@@ -77,7 +77,7 @@ describe('TaskAreaCard - area selection with a project', () => {
         expect(screen.queryByText('via project')).not.toBeInTheDocument();
     });
 
-    it('shows a read-only via-project card when the area is inherited from the project', () => {
+    it('shows the project area as via-project and still lets the user pick an own area', async () => {
         const task = {
             id: 10,
             name: 'Task',
@@ -94,5 +94,15 @@ describe('TaskAreaCard - area selection with a project', () => {
 
         expect(screen.getByText('Work')).toBeInTheDocument();
         expect(screen.getByText('via project')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('Work'));
+        expect(screen.queryByText('Remove area')).not.toBeInTheDocument();
+        await act(async () => {
+            fireEvent.click(screen.getByText('Home'));
+        });
+
+        expect(baseProps.onAreaSelect).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 2, name: 'Home' })
+        );
     });
 });

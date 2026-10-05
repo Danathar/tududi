@@ -273,8 +273,9 @@ const TagDetails: React.FC = () => {
             localStorage.getItem('order_by') || 'created_at:desc';
         setOrderBy(savedOrderBy);
         const savedGroupBy =
-            (localStorage.getItem('tasks_group_by') as 'none' | 'project') ||
-            'none';
+            localStorage.getItem('tasks_group_by') === 'project'
+                ? 'project'
+                : 'none';
         setGroupBy(savedGroupBy);
     }, []);
 

@@ -2,7 +2,7 @@ const request = require('supertest');
 const app = require('../../app');
 const path = require('path');
 const fs = require('fs').promises;
-const { Task, User, TaskAttachment } = require('../../models');
+const { Task, User, TaskAttachment, Area, Project } = require('../../models');
 const { createTestUser } = require('../helpers/testUtils');
 const { getConfig } = require('../../config/config');
 
@@ -148,6 +148,31 @@ describe('Tasks Routes', () => {
             expect(response.body.tasks).toBeDefined();
             expect(response.body.tasks.length).toBe(1);
             expect(response.body.tasks[0].id).toBe(task1.id);
+        });
+
+        it("should include the task's project area in the list and single-task responses", async () => {
+            const area = await Area.create({ name: 'Work', user_id: user.id });
+            const project = await Project.create({
+                name: 'Website',
+                user_id: user.id,
+                area_id: area.id,
+            });
+            await task1.update({ project_id: project.id });
+
+            const list = await agent.get('/api/tasks');
+            const listed = list.body.tasks.find((t) => t.id === task1.id);
+            expect(listed.Project.area_id).toBe(area.id);
+            expect(listed.Project.Area).toMatchObject({
+                id: area.id,
+                name: 'Work',
+                uid: area.uid,
+            });
+            expect(listed.Area).toBeNull();
+
+            const single = await agent.get(`/api/task/${task1.uid}`);
+            expect(single.status).toBe(200);
+            expect(single.body.Project.area_id).toBe(area.id);
+            expect(single.body.Project.Area.name).toBe('Work');
         });
 
         it('should require authentication', async () => {
