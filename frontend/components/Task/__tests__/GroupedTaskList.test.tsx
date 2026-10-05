@@ -76,4 +76,50 @@ describe('GroupedTaskList', () => {
         expect(screen.getByText('Active task')).toBeInTheDocument();
         expect(screen.queryByText('Cancelled task')).not.toBeInTheDocument();
     });
+
+    it('groups by effective area: own area, else project area, else No area first', () => {
+        const tasks = [
+            makeTask({
+                id: 1,
+                name: 'Home task',
+                Area: { id: 1, name: 'Home' } as Task['Area'],
+            }),
+            makeTask({
+                id: 2,
+                name: 'Website task',
+                Project: {
+                    id: 9,
+                    name: 'Website',
+                    Area: { id: 2, name: 'Work' },
+                } as Task['Project'],
+            }),
+            makeTask({ id: 3, name: 'Loose task' }),
+            makeTask({
+                id: 4,
+                name: 'Own area wins',
+                Area: { id: 1, name: 'Home' } as Task['Area'],
+                Project: {
+                    id: 9,
+                    name: 'Website',
+                    Area: { id: 2, name: 'Work' },
+                } as Task['Project'],
+            }),
+        ];
+
+        render(
+            <GroupedTaskList
+                tasks={tasks}
+                groupBy="area"
+                onTaskUpdate={jest.fn()}
+                onTaskDelete={jest.fn()}
+                projects={[]}
+            />
+        );
+
+        const headers = screen
+            .getAllByText(/^\d+ tasks$/)
+            .map((el) => el.previousElementSibling?.textContent);
+        expect(headers).toEqual(['No area', 'Home', 'Work']);
+        expect(screen.getByText('2 tasks')).toBeInTheDocument();
+    });
 });

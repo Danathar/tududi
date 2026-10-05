@@ -27,7 +27,7 @@ import { isTaskActive } from '../../constants/taskStatus';
 interface GroupedTaskListProps {
     tasks: Task[];
     groupedTasks?: GroupedTasks | null;
-    groupBy?: 'none' | 'project';
+    groupBy?: 'none' | 'project' | 'area';
     onTaskUpdate: (task: Task) => Promise<void>;
     onTaskCompletionToggle?: (task: Task) => void;
     onTaskCreate?: (task: Task) => void;
@@ -105,6 +105,7 @@ interface ProjectGroup {
     key: string;
     projectId?: number;
     projectUid?: string;
+    areaName?: string;
     tasks: Task[];
     order: number;
 }
@@ -228,9 +229,9 @@ const GroupedTaskList: React.FC<GroupedTaskListProps> = ({
         return filtered;
     }, [groupedTasks, showCompletedTasks, shouldUseDayGrouping, searchQuery]);
 
-    // Group tasks by project when requested (only applies to standalone view)
-    const groupedByProject = useMemo(() => {
-        if (groupBy !== 'project') return null;
+    // Group tasks by project or area when requested (only applies to standalone view)
+    const groupedByKey = useMemo(() => {
+        if (groupBy !== 'project' && groupBy !== 'area') return null;
 
         const normalizeProjectId = (
             value: number | string | null | undefined
@@ -272,6 +273,23 @@ const GroupedTaskList: React.FC<GroupedTaskListProps> = ({
 
         const byProject = new Map<string, ProjectGroup>();
         filteredBySearch.forEach((task) => {
+            if (groupBy === 'area') {
+                // A task's own area wins over the area of its project.
+                const area = task.Area || task.Project?.Area;
+                const areaKey =
+                    area?.id != null ? `area-${area.id}` : 'no_area';
+                if (!byProject.has(areaKey)) {
+                    byProject.set(areaKey, {
+                        key: areaKey,
+                        areaName: area?.name,
+                        tasks: [],
+                        order: byProject.size,
+                    });
+                }
+                byProject.get(areaKey)!.tasks.push(task);
+                return;
+            }
+
             const resolvedProjectId =
                 normalizeProjectId(task.project_id) ??
                 normalizeProjectId(task.Project?.id);
@@ -293,10 +311,16 @@ const GroupedTaskList: React.FC<GroupedTaskListProps> = ({
 
         const groups = Array.from(byProject.values());
         groups.sort((a, b) => {
-            if (a.key === 'no_project' && b.key !== 'no_project') {
+            if (
+                (a.key === 'no_project' || a.key === 'no_area') &&
+                b.key !== a.key
+            ) {
                 return -1;
             }
-            if (b.key === 'no_project' && a.key !== 'no_project') {
+            if (
+                (b.key === 'no_project' || b.key === 'no_area') &&
+                a.key !== b.key
+            ) {
                 return 1;
             }
             return a.order - b.order;
@@ -445,10 +469,16 @@ const GroupedTaskList: React.FC<GroupedTaskListProps> = ({
     return (
         <div className="task-list-container space-y-1.5">
             {/* Standalone tasks */}
-            {groupBy === 'project' && groupedByProject
-                ? groupedByProject.map(
+            {groupedByKey
+                ? groupedByKey.map(
                       (
-                          { key, projectId, projectUid, tasks: projectTasks },
+                          {
+                              key,
+                              projectId,
+                              projectUid,
+                              areaName,
+                              tasks: projectTasks,
+                          },
                           index
                       ) => {
                           const matchingProject = projects.find((p) => {
@@ -466,14 +496,16 @@ const GroupedTaskList: React.FC<GroupedTaskListProps> = ({
                           });
 
                           const projectName =
-                              matchingProject?.name ||
-                              projectTasks[0]?.Project?.name ||
-                              (key === 'no_project'
-                                  ? t('tasks.noProject', 'No project')
-                                  : t(
-                                        'tasks.unknownProject',
-                                        'Unknown project'
-                                    ));
+                              groupBy === 'area'
+                                  ? areaName || t('tasks.noArea', 'No area')
+                                  : matchingProject?.name ||
+                                    projectTasks[0]?.Project?.name ||
+                                    (key === 'no_project'
+                                        ? t('tasks.noProject', 'No project')
+                                        : t(
+                                              'tasks.unknownProject',
+                                              'Unknown project'
+                                          ));
                           return (
                               <div
                                   key={key}

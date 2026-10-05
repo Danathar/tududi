@@ -190,6 +190,7 @@
     "descending": "Descending",
     "groupBy": "Group by",
     "groupByProject": "Project",
+    "groupByArea": "Area",
     "grouping": {
       "none": "None",
       "eisenhower": "Eisenhower Matrix"
@@ -225,6 +226,7 @@
     "completedOnly": "Completed only",
     "notCompleted": "Not completed",
     "noProject": "No project",
+    "noArea": "No area",
     "unknownProject": "Unknown project",
     "tasks": "tasks",
     "showingItems": "Showing {{current}} of {{total}} tasks",

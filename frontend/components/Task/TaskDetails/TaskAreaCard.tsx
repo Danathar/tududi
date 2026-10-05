@@ -63,40 +63,6 @@ const TaskAreaCard: React.FC<TaskAreaCardProps> = ({
         setSearchQuery('');
     };
 
-    // Show a read-only card only when the area is genuinely inherited from the
-    // task's project. A task keeps its own independent area_id, so in every
-    // other case (project without an area, or the task carrying its own area)
-    // the selector below stays editable.
-    if (isInherited && effectiveArea) {
-        return (
-            <div className="rounded-lg shadow-sm bg-white dark:bg-gray-900 p-4">
-                <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                        <span
-                            className="inline-block w-3 h-3 rounded-full flex-shrink-0 border border-gray-300 dark:border-gray-600"
-                            style={effectiveArea.color ? { backgroundColor: effectiveArea.color, borderColor: effectiveArea.color } : {}}
-                        />
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
-                            {effectiveArea.name}
-                        </span>
-                        <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">
-                            {t('area.viaProject', 'via project')}
-                        </span>
-                    </div>
-                    {effectiveArea.uid && (
-                        <Link
-                            to={getAreaLink(effectiveArea)}
-                            className="p-1.5 rounded-full text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors flex-shrink-0"
-                            title={t('area.viewArea', 'Go to area')}
-                        >
-                            <ArrowRightIcon className="h-4 w-4" />
-                        </Link>
-                    )}
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div ref={dropdownRef} className="space-y-2">
             {dropdownOpen ? (
@@ -111,7 +77,7 @@ const TaskAreaCard: React.FC<TaskAreaCardProps> = ({
                             className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-md px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         <div className="mt-2 max-h-48 overflow-y-auto space-y-0.5">
-                            {effectiveArea && (
+                            {task.Area && (
                                 <button
                                     onClick={handleClear}
                                     className="w-full text-left text-sm px-3 py-1.5 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
@@ -147,7 +113,7 @@ const TaskAreaCard: React.FC<TaskAreaCardProps> = ({
                     <div className="flex items-center justify-between gap-2">
                         <div
                             className="flex items-center gap-2 min-w-0 cursor-pointer flex-1"
-                            onClick={() => !isInherited && setDropdownOpen(true)}
+                            onClick={() => setDropdownOpen(true)}
                         >
                             <span
                                 className="inline-block w-3 h-3 rounded-full flex-shrink-0 border border-gray-300 dark:border-gray-600"
@@ -156,6 +122,11 @@ const TaskAreaCard: React.FC<TaskAreaCardProps> = ({
                             <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
                                 {effectiveArea.name}
                             </span>
+                            {isInherited && (
+                                <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">
+                                    {t('area.viaProject', 'via project')}
+                                </span>
+                            )}
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0">
                             {effectiveArea.uid && (
@@ -168,13 +139,15 @@ const TaskAreaCard: React.FC<TaskAreaCardProps> = ({
                                     <ArrowRightIcon className="h-4 w-4" />
                                 </Link>
                             )}
-                            <button
-                                onClick={handleClear}
-                                className="p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                                title={t('area.clearArea', 'Remove area')}
-                            >
-                                <XMarkIcon className="h-4 w-4" />
-                            </button>
+                            {!isInherited && (
+                                <button
+                                    onClick={handleClear}
+                                    className="p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                    title={t('area.clearArea', 'Remove area')}
+                                >
+                                    <XMarkIcon className="h-4 w-4" />
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

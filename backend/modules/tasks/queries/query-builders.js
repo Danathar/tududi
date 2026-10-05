@@ -71,8 +71,15 @@ async function filterTasksByParams(
         },
         {
             model: Project,
-            attributes: ['id', 'name', 'status', 'uid'],
+            attributes: ['id', 'name', 'status', 'uid', 'area_id'],
             required: false,
+            include: [
+                {
+                    model: Area,
+                    attributes: ['id', 'name', 'uid', 'color'],
+                    required: false,
+                },
+            ],
         },
         {
             model: Area,

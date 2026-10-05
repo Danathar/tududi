@@ -57,7 +57,7 @@ const Tasks: React.FC = () => {
     const [isSearchExpanded, setIsSearchExpanded] = useState(false);
     const [showCompleted, setShowCompleted] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-    const [groupBy, setGroupBy] = useState<'none' | 'project'>('none');
+    const [groupBy, setGroupBy] = useState<'none' | 'project' | 'area'>('none');
 
     const [offset, setOffset] = useState(0);
     const [hasMore, setHasMore] = useState(false);
@@ -132,8 +132,8 @@ const Tasks: React.FC = () => {
             localStorage.getItem('order_by') || 'created_at:desc';
         setOrderBy(savedOrderBy);
         const savedGroupBy =
-            (localStorage.getItem('tasks_group_by') as 'none' | 'project') ||
-            'none';
+            (localStorage.getItem('tasks_group_by') as
+                'none' | 'project' | 'area') || 'none';
         setGroupBy(savedGroupBy);
 
         const params = new URLSearchParams(location.search);
@@ -290,8 +290,7 @@ const Tasks: React.FC = () => {
         if (isLoadingMore) return;
         if (!hasMore && !all) return;
         setIsLoadingMore(true);
-        const shouldDisablePagination =
-            !isUpcomingView && groupBy === 'project';
+        const shouldDisablePagination = !isUpcomingView && groupBy !== 'none';
         if (all || shouldDisablePagination) {
             const newLimit = totalCount > 0 ? totalCount : 10000;
             await fetchData(true, {
@@ -311,7 +310,7 @@ const Tasks: React.FC = () => {
     };
 
     useEffect(() => {
-        const shouldDisablePagination = isUpcomingView || groupBy === 'project';
+        const shouldDisablePagination = isUpcomingView || groupBy !== 'none';
         fetchData(
             true,
             shouldDisablePagination
@@ -654,7 +653,11 @@ const Tasks: React.FC = () => {
                                             </div>
                                             <div className="py-1">
                                                 {(
-                                                    ['none', 'project'] as const
+                                                    [
+                                                        'none',
+                                                        'project',
+                                                        'area',
+                                                    ] as const
                                                 ).map((val) => (
                                                     <button
                                                         key={val}
@@ -677,10 +680,15 @@ const Tasks: React.FC = () => {
                                                                       'tasks.groupByProject',
                                                                       'Project'
                                                                   )
-                                                                : t(
-                                                                      'tasks.grouping.none',
-                                                                      'None'
-                                                                  )}
+                                                                : val === 'area'
+                                                                  ? t(
+                                                                        'tasks.groupByArea',
+                                                                        'Area'
+                                                                    )
+                                                                  : t(
+                                                                        'tasks.grouping.none',
+                                                                        'None'
+                                                                    )}
                                                         </span>
                                                         {groupBy === val && (
                                                             <CheckIcon className="h-4 w-4" />
@@ -1003,7 +1011,7 @@ const Tasks: React.FC = () => {
                                             </div>
                                         )}
                                     </>
-                                ) : groupBy === 'project' ? (
+                                ) : groupBy !== 'none' ? (
                                     <GroupedTaskList
                                         tasks={displayTasks}
                                         groupedTasks={null}
