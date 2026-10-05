@@ -1,6 +1,6 @@
 services:
   tududi:
-    image: chrisvel/tududi:latest
+    image: ghcr.io/danathar/tududi:latest
     container_name: tududi
     # Requires: cp .env.example .env — see .env.example for all options
     env_file:

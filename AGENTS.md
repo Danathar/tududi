@@ -49,10 +49,26 @@ remote exists, use it for fetching only. To make an accidental push fail, run
 ### Upstream instructions that do not apply
 
 Some files are inherited from upstream and still send contributors to
-upstream: `.github/CONTRIBUTING.md`, `.github/FUNDING.yml`, and the External
-Resources section of `CLAUDE.md`. Their technical content (tests,
+upstream: `.github/CONTRIBUTING.md` and the External Resources section of
+`CLAUDE.md`. Their technical content (tests,
 migrations, translations, code style) still applies. Wherever they say to
 open an issue, discussion, or pull request upstream, use this fork instead.
+
+### Docker images
+
+This fork's image is `ghcr.io/danathar/tududi`. `.github/workflows/docker-publish.yml`
+publishes `:latest`, `:sha-<short commit>` and `:v<version>-<short commit>` on
+every push to `main`, and only from `main`. Do not point builds, compose files,
+or docs at `chrisvel/tududi` or Docker Hub, and do not reintroduce upstream's
+tag-driven release or deploy workflow. The owner syncs upstream by hand; do not
+add a scheduled sync.
+
+The fork has no version line of its own. `package.json` keeps upstream's
+version, which arrives with each upstream sync. Do not bump it, switch it to
+CalVer, or add a suffix. Backups embed that version, and
+`backend/services/backupService.js` refuses to restore a backup that claims to
+be newer than the running app. A fork-only version would block restores in one
+direction or the other.
 
 ## Licensing
 
