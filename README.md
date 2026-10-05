@@ -354,7 +354,9 @@ Contributions to tududi are welcome! Whether it's bug fixes, new features, docum
 
 ## 📜 License
 
-This project is licensed under the [MIT License](LICENSE).
+This fork is licensed under the [GNU General Public License v3.0](LICENSE).
+
+It incorporates code from [`chrisvel/tududi`](https://github.com/chrisvel/tududi), Copyright 2024, 2025 Tududi Developers, released under the MIT License. That code remains under MIT; its licence text and copyright notice are preserved in [LICENSE.MIT](LICENSE.MIT) as the MIT licence requires. The combined work - upstream code together with this fork's changes - is distributed under GPL-3.0.
 
 ## 📬 Contact
 
