@@ -10,7 +10,9 @@
 tududi/                      # Repository root
 ├── README.md                # User-facing documentation
 ├── CLAUDE.md               # This developer guide (index)
-├── LICENSE                 # MIT License
+├── AGENTS.md               # Rules for AI agents working in this fork (read first)
+├── LICENSE                 # GPL-3.0 (this fork's licence)
+├── LICENSE.MIT             # Upstream MIT licence and copyright notice (keep verbatim)
 ├── package.json            # Root scripts and dependencies (monorepo)
 ├── package-lock.json       # Dependency lock file
 │
