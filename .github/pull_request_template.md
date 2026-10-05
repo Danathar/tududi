@@ -2,7 +2,7 @@
 Thank you for contributing to tududi!
 
 Before submitting:
-1. Read the Contributing Guide: https://github.com/chrisvel/tududi/blob/main/.github/CONTRIBUTING.md
+1. Read the Contributing Guide: https://github.com/Danathar/tududi/blob/main/.github/CONTRIBUTING.md
 2. Run: npm run pre-push (linting, formatting, tests)
 3. Fill out the sections below and check all applicable boxes (replace [ ] with [x])
 4. Delete sections that don't apply
