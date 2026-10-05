@@ -1,27 +1,28 @@
 name: Publish Docker image
 
-# Builds this fork's image from main and pushes it to
-# ghcr.io/danathar/tududi as :latest and :sha-<short commit>. Every push to
-# main publishes; a manual run republishes the current main.
+# Builds this fork's image from main and pushes it to ghcr.io/danathar/tududi
+# as :latest, :sha-<short commit> and :v<package.json version>-<short commit>.
+# Every push to main publishes. A manual run republishes main and is refused
+# from any other branch or tag, so unmerged code never becomes :latest.
 #
-# Upstream's version tags, Docker Hub image and GitHub Releases are not used
-# here. ghcr.io uses the workflow's own GITHUB_TOKEN, so no secrets are needed.
+# package.json keeps upstream's version, so the version tag names the upstream
+# release this build is based on. Upstream's Docker Hub image and GitHub
+# Releases are not used here. ghcr.io uses the workflow's own GITHUB_TOKEN, so
+# no secrets are needed.
 
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# A newer push supersedes an older one still building, so :latest never
-# moves back to an older commit.
+# A newer push to main supersedes an older one still building, so :latest
+# never moves back to an older commit. The group is per ref, so a refused
+# manual run from another branch cannot cancel a main build.
 concurrency:
-  group: docker-publish
+  group: docker-publish-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -32,6 +33,8 @@ jobs:
   # QEMU crashed npm install at random (Illegal instruction) and shipped an
   # arm64 image without its node_modules (upstream #1725).
   build:
+    # Manual runs too: only main is ever published.
+    if: github.ref == 'refs/heads/main'
     strategy:
       fail-fast: true
       matrix:
@@ -113,6 +116,25 @@ jobs:
       packages: write
 
     steps:
+      - name: Read the upstream version from package.json
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: package.json
+          sparse-checkout-cone-mode: false
+
+      - name: Resolve tags
+        id: tags
+        run: |
+          SHORT="${GITHUB_SHA::7}"
+          VERSION="$(jq -r '.version // empty' package.json)"
+          VERSION="${VERSION#v}"
+          echo "short=sha-$SHORT" >> "$GITHUB_OUTPUT"
+          if printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "versioned=v$VERSION-$SHORT" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::package.json version '$VERSION' is not a version; skipping the version tag"
+          fi
+
       - name: Download digests
         uses: actions/download-artifact@v7
         with:
@@ -132,15 +154,21 @@ jobs:
 
       - name: Create and push the multi-platform tags
         working-directory: /tmp/digests
+        env:
+          SHORT_TAG: ${{ steps.tags.outputs.short }}
+          VERSIONED_TAG: ${{ steps.tags.outputs.versioned }}
         run: |
-          SHORT="sha-${GITHUB_SHA::7}"
-          set -- -t "$IMAGE:latest" -t "$IMAGE:$SHORT"
+          set -- -t "$IMAGE:latest" -t "$IMAGE:$SHORT_TAG"
+          if [ -n "$VERSIONED_TAG" ]; then
+            set -- "$@" -t "$IMAGE:$VERSIONED_TAG"
+          fi
           for digest in *; do
             set -- "$@" "$IMAGE@sha256:$digest"
           done
           docker buildx imagetools create "$@"
-          echo "short=$SHORT" >> "$GITHUB_ENV"
 
       - name: Print digest
+        env:
+          SHORT_TAG: ${{ steps.tags.outputs.short }}
         run: |
-          docker buildx imagetools inspect "$IMAGE:$short" | tee -a "$GITHUB_STEP_SUMMARY"
+          docker buildx imagetools inspect "$IMAGE:$SHORT_TAG" | tee -a "$GITHUB_STEP_SUMMARY"
