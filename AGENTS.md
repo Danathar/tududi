@@ -49,10 +49,18 @@ remote exists, use it for fetching only. To make an accidental push fail, run
 ### Upstream instructions that do not apply
 
 Some files are inherited from upstream and still send contributors to
-upstream: `.github/CONTRIBUTING.md`, `.github/FUNDING.yml`, and the External
-Resources section of `CLAUDE.md`. Their technical content (tests,
+upstream: `.github/CONTRIBUTING.md` and the External Resources section of
+`CLAUDE.md`. Their technical content (tests,
 migrations, translations, code style) still applies. Wherever they say to
 open an issue, discussion, or pull request upstream, use this fork instead.
+
+### Docker images
+
+This fork's image is `ghcr.io/danathar/tududi`. `.github/workflows/docker-publish.yml`
+publishes `:latest` and `:sha-<short commit>` on every push to `main`. Do not
+point builds, compose files, or docs at `chrisvel/tududi` or Docker Hub, and do
+not reintroduce upstream's tag-driven release or deploy workflow. The owner
+syncs upstream by hand; do not add a scheduled sync.
 
 ## Licensing
 

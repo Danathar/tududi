@@ -221,7 +221,7 @@ const About: React.FC<AboutProps> = ({ isDarkMode = false }) => {
                     <div className="text-center">
                         <div className="space-y-2">
                             <a
-                                href="https://github.com/chrisvel/tududi"
+                                href="https://github.com/Danathar/tududi"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors duration-200"

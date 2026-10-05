@@ -23,12 +23,6 @@ More screenshots are [available here](#screenshots).
 
 ---
 
-## 💖 Enjoying tududi?
-
-Help keep it free and actively developed by [buying me a coffee](https://coff.ee/chrisveleris) ☕, [becoming a sponsor](https://github.com/sponsors/chrisvel), or [supporting on Patreon](https://www.patreon.com/ChrisVeleris). You can also support the project by purchasing a **hosted subscription** for a hassle-free, managed solution. Every contribution helps maintain this project and build new features!
-
----
-
 ## 🚀 How It Works
 
 This app allows users to manage their tasks, projects, areas, notes, and tags in an organized way. Users can create tasks, projects, areas (to group projects), notes, and tags. Each task can be associated with a project, and both tasks and notes can be tagged for better organization. Projects can belong to areas and can also have multiple notes and tags. This structure helps users categorize and track their work efficiently, whether they’re managing individual tasks, larger projects, or keeping detailed notes.
@@ -85,10 +79,6 @@ For the thinking behind tududi, read:
     - Background automatic synchronization
     - HTTP Basic Authentication for CalDAV clients
 
-## 🗺️ Roadmap
-
-Check out our [GitHub Project](https://github.com/users/chrisvel/projects/2) for planned features and progress.
-
 ## 🛠️ Getting Started
 
 Get up and running quickly with our comprehensive documentation:
@@ -96,7 +86,7 @@ Get up and running quickly with our comprehensive documentation:
 ### Quick Start
 
 ```bash
-docker pull chrisvel/tududi:latest
+docker pull ghcr.io/danathar/tududi:latest
 
 docker run \
   -e TUDUDI_USER_EMAIL=admin@example.com \
@@ -106,7 +96,7 @@ docker run \
   -v ~/tududi_uploads:/app/uploads \
   -v ~/tududi_backups:/app/backups \
   -p 3002:3002 \
-  -d chrisvel/tududi:latest
+  -d ghcr.io/danathar/tududi:latest
 ```
 
 Navigate to [http://localhost:3002](http://localhost:3002) and login with your credentials.
