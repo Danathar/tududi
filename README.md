@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> This is a customized fork of [`chrisvel/tududi`](https://github.com/chrisvel/tududi), tailored for its owner, [Danathar](https://github.com/Danathar). It is not intended to replace upstream tududi. For the official project, its releases and its Docker images, see [upstream](https://github.com/chrisvel/tududi). Issues about this fork belong [here](https://github.com/Danathar/tududi/issues).
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="public/wide-logo-light.png">
@@ -282,7 +285,7 @@ Quick overview:
 
 ```bash
 # Clone and install
-git clone https://github.com/chrisvel/tududi.git
+git clone https://github.com/Danathar/tududi.git
 cd tududi
 npm install
 
@@ -330,9 +333,9 @@ Contributions to tududi are welcome! Whether it's bug fixes, new features, docum
 
 **Before you start:**
 
-- Check [existing issues](https://github.com/chrisvel/tududi/issues) and [discussions](https://github.com/chrisvel/tududi/discussions) to avoid duplicate work
-- For bugs, [open an issue](https://github.com/chrisvel/tududi/issues/new/choose) with the bug report template
-- For feature requests, start a [discussion](https://github.com/chrisvel/tududi/discussions/categories/feature-requests)
+- Check [existing issues](https://github.com/Danathar/tududi/issues) to avoid duplicate work
+- For bugs, [open an issue](https://github.com/Danathar/tududi/issues/new/choose) with the bug report template
+- For feature requests, [open an issue](https://github.com/Danathar/tududi/issues/new) describing the idea
 
 **Quick contribution workflow:**
 
@@ -360,18 +363,7 @@ It incorporates code from [`chrisvel/tududi`](https://github.com/chrisvel/tududi
 
 ## 📬 Contact
 
-For questions or comments, please [open an issue](https://github.com/chrisvel/tududi/issues) or contact the developer directly.
-
-Join the tududi community:
-
-[![Discord](https://img.shields.io/badge/Discord-Join%20Server-7289da?logo=discord&logoColor=white&style=for-the-badge)](https://discord.gg/fkbeJ9CmcH)
-[![Reddit](https://img.shields.io/reddit/subreddit-subscribers/tududi?color=ff4500&label=Reddit&logo=reddit&logoColor=white&style=for-the-badge)](https://www.reddit.com/r/tududi/)
-
-## 🌟 Please check my other projects!
-
-- **[Reconya](https://reconya.com)** - Network reconnaissance and asset discovery tool
-- **[BreachHarbor](https://breachharbor.com)** - Cybersecurity suite for digital asset protection
-- **[Hevetra](https://hevetra.com)** - Digital tracking for child health milestones
+For questions or comments, please [open an issue](https://github.com/Danathar/tududi/issues).
 
 # Screenshots
 

@@ -48,10 +48,9 @@ remote exists, use it for fetching only. To make an accidental push fail, run
 
 ### Upstream instructions that do not apply
 
-Some files are inherited from upstream and send contributors to upstream:
-`.github/CONTRIBUTING.md`, `.github/pull_request_template.md`,
-`.github/ISSUE_TEMPLATE/`, the Contact section of `README.md`, and the
-External Resources section of `CLAUDE.md`. Their technical content (tests,
+Some files are inherited from upstream and still send contributors to
+upstream: `.github/CONTRIBUTING.md`, `.github/FUNDING.yml`, and the External
+Resources section of `CLAUDE.md`. Their technical content (tests,
 migrations, translations, code style) still applies. Wherever they say to
 open an issue, discussion, or pull request upstream, use this fork instead.
 
