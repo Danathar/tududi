@@ -5,7 +5,6 @@
 certs/
 .DS_Store
 .cursor
-AGENTS.md
 # CLAUDE.md - project documentation (committed)
 CLAUDE.local.md  # User-specific customizations (ignored)
 

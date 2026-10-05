@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**This repository is a fork (`Danathar/tududi`). Read [AGENTS.md](AGENTS.md) first.** Its rules decide where PRs, issues, and pushes go, and they override anything below.
+
+@AGENTS.md
+
 ## Tududi - Developer Guide
 
 This documentation is designed for AI assistants and developers working with the tududi codebase. For user-facing documentation, see [README.md](README.md). For contribution guidelines, see [CONTRIBUTING.md](.github/CONTRIBUTING.md).
@@ -16,7 +20,7 @@ Tududi is a self-hosted task management system with hierarchical organization (A
 
 **Get Started:**
 ```bash
-git clone https://github.com/chrisvel/tududi.git
+git clone https://github.com/Danathar/tududi.git
 cd tududi
 npm install
 npm run db:init
@@ -397,6 +401,8 @@ Tududi is a self-hosted task management system designed around hierarchical orga
 ---
 
 ## External Resources
+
+These belong to upstream (`chrisvel/tududi`). Read them for reference only. Do not file or comment there; see [AGENTS.md](AGENTS.md).
 
 - **Roadmap:** [GitHub Project](https://github.com/users/chrisvel/projects/2)
 - **Community:**

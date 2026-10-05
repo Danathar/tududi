@@ -13,11 +13,11 @@ const options = {
             description: 'REST API for Tududi task management application',
             contact: {
                 name: 'Tududi',
-                url: 'https://github.com/chrisvel/tududi',
+                url: 'https://github.com/Danathar/tududi',
             },
             license: {
-                name: 'MIT',
-                url: 'https://opensource.org/licenses/MIT',
+                name: 'GPL-3.0-only',
+                url: 'https://www.gnu.org/licenses/gpl-3.0.html',
             },
         },
         servers: [
