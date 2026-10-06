@@ -62,10 +62,12 @@ export const useAreaDrop = (
     onAreaDrop?: (taskUid: string, areaUid: string) => void
 ) => {
     const stopTracking = useRef<() => void>(() => undefined);
+    const lastPointer = useRef<{ x: number; y: number } | null>(null);
 
     const stop = useCallback(() => {
         stopTracking.current();
         stopTracking.current = () => undefined;
+        lastPointer.current = null;
         setHoveredAreaUid(null);
     }, []);
 
@@ -84,11 +86,25 @@ export const useAreaDrop = (
         handlers: {
             onDragStart: () => {
                 sortableCursorHandlers.onDragStart();
-                const onMove = (e: MouseEvent) =>
+                const onMove = (e: MouseEvent) => {
+                    lastPointer.current = { x: e.clientX, y: e.clientY };
                     setHoveredAreaUid(areaUidAt(e.clientX, e.clientY));
+                };
+                // Scrolling the sidebar moves rows under a still pointer
+                // without a mousemove; element scrolls reach window only in
+                // the capture phase.
+                const onScroll = () => {
+                    const pointer = lastPointer.current;
+                    if (pointer) {
+                        setHoveredAreaUid(areaUidAt(pointer.x, pointer.y));
+                    }
+                };
                 window.addEventListener('mousemove', onMove, true);
-                stopTracking.current = () =>
+                window.addEventListener('scroll', onScroll, true);
+                stopTracking.current = () => {
                     window.removeEventListener('mousemove', onMove, true);
+                    window.removeEventListener('scroll', onScroll, true);
+                };
             },
             onDragCancel: () => {
                 sortableCursorHandlers.onDragCancel();
@@ -96,7 +112,10 @@ export const useAreaDrop = (
             },
         },
         finish: (taskUid: string) => {
-            const areaUid = hoveredAreaUid;
+            const pointer = lastPointer.current;
+            const areaUid = pointer
+                ? areaUidAt(pointer.x, pointer.y)
+                : hoveredAreaUid;
             stop();
             if (!areaUid) return false;
             onAreaDrop(taskUid, areaUid);
