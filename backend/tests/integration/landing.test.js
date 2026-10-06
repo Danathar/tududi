@@ -184,6 +184,16 @@ describe('Landing page', () => {
         expect(icon.status).toBe(200);
     });
 
+    it('answers robots.txt itself instead of redirecting to the app', async () => {
+        // X's crawler reads robots.txt before fetching a card's image.
+        const res = await request(app)
+            .get('/robots.txt')
+            .set('Host', 'tududi.com');
+        expect(res.status).toBe(200);
+        expect(res.headers['content-type']).toMatch(/^text\/plain/);
+        expect(res.text).toContain('User-agent: *');
+    });
+
     it('gives the landing and cloud pages a link preview card', async () => {
         for (const path of ['/', '/de', '/cloud']) {
             const res = await request(app).get(path).set('Host', 'tududi.com');
@@ -449,7 +459,58 @@ describe('Landing page', () => {
         );
     });
 
-    it('never implies Cloud is free or has a trial', async () => {
+    it('offers the trial everywhere it sells Cloud once trials are on', async () => {
+        const hosted = getConfig().hosted;
+        const saved = { enabled: hosted.enabled, trialDays: hosted.trialDays };
+        hosted.enabled = true;
+        hosted.trialDays = 14;
+        try {
+            const res = await request(app).get('/').set('Host', 'tududi.com');
+            const heroOpen = res.text.indexOf('<section class="hero"');
+            const hero = res.text.slice(
+                heroOpen,
+                res.text.indexOf('</section>', heroOpen)
+            );
+            expect(hero).toContain('Start your free 14-day trial');
+            expect(hero).toContain('Free for 14 days, no card needed.');
+            expect(res.text).toContain('Start free trial →');
+            expect(res.text).toContain('14-day free trial, no card needed');
+            expect(res.text).not.toContain('no trial clock');
+            expect(res.text).toContain(
+                'The trial has everything except the AI assistant'
+            );
+            const closingOpen = res.text.indexOf('<div class="closing"');
+            const closing = res.text.slice(
+                closingOpen,
+                res.text.indexOf('</section>', closingOpen)
+            );
+            expect(closing).toContain('Try it free for 14 days');
+            expect(closing).toContain('Start free trial');
+
+            const cloud = await request(app)
+                .get('/cloud')
+                .set('Host', 'tududi.com');
+            expect(cloud.text).toContain('Try it free for 14 days');
+            expect(cloud.text).toContain(
+                'The trial has everything except the AI assistant'
+            );
+
+            const terms = await request(app)
+                .get('/terms')
+                .set('Host', 'tududi.com');
+            expect(terms.text).toContain('free trial of 14 days');
+            const privacy = await request(app)
+                .get('/privacy')
+                .set('Host', 'tududi.com');
+            expect(privacy.text).toContain(
+                'Trial accounts that never subscribe'
+            );
+        } finally {
+            Object.assign(hosted, saved);
+        }
+    });
+
+    it('never implies Cloud is free or has a trial while trials are off', async () => {
         const res = await request(app).get('/').set('Host', 'tududi.com');
 
         // Scoped to where the offer is actually made. The FAQ says the words
@@ -476,6 +537,8 @@ describe('Landing page', () => {
         expect(cloudCard).toMatch(/€5/);
         expect(cloudCard).toMatch(/€50/);
         expect(res.text).toContain('Is there a free plan or a trial');
+        expect(res.text).not.toContain('The trial has everything except');
+        expect(res.text).not.toContain('Start free trial');
 
         // Self-hosting is still free, and the page still says so.
         expect(res.text).toMatch(/free, if you run the server yourself/i);
