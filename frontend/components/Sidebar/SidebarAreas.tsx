@@ -9,6 +9,7 @@ import { Area } from '../../entities/Area';
 import { useTranslation } from 'react-i18next';
 import { useCan } from '../../hooks/useCan';
 import { useSidebarSectionExpanded } from '../../hooks/useSidebarSectionExpanded';
+import { useHoveredDropAreaUid } from '../Shared/areaDrop';
 
 interface SidebarAreasProps {
     handleNavClick: (path: string, title: string, icon: JSX.Element) => void;
@@ -35,6 +36,7 @@ const SidebarAreas: React.FC<SidebarAreasProps> = ({
     const { t } = useTranslation();
     const canCreateAreas = useCan('create_projects');
     const [isExpanded, setIsExpanded] = useSidebarSectionExpanded('areas');
+    const hoveredDropAreaUid = useHoveredDropAreaUid();
 
     useEffect(() => {
         if (areas.some((area) => getAreaPath(area) === location.pathname)) {
@@ -134,7 +136,12 @@ const SidebarAreas: React.FC<SidebarAreasProps> = ({
                         {areas.map((area) => (
                             <div
                                 key={area.uid}
-                                className={itemClass(getAreaPath(area))}
+                                data-area-drop-uid={area.uid}
+                                className={`${itemClass(getAreaPath(area))} ${
+                                    hoveredDropAreaUid === area.uid
+                                        ? '!bg-blue-100 dark:!bg-blue-900/40 ring-2 ring-blue-500 text-blue-700 dark:text-blue-200'
+                                        : ''
+                                }`}
                                 onClick={() => navigate(area)}
                             >
                                 <span className="truncate min-w-0">

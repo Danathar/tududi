@@ -4,9 +4,16 @@ import { useTranslation } from 'react-i18next';
 import TaskList from './Task/TaskList';
 import GroupedTaskList from './Task/GroupedTaskList';
 import { Task } from '../entities/Task';
+import { Area } from '../entities/Area';
 import { getTitleAndIcon } from './Task/getTitleAndIcon';
 import { getDescription } from './Task/getDescription';
-import { createTask, GroupedTasks, saveTaskOrder } from '../utils/tasksService';
+import {
+    createTask,
+    fetchTaskByUid,
+    GroupedTasks,
+    saveTaskOrder,
+    updateTask,
+} from '../utils/tasksService';
 import { mergeVisibleOrder } from './Shared/sortableList';
 import { useStore } from '../store/useStore';
 import { useToast } from './Shared/ToastContext';
@@ -74,6 +81,13 @@ const Tasks: React.FC = () => {
     const isUpcomingView =
         query.get('type') === 'upcoming' || location.pathname === '/upcoming';
     const status = query.get('status');
+    // Only the plain All Tasks page accepts drops on sidebar areas, not
+    // Today, Inbox, Next, Someday, Upcoming or Completed.
+    const isAllTasksView =
+        location.pathname === '/tasks' &&
+        !query.get('type') &&
+        !query.get('project_id') &&
+        status !== 'done';
     const tag = query.get('tag');
 
     useEffect(() => {
@@ -532,6 +546,39 @@ const Tasks: React.FC = () => {
             showErrorToast(
                 t('tasks.reorderError', 'Failed to save task order')
             );
+        }
+    };
+
+    // Releasing a dragged row over a sidebar area files the task under it;
+    // same update and messages as the area picker on the task page.
+    const handleAreaDrop = async (taskUid: string, areaUid: string) => {
+        const { areasStore, tasksStore } = useStore.getState();
+        const area = areasStore.areas.find((a: Area) => a.uid === areaUid);
+        const task = tasks.find((row) => row.uid === taskUid);
+        if (!area || !task || task.area_id === area.id) return;
+
+        try {
+            await updateTask(taskUid, { area_id: area.id });
+            const updatedTask = await fetchTaskByUid(taskUid);
+            tasksStore.updateTaskInStore(updatedTask);
+            setTasks((prevTasks) =>
+                prevTasks.map((prev) =>
+                    prev.uid === taskUid
+                        ? {
+                              ...prev,
+                              ...updatedTask,
+                              subtasks:
+                                  updatedTask.subtasks || prev.subtasks || [],
+                          }
+                        : prev
+                )
+            );
+            showSuccessToast(
+                t('task.areaUpdated', 'Area updated successfully')
+            );
+        } catch (error) {
+            console.error('Error updating area:', error);
+            showErrorToast(t('task.areaUpdateError', 'Failed to update area'));
         }
     };
 
@@ -1017,6 +1064,11 @@ const Tasks: React.FC = () => {
                                         groupedTasks={null}
                                         groupBy={groupBy}
                                         onReorder={handleReorder}
+                                        onAreaDrop={
+                                            isAllTasksView
+                                                ? handleAreaDrop
+                                                : undefined
+                                        }
                                         onTaskCreate={handleTaskCreate}
                                         onTaskUpdate={handleTaskUpdate}
                                         onTaskCompletionToggle={
@@ -1045,6 +1097,11 @@ const Tasks: React.FC = () => {
                                             isUpcomingView
                                                 ? undefined
                                                 : handleReorder
+                                        }
+                                        onAreaDrop={
+                                            isAllTasksView
+                                                ? handleAreaDrop
+                                                : undefined
                                         }
                                     />
                                 )}

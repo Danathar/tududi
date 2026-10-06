@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
+import { DndContext, DragEndEvent } from '@dnd-kit/core';
 import {
     arrayMove,
     SortableContext,
@@ -10,10 +10,10 @@ import TaskItem from './TaskItem';
 import SortableItem from '../Shared/SortableItem';
 import {
     resetSortableCursor,
-    sortableCursorHandlers,
     swallowNextClick,
     useSortableSensors,
 } from '../Shared/sortableList';
+import { useAreaDrop } from '../Shared/areaDrop';
 import { Project } from '../../entities/Project';
 import { Task } from '../../entities/Task';
 import { isTaskActive } from '../../constants/taskStatus';
@@ -34,6 +34,9 @@ interface TaskListProps {
     // Makes the rows draggable; called with the shown task uids in their
     // new order after a drop.
     onReorder?: (orderedUids: string[]) => void;
+    // With onReorder: releasing a dragged row over a sidebar area calls this
+    // with the task uid and the area uid instead of reordering.
+    onAreaDrop?: (taskUid: string, areaUid: string) => void;
 }
 
 const TaskList: React.FC<TaskListProps> = ({
@@ -49,9 +52,11 @@ const TaskList: React.FC<TaskListProps> = ({
     isUpcomingView = false,
     showSuggestionChips = false,
     onReorder,
+    onAreaDrop,
 }) => {
     const { t } = useTranslation();
     const sensors = useSortableSensors();
+    const areaDrop = useAreaDrop(onAreaDrop);
 
     // Conditionally filter tasks based on showCompletedTasks prop
     const filteredTasks = showCompletedTasks
@@ -109,6 +114,10 @@ const TaskList: React.FC<TaskListProps> = ({
 
     const handleDragEnd = ({ active, over }: DragEndEvent) => {
         resetSortableCursor();
+        if (areaDrop.finish(active.id as string)) {
+            swallowNextClick();
+            return;
+        }
         if (!over || active.id === over.id) return;
         swallowNextClick();
         const from = uids.indexOf(active.id as string);
@@ -120,8 +129,8 @@ const TaskList: React.FC<TaskListProps> = ({
     return (
         <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
-            {...sortableCursorHandlers}
+            collisionDetection={areaDrop.collisionDetection}
+            {...areaDrop.handlers}
             onDragEnd={handleDragEnd}
         >
             <SortableContext

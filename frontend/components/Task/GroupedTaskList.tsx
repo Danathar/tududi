@@ -5,7 +5,7 @@ import {
     ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import { useTranslation } from 'react-i18next';
-import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
+import { DndContext, DragEndEvent } from '@dnd-kit/core';
 import {
     arrayMove,
     SortableContext,
@@ -15,10 +15,10 @@ import TaskItem from './TaskItem';
 import SortableItem from '../Shared/SortableItem';
 import {
     resetSortableCursor,
-    sortableCursorHandlers,
     swallowNextClick,
     useSortableSensors,
 } from '../Shared/sortableList';
+import { useAreaDrop } from '../Shared/areaDrop';
 import { Project } from '../../entities/Project';
 import { Task } from '../../entities/Task';
 import { GroupedTasks } from '../../utils/tasksService';
@@ -40,20 +40,29 @@ interface GroupedTaskListProps {
     // Makes the rows of each project group draggable within that group;
     // called with the group's task uids in their new order.
     onReorder?: (orderedUids: string[]) => void;
+    // With onReorder: releasing a dragged row over a sidebar area calls this
+    // with the task uid and the area uid instead of reordering.
+    onAreaDrop?: (taskUid: string, areaUid: string) => void;
 }
 
 // One project group's rows, draggable among themselves.
 const SortableTaskGroup: React.FC<{
     tasks: Task[];
     onReorder: (orderedUids: string[]) => void;
+    onAreaDrop?: (taskUid: string, areaUid: string) => void;
     renderTask: (task: Task) => React.ReactNode;
-}> = ({ tasks, onReorder, renderTask }) => {
+}> = ({ tasks, onReorder, onAreaDrop, renderTask }) => {
     const { t } = useTranslation();
     const sensors = useSortableSensors();
+    const areaDrop = useAreaDrop(onAreaDrop);
     const uids = tasks.map((task) => task.uid as string);
 
     const handleDragEnd = ({ active, over }: DragEndEvent) => {
         resetSortableCursor();
+        if (areaDrop.finish(active.id as string)) {
+            swallowNextClick();
+            return;
+        }
         if (!over || active.id === over.id) return;
         swallowNextClick();
         const from = uids.indexOf(active.id as string);
@@ -65,8 +74,8 @@ const SortableTaskGroup: React.FC<{
     return (
         <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
-            {...sortableCursorHandlers}
+            collisionDetection={areaDrop.collisionDetection}
+            {...areaDrop.handlers}
             onDragEnd={handleDragEnd}
         >
             <SortableContext
@@ -123,6 +132,7 @@ const GroupedTaskList: React.FC<GroupedTaskListProps> = ({
     showCompletedTasks = false,
     searchQuery = '',
     onReorder,
+    onAreaDrop,
 }) => {
     const { t } = useTranslation();
 
@@ -525,6 +535,7 @@ const GroupedTaskList: React.FC<GroupedTaskListProps> = ({
                                       <SortableTaskGroup
                                           tasks={projectTasks}
                                           onReorder={onReorder}
+                                          onAreaDrop={onAreaDrop}
                                           renderTask={(task) => (
                                               <TaskItem
                                                   task={task}
