@@ -12,7 +12,8 @@
 // the call proceed; exit 2 blocks it and feeds stderr back to the model.
 //
 // What is blocked (fail closed when unsure):
-//   - gh pr|issue|release|workflow|run|label|repo|secret|variable|ruleset|cache
+//   - gh pr|issue|discussion|release|workflow|run|label|repo|secret|variable|
+//     ruleset|cache
 //     subcommands that are not read-only and do not target Danathar/tududi
 //     via --repo/-R or a GH_REPO= prefix; any such command whose target is
 //     chrisvel/tududi.
@@ -55,6 +56,7 @@ const GH_GROUPS = {
     variable: ['list', 'get'],
     ruleset: ['list', 'view', 'check'],
     cache: ['list'],
+    discussion: ['view', 'list'],
 };
 
 // Words that may precede the real command and carry no meaning for us.
@@ -294,6 +296,16 @@ function checkGhApi(args) {
         if (args.some((a) => /\bmutation\b/i.test(a))) {
             return block('Blocked: `gh api graphql` mutation. The target repository cannot be verified.');
         }
+        // The query must be a visible literal: a body from a file/stdin (--input,
+        // query=@file) or a shell variable could hide a mutation.
+        const query = args.map((a) => /^query=([\s\S]*)$/.exec(a)).find(Boolean);
+        const opaque =
+            args.some((a) => a === '--input' || a.startsWith('--input=')) ||
+            !query ||
+            /^[@$]/.test(query[1]);
+        if (opaque) {
+            return block('Blocked: `gh api graphql` without an inline literal `-f query=...`; the request cannot be inspected for mutations.');
+        }
         return null;
     }
     if (!mutating) return null;
@@ -419,8 +431,10 @@ function checkGitRemote(rest) {
                 'Use `DISABLE` for upstream, or the Danathar/tududi URL for origin.'
         );
     }
-    if (name === 'origin' && namesUpstream(url)) {
-        return block('Blocked: pointing `origin` at chrisvel/tududi.');
+    if (name === 'origin' && !isFork(url)) {
+        // AGENTS.md defines origin as https://github.com/Danathar/tududi; any
+        // other URL would let `git push origin` reach a different repository.
+        return block('Blocked: `origin` may only point at https://github.com/Danathar/tududi.');
     }
     return null;
 }
@@ -471,7 +485,9 @@ function checkSegment(words, state) {
     if (cmd === 'git') return checkGit(args);
     if (SHELLS.has(cmd)) {
         const c = args.findIndex((a) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a));
-        if (c !== -1 && args[c + 1] !== undefined) return checkCommand(args[c + 1], state);
+        // The script is the first non-option word after -c (`sh -c -- 'cmd'`, `sh -c -x 'cmd'`).
+        const script = c === -1 ? undefined : args.slice(c + 1).find((a) => !a.startsWith('-'));
+        if (script !== undefined) return checkCommand(script, state);
         return null;
     }
     if (cmd === 'eval') return checkCommand(args.join(' '), state);
