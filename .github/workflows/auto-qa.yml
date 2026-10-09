@@ -61,11 +61,11 @@ jobs:
           # List rather than search (the search index lags and in:title is a
           # word match). Match the exact title AND the Actions bot as author so
           # an issue someone else opens with this title is never reused.
-          existing=$(gh issue list --state open --limit 1000 --json number,title,author \
+          existing=$(gh issue list --repo "$GH_REPO" --state open --limit 1000 --json number,title,author \
             --jq '[.[] | select(.title == env.TITLE and (.author.login == "app/github-actions" or .author.login == "github-actions[bot]" or .author.login == "github-actions"))][0].number // empty')
           if [ -n "$existing" ]; then
-            gh issue edit "$existing" --body-file auto-qa-out/issue-body.md
-            gh issue comment "$existing" --body "Proposal refreshed by run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+            gh issue edit --repo "$GH_REPO" "$existing" --body-file auto-qa-out/issue-body.md
+            gh issue comment --repo "$GH_REPO" "$existing" --body "Proposal refreshed by run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
           else
-            gh issue create --title "$TITLE" --body-file auto-qa-out/issue-body.md
+            gh issue create --repo "$GH_REPO" --title "$TITLE" --body-file auto-qa-out/issue-body.md
           fi

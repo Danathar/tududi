@@ -125,7 +125,7 @@ jobs:
           [ -z "$failed" ]
 
       - name: Open or update the tracking issue
-        if: failure() && github.event_name == 'schedule'
+        if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -134,10 +134,10 @@ jobs:
         run: |
           body=$(printf 'The nightly compliance run failed on %s.\n\nFailed checks:%s\n\nRun: %s/%s/actions/runs/%s\n\nThis issue is not closed automatically; close it once the nightly is green.\n' \
             "$(date -u +%Y-%m-%d)" "${FAILED:- unknown (see run)}" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")
-          existing=$(gh issue list --state open --limit 1000 --json number,title,author \
+          existing=$(gh issue list --repo "$GH_REPO" --state open --limit 1000 --json number,title,author \
             --jq '[.[] | select(.title == env.TITLE and (.author.login == "app/github-actions" or .author.login == "github-actions[bot]" or .author.login == "github-actions"))][0].number // empty')
           if [ -n "$existing" ]; then
-            gh issue comment "$existing" --body "$body"
+            gh issue comment --repo "$GH_REPO" "$existing" --body "$body"
           else
-            gh issue create --title "$TITLE" --body "$body"
+            gh issue create --repo "$GH_REPO" --title "$TITLE" --body "$body"
           fi
