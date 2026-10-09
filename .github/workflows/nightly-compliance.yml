@@ -21,11 +21,13 @@ concurrency:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   compliance:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     timeout-minutes: 45
     steps:
       - name: Checkout code
