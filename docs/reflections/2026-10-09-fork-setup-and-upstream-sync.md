@@ -9,6 +9,14 @@
 - PR #1 relicensed the fork to GPL-3.0-only, kept upstream's MIT notice in
   `LICENSE.MIT` (byte-identical to the old `LICENSE`), and added `AGENTS.md` with
   the rule that work stays in this fork and the `gh` default-repository trap.
+- PRs #2-#4 were follow-ups to PR #1: #2 fixed `docs/directory-structure.md`,
+  which still called `LICENSE` MIT after the relicense (and added `LICENSE.MIT`
+  and `AGENTS.md` to the tree); #3 added the fork date to the README License
+  section (the GPLv3 section 5(a) date); #4 marked the README as a personal fork,
+  repointed its links, the issue chooser (`.github/ISSUE_TEMPLATE/config.yml`) and the
+  PR template at this fork, and updated AGENTS.md's list of inherited files that
+  still point upstream. The relicense PR alone left stale references that took
+  three more PRs to find.
 - PR #5 replaced upstream's release plumbing with `docker-publish.yml` that
   pushes `ghcr.io/danathar/tududi`. The PR body records two Codex P1 findings
   fixed in `24d3e3ef` ("publish only from main, on every main commit, with a
@@ -46,6 +54,9 @@
 - For the next upstream sync, repeat PR #10's structure: merge the whole tag,
   list upstream migrations and whether they ran, run the baseline on `main`
   before calling failures pre-existing, and answer each automated review finding.
+- After a relicense or fork-identity change, search the whole repository for
+  the old identity (licence names, upstream URLs) in the same PR, as PRs #2-#4
+  had to do afterwards.
 - Put the reason next to each new fork rule in AGENTS.md.
 - State in the PR when a workflow change has not been executed, and what will
   exercise it first.

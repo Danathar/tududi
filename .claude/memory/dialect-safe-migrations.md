@@ -11,11 +11,20 @@ follow the checklist in the "Writing dialect-safe migrations" section of
 `queryInterface.sequelize.getDialect()` only when unavoidable;
 `backend/migrations/20251228000001-update-project-state-enum.js` shows the
 pattern (separate `sqlite` and `postgres` branches). After adding a migration
-run `npm run backend:test:upgrade`. Never edit a migration that has shipped;
+run `npm run backend:test:upgrade` (SQLite legacy fixtures only), and run the
+migration yourself against an existing PostgreSQL database that was created
+before it: start PostgreSQL, bootstrap with the base commit (`npm run db:prepare`
+with `DATABASE_URL` set), switch to your branch and run
+`npm run migration:run` with the same `DATABASE_URL`.
+Neither CI job does this for you (see Why it matters). Never edit a migration that has shipped;
 add a new one (docs/database.md, "Never Modify Released Migrations").
-**Why it matters:** a fresh PostgreSQL database is created from the models and
+**Why it matters:** CI cannot catch this. `backend/scripts/db-prepare.js:58-72,102`
+records every migration file in the tree as already applied on an empty
+PostgreSQL database, including the one your PR adds, so `test-postgres` never
+executes it; `backend/jest.upgrade.config.js` runs only SQLite fixtures. A
+fresh PostgreSQL database is created from the models and
 every existing migration is marked applied without being run (a baseline), so
-only migrations added after the baseline execute there. A SQLite-only
+only migrations added after the baseline execute there (on existing databases). A SQLite-only
 migration passes locally and fails on PostgreSQL installs. SQLite also loses
 indexes when `safeChangeColumn` rebuilds a table: see the comment at
 `backend/migrations/20260922000005-widen-oidc-identities-picture.js:5-10`.

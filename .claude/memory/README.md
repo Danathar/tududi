@@ -59,4 +59,4 @@ against a commit, a PR or a file does not get an entry.
 | [license-mit-verbatim](license-mit-verbatim.md) | `LICENSE.MIT` stays byte-identical to upstream's notice |
 | [dialect-safe-migrations](dialect-safe-migrations.md) | Migrations must run on SQLite and PostgreSQL |
 | [known-frontend-test-failures](known-frontend-test-failures.md) | Three frontend suites already fail on main; verify before claiming a regression |
-| [hosted-only-upstream-code](hosted-only-upstream-code.md) | Do not patch upstream's hosted-mode (Cloud) code in this fork |
+| [hosted-only-upstream-code](hosted-only-upstream-code.md) | Check reachability before patching upstream's hosted-mode (Cloud) code, and record the decision |
