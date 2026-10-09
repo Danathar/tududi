@@ -1,0 +1,55 @@
+# Runs the Node built-in tests for the repo's agent tooling: the Claude Code
+# hooks under .claude/hooks/ (notably guard-bash.mjs, which keeps agents from
+# touching chrisvel/tududi) and the helper scripts under scripts/.
+# These tests need no npm install; only Node is used.
+#
+# Other slices add test files over time, so the file list is built in shell
+# and an empty glob does not fail the job.
+name: Agent tooling
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.claude/**'
+      - 'scripts/**'
+      - '.github/workflows/agent-tooling.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - '.claude/**'
+      - 'scripts/**'
+      - '.github/workflows/agent-tooling.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-tooling-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Run agent tooling tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          files=(scripts/tests/**/*.test.mjs .claude/hooks/tests/**/*.test.mjs)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No agent tooling tests found; nothing to run."
+            exit 0
+          fi
+          printf 'Running %s test file(s):\n' "${#files[@]}"
+          printf '  %s\n' "${files[@]}"
+          node --test "${files[@]}"

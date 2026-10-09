@@ -1,0 +1,68 @@
+name: Coverage gate
+
+# Fails a pull request or a push to main when Jest coverage drops below the
+# floors in .coverage-thresholds.json (compared by scripts/coverage-gate.mjs).
+# Covers the backend suite (backend/jest.config.js) and the frontend suite
+# (root jest.config.js). ci.yml does not run the frontend suite, and main has
+# three failing frontend suites (MermaidDiagram, MarkdownRenderer.publicLinks,
+# roleLabels), so a failing frontend test does not fail this job by itself;
+# only the coverage floors do. The failure is shown in the step summary.
+# Not a required status check until the owner adds it to the ruleset.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: coverage-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Backend coverage
+        run: npm run backend:test:coverage -- --coverageReporters=json-summary --coverageReporters=text-summary
+
+      - name: Frontend coverage
+        id: frontend
+        continue-on-error: true
+        run: npm run frontend:test:coverage -- --coverageReporters=json-summary --coverageReporters=text-summary
+
+      - name: Compare against floors
+        env:
+          FRONTEND_OUTCOME: ${{ steps.frontend.outcome }}
+        run: |
+          if [ "$FRONTEND_OUTCOME" = "failure" ]; then
+            {
+              echo "Note: the frontend Jest run reported failing tests (known failing suites on main); coverage is still compared."
+              echo
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          set -o pipefail
+          node scripts/coverage-gate.mjs | tee gate.txt
+
+      - name: Publish table
+        if: always()
+        run: |
+          if [ -f gate.txt ]; then
+            { cat gate.txt; echo; } >> "$GITHUB_STEP_SUMMARY"
+          fi
