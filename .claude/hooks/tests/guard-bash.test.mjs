@@ -88,6 +88,8 @@ const blocked = [
     ['echo $(gh issue create --title t)', 'no --repo'],
     ['echo `gh issue create --title t`', 'no --repo'],
     ['echo "$(gh issue create --title t)"', 'no --repo'],
+    [`echo "$(printf ')'; gh pr create)"`, 'no --repo'],
+    ['echo $(echo "(" ; gh issue create --title t)', 'no --repo'],
     ['bash -c "gh pr create --title t"', 'no --repo'],
     ['sh -lc \'git push upstream main\'', 'origin'],
     ['eval "gh pr create"', 'no --repo'],

@@ -201,11 +201,19 @@ export function extractSubstitutions(input) {
         } else if (!inSingle && c === '$' && input[i + 1] === '(') {
             let depth = 1;
             let j = i + 2;
+            // Match the closing paren, ignoring parens in quotes or escaped.
+            let q = null;
             for (; j < input.length && depth > 0; j++) {
-                if (input[j] === '(') depth++;
-                else if (input[j] === ')') depth--;
+                const d = input[j];
+                if (d === '\\' && q !== "'") j++;
+                else if (q) {
+                    if (d === q) q = null;
+                } else if (d === "'" || d === '"') q = d;
+                else if (d === '(') depth++;
+                else if (d === ')') depth--;
             }
             found.push(input.slice(i + 2, j - 1));
+            i = j - 1; // nested substitutions are found by the recursive analysis
         } else if (!inSingle && c === '`') {
             const end = input.indexOf('`', i + 1);
             const stop = end === -1 ? input.length : end;
