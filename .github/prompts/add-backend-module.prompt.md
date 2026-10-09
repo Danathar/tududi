@@ -15,7 +15,7 @@ Task: add a `<feature>` backend module.
    directly. Use `hasAccess` from `backend/middleware/authorize.js` for
    protected resources.
 3. If a table is needed, add `backend/models/<model>.js` and a migration (use
-   `.github/prompts/add-migration.md`).
+   `.github/prompts/add-migration.prompt.md`).
 4. Register the module in `backend/app.js`, the same way `areasModule` is
    required and mounted.
 5. Add tests in `backend/tests/unit/` and `backend/tests/integration/`.

@@ -13,11 +13,14 @@ must repeat this rule.
 
 | Prompt | Use it to |
 |--------|-----------|
-| [add-backend-module.md](add-backend-module.md) | Add a feature module under `backend/modules/` |
-| [add-migration.md](add-migration.md) | Add a migration that runs on SQLite and PostgreSQL |
-| [add-translation.md](add-translation.md) | Add or change UI strings in all 25 locales |
-| [sync-upstream.md](sync-upstream.md) | Bring upstream `chrisvel/tududi` changes into the fork by hand |
+| [add-backend-module.prompt.md](add-backend-module.prompt.md) | Add a feature module under `backend/modules/` |
+| [add-migration.prompt.md](add-migration.prompt.md) | Add a migration that runs on SQLite and PostgreSQL |
+| [add-translation.prompt.md](add-translation.prompt.md) | Add or change UI strings in all 25 locales |
+| [sync-upstream.prompt.md](sync-upstream.prompt.md) | Bring upstream `chrisvel/tududi` changes into the fork by hand |
 
 Other agent files are listed in the "Agent tooling" section of
 [AGENTS.md](../../AGENTS.md). Claude Code skills with the same intent live in
 `.claude/skills/`.
+
+Files use the `*.prompt.md` suffix so GitHub Copilot lists them in its prompt
+picker.
