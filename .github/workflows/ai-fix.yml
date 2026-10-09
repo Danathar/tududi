@@ -88,7 +88,7 @@ jobs:
           role=$(gh api "repos/$GH_REPO/collaborators/$ACTOR/permission" \
                    --jq '.permission' 2>/dev/null || echo none)
           case "$role" in
-            admin|write) echo "$ACTOR has $role; proceeding" ;;
+            admin|maintain|write) echo "$ACTOR has $role; proceeding" ;;
             *) echo "::error::$ACTOR lacks write access (got '$role'); refusing."; exit 1 ;;
           esac
 
