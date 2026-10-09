@@ -255,15 +255,21 @@ function isFork(value) {
     return normalizeRepo(value) === FORK;
 }
 
-/** Extract the --repo/-R value from gh args, or null. */
+/**
+ * Extract the effective --repo/-R value from gh args, or null. gh honours the
+ * LAST repeated flag, so a fork flag followed by another repo must not pass:
+ * if any value is not the fork, that one is returned; otherwise the last.
+ */
 function repoFlag(args) {
+    const values = [];
     for (let i = 0; i < args.length; i++) {
         const a = args[i];
-        if (a === '--repo' || a === '-R') return args[i + 1] ?? '';
-        if (a.startsWith('--repo=')) return a.slice(7);
-        if (a.startsWith('-R') && a.length > 2 && !a.startsWith('--')) return a.slice(2);
+        if (a === '--repo' || a === '-R') values.push(args[++i] ?? '');
+        else if (a.startsWith('--repo=')) values.push(a.slice(7));
+        else if (a.startsWith('-R') && a.length > 2 && !a.startsWith('--')) values.push(a.slice(2));
     }
-    return null;
+    if (!values.length) return null;
+    return values.find((v) => !isFork(v)) ?? values[values.length - 1];
 }
 
 const block = (reason) => ({ blocked: true, reason: `${reason}\n${GUIDANCE}` });
@@ -382,6 +388,28 @@ function checkGh(args, envRepo) {
     if (!isFork(target)) {
         return block(`Blocked: \`gh ${group} ${action}\` targets "${target}", not Danathar/tududi.`);
     }
+    if (group === 'pr' && action === 'create') return checkPrCreate(args);
+    return null;
+}
+
+/** AGENTS.md: PRs are created with an explicit `--base main` and `--head <branch>`. */
+function checkPrCreate(args) {
+    const flagValue = (long, short) => {
+        for (let i = 0; i < args.length; i++) {
+            const a = args[i];
+            if (a === long || a === short) return args[i + 1] ?? '';
+            if (a.startsWith(`${long}=`)) return a.slice(long.length + 1);
+        }
+        return null;
+    };
+    const base = flagValue('--base', '-B');
+    const head = flagValue('--head', '-H');
+    if (base !== 'main') {
+        return block('Blocked: `gh pr create` needs an explicit `--base main`.');
+    }
+    if (!head) {
+        return block('Blocked: `gh pr create` needs an explicit `--head <branch>`.');
+    }
     return null;
 }
 
@@ -432,13 +460,24 @@ function checkGitPush(rest) {
 }
 
 function checkGitRemote(rest) {
-    const isSetUrl = rest[0] === 'set-url';
-    if (!isSetUrl) return null;
+    const sub = rest[0];
     const flags = rest.slice(1).filter((a) => a.startsWith('-'));
     const plain = rest.slice(1).filter((a) => !a.startsWith('-'));
     const [name, url] = plain;
-    const push = flags.includes('--push');
+    const originHint =
+        'AGENTS.md defines origin as https://github.com/Danathar/tududi; it must not be removed, renamed or re-pointed.';
+
+    // Anything that could remove, replace or re-point `origin` would defeat the
+    // "push only to origin" rule (`git push origin` would then reach another repo).
+    if (['remove', 'rm', 'rename'].includes(sub) && plain.includes('origin')) {
+        return block(`Blocked: \`git remote ${sub}\` involving origin. ${originHint}`);
+    }
+    if (sub === 'add' && name === 'origin' && !isFork(url ?? '')) {
+        return block(`Blocked: \`git remote add origin\` with a non-fork URL. ${originHint}`);
+    }
+    if (sub !== 'set-url') return null;
     if (url === undefined) return null;
+    const push = flags.includes('--push');
     if (push && url !== 'DISABLE' && !(name === 'origin' && isFork(url))) {
         return block(
             `Blocked: \`git remote set-url --push ${name}\` to a real URL. ` +
@@ -446,9 +485,7 @@ function checkGitRemote(rest) {
         );
     }
     if (name === 'origin' && !isFork(url)) {
-        // AGENTS.md defines origin as https://github.com/Danathar/tududi; any
-        // other URL would let `git push origin` reach a different repository.
-        return block('Blocked: `origin` may only point at https://github.com/Danathar/tududi.');
+        return block(`Blocked: \`origin\` may only point at https://github.com/Danathar/tududi.`);
     }
     return null;
 }
