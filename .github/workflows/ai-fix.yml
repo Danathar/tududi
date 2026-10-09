@@ -218,7 +218,7 @@ jobs:
 
             1. Read the issue or PR with `gh issue view` or `gh pr view`, using --repo Danathar/tududi. `gh pr view` does not return inline review comments; fetch them with `${{ runner.temp }}/gh-review-read.sh pr-comments <number>` (inline comments) and `${{ runner.temp }}/gh-review-read.sh pr-reviews <number>` (review summaries). That script is read-only; do not call `gh api` directly.
             2. For each finding, verify the claim against the code at this checkout. Judge it by docs/review-rubric.md. Skip, and say why, any finding that is wrong, not actionable, or needs a merge order instead of a code change.
-            3. For a pull request, commit the fixes to the checked-out head branch and push it to origin. For an issue, create a branch from main and open a PR with `gh pr create --repo Danathar/tududi --base main --head <branch>`.
+            3. For a pull request, commit the fixes to the checked-out head branch and push with exactly `git push -u origin HEAD` (no other push form is permitted). For an issue, create a branch from main with `git switch -c <branch>`, push with exactly `git push -u origin HEAD`, then open a PR with `gh pr create --repo Danathar/tududi --base main --head <branch>`.
             4. Follow CLAUDE.md for style, tests and migrations. Do not bump the version in package.json. Do not merge anything.
             5. Finish with one comment (`gh issue comment --repo Danathar/tududi` or `gh pr comment --repo Danathar/tududi`) listing which findings you applied and which you rejected, with the reason for each.
           claude_args: >-
