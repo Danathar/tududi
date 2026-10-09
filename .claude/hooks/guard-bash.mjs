@@ -419,6 +419,11 @@ function checkGh(args, envRepo) {
 
 /** AGENTS.md: PRs are created with an explicit `--base main` and `--head <branch>`. */
 function checkPrCreate(args) {
+    // Flags whose value must be skipped so e.g. `--body "-Bump deps"` is not read as `-B`.
+    const takesValue = new Set([
+        '--title', '-t', '--body', '-b', '--body-file', '-F', '--label', '-l', '--assignee', '-a',
+        '--reviewer', '-r', '--milestone', '-m', '--project', '-p', '--template', '-T',
+    ]);
     const flagValue = (long, short) => {
         let found = null;
         for (let i = 0; i < args.length; i++) {
@@ -426,6 +431,7 @@ function checkPrCreate(args) {
             if (a === long || a === short) found = args[i + 1] ?? '';
             else if (a.startsWith(`${long}=`)) found = a.slice(long.length + 1);
             else if (a.startsWith(short) && a.length > 2 && !a.startsWith('--')) found = a.slice(2); // -Bdevelop
+            if (a === long || a === short || takesValue.has(a)) i++; // skip this flag's value
         }
         return found; // gh honours the last occurrence of a repeated flag
     };
@@ -445,7 +451,8 @@ function checkPrCreate(args) {
 // ---------------------------------------------------------------------------
 
 // git config keys that can redirect where a push goes or how it authenticates.
-const RISKY_GIT_CONFIG = /^(remote\.|url\.|push\.|credential\.|core\.sshcommand$)/i;
+// (push.* keys such as push.default or push.autoSetupRemote cannot change the target.)
+const RISKY_GIT_CONFIG = /^(remote\.|url\.|credential\.|core\.sshcommand$)/i;
 
 function checkGit(args, inlineEnv = {}, exported = {}) {
     // Walk global options to find the subcommand, vetting `-c key=value`.
@@ -477,11 +484,35 @@ function checkGit(args, inlineEnv = {}, exported = {}) {
 function checkGitConfig(rest) {
     const readOnly = ['--get', '--get-all', '--get-regexp', '--get-urlmatch', '--list', '-l', '--show-origin', '--show-scope'];
     if (rest.some((a) => readOnly.includes(a))) return null;
-    const keys = rest.filter((a) => !a.startsWith('-'));
-    const key = keys[0];
-    // A write is `key value`, or any --unset/--add/--replace-all/section edit.
-    const modifies =
-        keys.length > 1 || rest.some((a) => /^--(unset|unset-all|add|replace-all|remove-section|rename-section)$/.test(a));
+
+    // Collect positionals, skipping the values of options that take one
+    // (`git config -f .git/config remote.origin.url <url>`).
+    const valueFlags = ['-f', '--file', '--blob', '--type', '--default', '--comment'];
+    const positionals = [];
+    for (let k = 0; k < rest.length; k++) {
+        const a = rest[k];
+        if (valueFlags.includes(a)) k++;
+        else if (!a.startsWith('-')) positionals.push(a);
+    }
+
+    // Modern syntax: `git config set|unset|replace-all|... <key> [value]`.
+    const verbs = ['set', 'unset', 'replace-all', 'add', 'rename-section', 'remove-section', 'edit'];
+    const readVerbs = ['get', 'list'];
+    let modifies = false;
+    if (positionals.length && readVerbs.includes(positionals[0])) return null;
+    if (positionals.length && verbs.includes(positionals[0])) {
+        if (positionals[0] === 'edit') {
+            return block('Blocked: `git config edit` could redirect pushes or credentials.');
+        }
+        positionals.shift();
+        modifies = true;
+    }
+    const key = positionals[0];
+    // Legacy syntax: a write is `key value`, or --unset/--add/--replace-all/section edits.
+    modifies =
+        modifies ||
+        positionals.length > 1 ||
+        rest.some((a) => /^--(unset|unset-all|add|replace-all|remove-section|rename-section)$/.test(a));
     if (key !== undefined && RISKY_GIT_CONFIG.test(key) && modifies) {
         return block(`Blocked: \`git config ${key}\` write could redirect pushes or credentials.`);
     }
@@ -618,7 +649,7 @@ function checkSegment(words, state) {
     const cmd = basename(w[0]);
     const args = w.slice(1);
 
-    if (cmd === 'export') {
+    if (cmd === 'export' || ((cmd === 'declare' || cmd === 'typeset') && args.some((a) => /^-[a-zA-Z]*x/.test(a)))) {
         for (const a of args) {
             if (a.startsWith('GH_REPO=')) state.exportedGhRepo = a.slice(8);
             if (/^(GIT_CONFIG_|GIT_SSH)/i.test(a)) (state.exportedEnv ??= {})[a.split('=')[0]] = a;
