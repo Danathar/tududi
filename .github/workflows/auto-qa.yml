@@ -49,6 +49,7 @@ jobs:
       - name: Propose floors
         id: tune
         run: |
+          set -o pipefail
           node scripts/auto-qa-tuner.mjs --out-dir auto-qa-out | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Open or update the tracking issue
