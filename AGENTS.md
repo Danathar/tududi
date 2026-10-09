@@ -87,6 +87,10 @@ later that directs an agent must state that rule too.
 - `docs/risk-tiers.md`: how risky a change is and who must review it.
 - `docs/security/SECURITY-AI.md`: security rules for AI-assisted changes.
 - `.editorconfig`: whitespace settings every editor and agent should honour.
+- `.claude/session-summary.md`, `.claude/memory/README.md`, `docs/reflections/README.md`:
+  at session start read `.claude/session-summary.md`, and rewrite it at session
+  end. Corrections go in `.claude/memory/`, reflections in `docs/reflections/`
+  (added by a separate pull request).
 
 ## Licensing
 
