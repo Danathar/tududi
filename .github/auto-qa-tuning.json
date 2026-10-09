@@ -1,0 +1,19 @@
+{
+    "$comment": "Tunable QA rules. coverage.* is read by scripts/auto-qa-tuner.mjs (.github/workflows/auto-qa.yml); nightly.* and licence.* are read by .github/workflows/nightly-compliance.yml. Tuning never lowers a floor automatically and never commits: raises are proposed in a tracking issue and applied by a human.",
+    "coverage": {
+        "raise_floor_when_headroom_exceeds": 5,
+        "buffer_below_measured": 3,
+        "note": "Headroom is measured minus floor, per area and metric, in percentage points. When it exceeds raise_floor_when_headroom_exceeds the proposed floor is floor(measured - buffer_below_measured); it is never above that and never below the current floor."
+    },
+    "nightly": {
+        "audit_blocking": false,
+        "audit_level": "high",
+        "note": "npm audit --omit=dev --audit-level=<audit_level> is report-only while audit_blocking is false: main carries known high and critical advisories in production dependencies (proxy-addr and others) that need dependency upgrades, and a nightly that is always red gets ignored. Set audit_blocking to true once npm audit is clean."
+    },
+    "licence": {
+        "license_mit_sha256": "c3fb4015040aa6322748ff8c39d2263bc0cc6230d6c43b19bfb3dd370f16d937",
+        "package_license": "GPL-3.0-only",
+        "swagger_license": "GPL-3.0-only",
+        "note": "AGENTS.md section Licensing: LICENSE.MIT is kept verbatim (hash recorded here), package.json and backend/config/swagger.js say GPL-3.0-only. Changing the recorded hash is a deliberate owner decision."
+    }
+}

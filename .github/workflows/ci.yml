@@ -43,7 +43,11 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        # The same official image, from Amazon ECR Public's mirror of Docker
+        # Hub's library images (identical index digest). Pulling from Docker
+        # Hub unauthenticated hit its rate limit on shared runners and failed
+        # this job at "Initialize containers" before any test ran.
+        image: public.ecr.aws/docker/library/postgres:16-alpine
         env:
           POSTGRES_USER: tududi
           POSTGRES_PASSWORD: tududi
