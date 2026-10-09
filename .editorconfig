@@ -1,6 +1,7 @@
 # EditorConfig: https://editorconfig.org
 # Matches .prettierrc.json (4 spaces, LF) and the indentation already used in
-# the repository: workflows, YAML, JSON and shell scripts use 2 spaces.
+# the repository: workflows, YAML and JSON use 2 spaces. Shell scripts mix 2 and 4 spaces, so
+# no indent size is forced for them beyond the default.
 root = true
 
 [*]
@@ -11,7 +12,7 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 4
 
-[*.{yml,yaml,json,sh}]
+[*.{yml,yaml,json}]
 indent_size = 2
 
 [*.md]

@@ -73,8 +73,8 @@ direction or the other.
 ## Agent tooling
 
 These files steer AI tools in this repository. All of them inherit the fork
-rule above: PRs and issues go to this fork, every `gh` command takes
-`--repo Danathar/tududi`, and nothing targets `chrisvel/tududi`. Any file added
+rule above: PRs and issues go to this fork, every `gh pr`, `gh issue`,
+`gh release` and `gh workflow` command takes `--repo Danathar/tududi`, and nothing targets `chrisvel/tududi`. Any file added
 later that directs an agent must state that rule too.
 
 - `.github/copilot-instructions.md`: GitHub Copilot guide.
