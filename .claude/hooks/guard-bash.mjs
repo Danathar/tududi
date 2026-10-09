@@ -425,6 +425,7 @@ function checkPrCreate(args) {
             const a = args[i];
             if (a === long || a === short) found = args[i + 1] ?? '';
             else if (a.startsWith(`${long}=`)) found = a.slice(long.length + 1);
+            else if (a.startsWith(short) && a.length > 2 && !a.startsWith('--')) found = a.slice(2); // -Bdevelop
         }
         return found; // gh honours the last occurrence of a repeated flag
     };
@@ -446,7 +447,7 @@ function checkPrCreate(args) {
 // git config keys that can redirect where a push goes or how it authenticates.
 const RISKY_GIT_CONFIG = /^(remote\.|url\.|push\.|credential\.|core\.sshcommand$)/i;
 
-function checkGit(args, inlineEnv = {}) {
+function checkGit(args, inlineEnv = {}, exported = {}) {
     // Walk global options to find the subcommand, vetting `-c key=value`.
     let i = 0;
     while (i < args.length && args[i].startsWith('-')) {
@@ -463,11 +464,30 @@ function checkGit(args, inlineEnv = {}) {
     const rest = args.slice(i + 1);
 
     if (sub === 'push') {
-        const envKey = Object.keys(inlineEnv).find((k) => /^(GIT_CONFIG_|GIT_SSH)/i.test(k));
+        const envKey = Object.keys({ ...exported, ...inlineEnv }).find((k) => /^(GIT_CONFIG_|GIT_SSH)/i.test(k));
         if (envKey) return block(`Blocked: \`git push\` with ${envKey}= could redirect the push.`);
         return checkGitPush(rest);
     }
     if (sub === 'remote') return checkGitRemote(rest);
+    if (sub === 'config') return checkGitConfig(rest);
+    return null;
+}
+
+/** Writes to push-redirecting config keys (`git config remote.origin.url ...`). */
+function checkGitConfig(rest) {
+    const readOnly = ['--get', '--get-all', '--get-regexp', '--get-urlmatch', '--list', '-l', '--show-origin', '--show-scope'];
+    if (rest.some((a) => readOnly.includes(a))) return null;
+    const keys = rest.filter((a) => !a.startsWith('-'));
+    const key = keys[0];
+    // A write is `key value`, or any --unset/--add/--replace-all/section edit.
+    const modifies =
+        keys.length > 1 || rest.some((a) => /^--(unset|unset-all|add|replace-all|remove-section|rename-section)$/.test(a));
+    if (key !== undefined && RISKY_GIT_CONFIG.test(key) && modifies) {
+        return block(`Blocked: \`git config ${key}\` write could redirect pushes or credentials.`);
+    }
+    if (rest.includes('--edit') || rest.includes('-e')) {
+        return block('Blocked: `git config --edit` could redirect pushes or credentials.');
+    }
     return null;
 }
 
@@ -555,15 +575,32 @@ function checkSegment(words, state) {
         if (!w.length) return null;
         const cmd = basename(w[0]);
         if (!WRAPPERS.has(cmd)) break;
-        // `env -S 'gh pr create'` / `env --split-string=...` runs a command string.
+        // `env -S 'gh pr create'` / `--split-string=...` runs a command string.
+        // Only env's own leading options and NAME=value words are scanned; the
+        // wrapped command's arguments (e.g. `--title -Sx`) are not env options.
         if (cmd === 'env') {
             for (let k = 1; k < w.length; k++) {
                 const a = w[k];
+                if (isAssignment(a)) continue;
+                if (!a.startsWith('-')) break; // first word of the wrapped command
+                if (['-u', '--unset', '-C', '--chdir'].includes(a)) {
+                    k++;
+                    continue;
+                }
                 let script = null;
-                if (a === '-S' || a === '--split-string') script = w[k + 1] ?? '';
-                else if (a.startsWith('--split-string=')) script = a.slice(15);
+                let rest = k + 1;
+                if (a === '-S' || a === '--split-string') {
+                    script = w[k + 1] ?? '';
+                    rest = k + 2;
+                } else if (a.startsWith('--split-string=')) script = a.slice(15);
                 else if (/^-S./.test(a)) script = a.slice(2);
-                if (script !== null) return checkCommand(script, state);
+                if (script === null) continue;
+                // Check the string on its own, then as the head of the command
+                // that still has the remaining words appended.
+                const alone = checkCommand(script, state);
+                if (alone) return alone;
+                const head = tokenize(script).flat();
+                return checkSegment([...head, ...w.slice(rest)], state);
             }
         }
         // Look through the wrapper for the real command.
@@ -584,6 +621,7 @@ function checkSegment(words, state) {
     if (cmd === 'export') {
         for (const a of args) {
             if (a.startsWith('GH_REPO=')) state.exportedGhRepo = a.slice(8);
+            if (/^(GIT_CONFIG_|GIT_SSH)/i.test(a)) (state.exportedEnv ??= {})[a.split('=')[0]] = a;
         }
         return null;
     }
@@ -591,7 +629,7 @@ function checkSegment(words, state) {
         const envRepo = inlineEnv.GH_REPO ?? state.exportedGhRepo ?? null;
         return checkGh(args, envRepo);
     }
-    if (cmd === 'git') return checkGit(args, inlineEnv);
+    if (cmd === 'git') return checkGit(args, inlineEnv, state.exportedEnv ?? {});
     if (SHELLS.has(cmd)) {
         const c = args.findIndex((a) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a));
         // The script is the first non-option word after -c (`sh -c -- 'cmd'`, `sh -c -x 'cmd'`).
