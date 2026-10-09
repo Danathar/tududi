@@ -50,14 +50,15 @@ concurrency:
   group: ai-fix-${{ github.event.issue.number || github.event.pull_request.number }}
   cancel-in-progress: false
 
-permissions:
-  contents: write
-  issues: write
-  pull-requests: write
-  actions: read
+permissions: {}
 
 jobs:
   requested:
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: read
     if: >-
       github.event.sender.type != 'Bot' && (
         (
