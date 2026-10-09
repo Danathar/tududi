@@ -22,7 +22,12 @@ Start of session:
    drift: check with `git log origin/main`, `gh pr list --repo Danathar/tududi`
    and `gh issue list --repo Danathar/tududi`.
 
-End of session (before the final message, in the same PR when there is one):
+End of session. This file is one tracked singleton, so concurrent PRs that all
+rewrite it will conflict or overwrite each other. Rule: only the session that
+lands work on `main` (the one that merges, or a dedicated handoff PR opened
+after the merge) rewrites it, starting from the current `origin/main` copy. A
+session that opens a PR to be merged later puts its notes in the PR body and
+leaves this file alone. Steps for the session that updates it:
 
 1. Update "Current state" so it matches what is on `main` now.
 2. Replace the "Last session" entry. Overwrite it; do not append a history. What

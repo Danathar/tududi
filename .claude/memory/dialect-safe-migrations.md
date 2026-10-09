@@ -13,9 +13,14 @@ follow the checklist in the "Writing dialect-safe migrations" section of
 pattern (separate `sqlite` and `postgres` branches). After adding a migration
 run `npm run backend:test:upgrade` (SQLite legacy fixtures only), and run the
 migration yourself against an existing PostgreSQL database that was created
-before it: start PostgreSQL, bootstrap with the base commit (`npm run db:prepare`
-with `DATABASE_URL` set), switch to your branch and run
-`npm run migration:run` with the same `DATABASE_URL`.
+before it. Use a disposable database only: start a throwaway container (as the
+`test-postgres` job in `.github/workflows/ci.yml` does, `postgres:16-alpine`),
+`export DATABASE_URL=postgres://tududi:tududi@localhost:5432/tududi_scratch`,
+and print it to confirm it is the scratch database before running anything
+(`db:prepare` and `migration:run` write to whatever it names). Bootstrap with
+the base commit (`npm run db:prepare`), switch to your branch, run
+`npm run migration:run` with the same `DATABASE_URL`, then delete the container.
+Never point `DATABASE_URL` at a database holding real data.
 Neither CI job does this for you (see Why it matters). Never edit a migration that has shipped;
 add a new one (docs/database.md, "Never Modify Released Migrations").
 **Why it matters:** CI cannot catch this. `backend/scripts/db-prepare.js:58-72,102`
