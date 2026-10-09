@@ -1,0 +1,51 @@
+# Path to label map for actions/labeler v5 (.github/workflows/labeler.yml).
+# Labels must already exist in the repository; the labeler does not create them.
+
+'area/backend':
+  - changed-files:
+      - any-glob-to-any-file: 'backend/**'
+
+'area/frontend':
+  - changed-files:
+      - any-glob-to-any-file: 'frontend/**'
+
+'area/migrations':
+  - changed-files:
+      - any-glob-to-any-file: 'backend/migrations/**'
+
+'area/i18n':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'public/locales/**'
+          - 'backend/modules/landing/locales/**'
+
+'area/ci':
+  - changed-files:
+      - any-glob-to-any-file: '.github/**'
+
+'area/docs':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**'
+          - '*.md'
+
+'area/e2e':
+  - changed-files:
+      - any-glob-to-any-file: 'e2e/**'
+
+'area/docker':
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'Dockerfile*'
+          - 'docker-compose*.yml'
+
+'area/agents':
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.claude/**'
+          - '.cursor/**'
+          - 'AGENTS.md'
+          - 'CLAUDE.md'
+          - '.github/copilot-instructions.md'
+          - '.github/prompts/**'
+          - 'policies/**'
