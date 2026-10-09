@@ -4,9 +4,11 @@
 *.sqlite3-wal
 certs/
 .DS_Store
-.cursor
-# CLAUDE.md - project documentation (committed)
-CLAUDE.local.md  # User-specific customizations (ignored)
+# Cursor: commit .cursor/rules/, ignore anything else
+.cursor/*
+!.cursor/rules/
+# CLAUDE.md is committed; CLAUDE.local.md holds user-specific customizations (ignored)
+CLAUDE.local.md
 
 .byebug_history
 node_modules
@@ -14,7 +16,9 @@ node_modules
 
 public/js/bundle.js
 .aider*
-.claude*
+# Agent config under .claude/ is committed; only local overrides are ignored
+.claude/settings.local.json
+.claude/*.local.*
 
 backend/coverage/
 
