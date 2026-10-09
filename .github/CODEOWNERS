@@ -14,8 +14,7 @@
 /policies/                              @Danathar
 /scripts/check-policies.mjs             @Danathar
 /risk-config.json                       @Danathar
-/LICENSE                                @Danathar
-/LICENSE.MIT                            @Danathar
+/LICENSE*                               @Danathar
 /package.json                           @Danathar
 /package-lock.json                      @Danathar
 /AGENTS.md                              @Danathar

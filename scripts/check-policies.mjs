@@ -248,10 +248,17 @@ function blockGhRepo(code, a) {
  * job or step does not count. Any GH_REPO or --repo naming another repository
  * is a violation.
  */
+// Value of --repo/-R: a GH_REPO reference, the github.repository expression,
+// or an owner/repo token that stops at the first character that cannot be in
+// one (quotes, ':', ')', ',', whitespace), so `--repo Danathar/tududi:*),` in
+// an --allowedTools string reads as Danathar/tududi.
+const REPO_FLAG =
+    /(?:--repo|-R)(?:\s+|=)["']?(\$\{?GH_REPO\}?|\$\{\{\s*github\.repository\s*\}\}|[\w.-]+\/[\w.-]+|[^\s"',:)]+)/;
+
 export function checkGhScope(f, code, policy) {
     const v = [];
     const allowed = policy.allowedRepoValues;
-    const unq = (x) => x.replace(/^["']|["']$/g, '');
+    const unq = (x) => x.replace(/^["']|["']$/g, '').replace(/\s+/g, ' ');
     const okLiteral = (x) => allowed.includes(unq(x));
     const reportedBad = new Set();
     code.forEach((l, i) => {
@@ -276,22 +283,32 @@ export function checkGhScope(f, code, policy) {
         const scoped =
             chain.some((a) => blockGhRepo(code, a).some(okEnv)) ||
             blockGhRepo(code, -1).some(okEnv);
-        const flag = t.match(/(?:--repo|-R)[ =]\s*(\S+)/);
-        if (flag) {
-            const val = unq(flag[1]);
-            const viaEnv = /^\$\{?GH_REPO\}?$/.test(val);
-            if (viaEnv ? !scoped : !okLiteral(val)) {
+        // Judge each write command on its own segment of the line, so a
+        // line that lists several (an --allowedTools string) is not
+        // misread as one command with one flag.
+        const starts = [
+            ...t.matchAll(new RegExp(policy.ghWriteCommandPattern, 'g')),
+        ].map((m) => m.index);
+        starts.forEach((from, n) => {
+            const seg = t.slice(from, starts[n + 1] ?? t.length);
+            const cmd = seg.match(new RegExp(policy.ghWriteCommandPattern))[0];
+            const flag = seg.match(REPO_FLAG);
+            if (flag) {
+                const val = flag[1];
+                const viaEnv = /^\$\{?GH_REPO\}?$/.test(val);
+                if (viaEnv ? !scoped : !okLiteral(val)) {
+                    v.push(
+                        viaEnv
+                            ? `${f}:${line}: "${cmd}" uses $GH_REPO but no valid GH_REPO is set in this step, job or workflow env`
+                            : `${f}:${line}: "${cmd}" targets "${val}", expected ${allowed[0]} or Danathar/tududi`,
+                    );
+                }
+            } else if (!scoped) {
                 v.push(
-                    viaEnv
-                        ? `${f}:${line}: "${writes[0]}" uses $GH_REPO but no valid GH_REPO is set in this step, job or workflow env`
-                        : `${f}:${line}: "${writes[0]}" targets "${val}", expected ${allowed[0]} or Danathar/tududi`,
+                    `${f}:${line}: "${cmd}" has no --repo and no valid GH_REPO is set in this step, job or workflow env`,
                 );
             }
-        } else if (!scoped) {
-            v.push(
-                `${f}:${line}: "${writes[0]}" has no --repo and no valid GH_REPO is set in this step, job or workflow env`,
-            );
-        }
+        });
     }
     return v;
 }

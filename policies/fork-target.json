@@ -23,10 +23,10 @@
     ],
     "excludeGlobs": [],
     "writeCommandPattern": "\\bgh\\s+(?:(?:pr|issue|release|workflow|label)\\s+(?:create|comment|edit|close|reopen|merge|review|delete|run|enable|disable|ready|upload|delete-asset|lock|unlock|transfer|pin|unpin|update-branch|develop)|run\\s+(?:rerun|cancel|delete))\\b",
-    "repoFlagPattern": "(?:--repo|-R)[ =]Danathar/tududi\\b",
+    "repoFlagPattern": "(?:--repo|-R)[ =]Danathar/tududi(?![\\w.-])",
     "forbiddenPatterns": [
-        "(?:--repo|-R)[ =]chrisvel/tududi\\b",
-        "GH_REPO=chrisvel/tududi\\b",
+        "(?:--repo|-R)[ =]chrisvel/tududi(?![\\w.-])",
+        "GH_REPO=chrisvel/tududi(?![\\w.-])",
         "gh\\s+repo\\s+set-default\\s+chrisvel/tududi\\b",
         "git\\s+push\\s+(?:\\S+\\s+)*upstream\\b"
     ]

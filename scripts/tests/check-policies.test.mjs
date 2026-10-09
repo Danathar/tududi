@@ -360,6 +360,44 @@ test('workflows: an unrelated --repo elsewhere does not scope another write', ()
     assert.match(v[0], /"gh pr close" has no --repo/);
 });
 
+const ALLOWED_TOOLS =
+    '      - run: claude --allowedTools "Bash(gh pr create --repo Danathar/tududi:*),Bash(gh issue comment --repo Danathar/tududi:*),Bash(gh pr merge -R Danathar/tududi)"\n';
+
+test('workflows: --allowedTools strings with several scoped gh commands pass', () => {
+    assert.deepEqual(run({ '.github/workflows/a.yml': GOOD_WF + ALLOWED_TOOLS }), []);
+});
+
+test('workflows: each gh command in one line is judged on its own flag', () => {
+    const v = run({
+        '.github/workflows/a.yml':
+            GOOD_WF +
+            '      - run: claude --allowedTools "Bash(gh pr create --repo Danathar/tududi:*),Bash(gh issue comment:*)"\n',
+    });
+    assert.equal(v.length, 1);
+    assert.match(v[0], /"gh issue comment" has no --repo/);
+});
+
+test('workflows: upstream repo in an --allowedTools string still fails', () => {
+    for (const bad of [
+        'Bash(gh pr create --repo chrisvel/tududi:*)',
+        'Bash(gh pr create -R chrisvel/tududi)',
+        'Bash(gh pr create --repo Danathar/tududi-other:*)',
+    ]) {
+        const v = run({
+            '.github/workflows/a.yml': GOOD_WF + `      - run: claude --allowedTools "${bad}"\n`,
+        });
+        assert.equal(v.length, 1, bad);
+        assert.match(v[0], /targets "/);
+    }
+});
+
+test('fork-target: markdown allowedTools shape passes, upstream and lookalike fail', () => {
+    const ok = 'Bash(gh pr create --repo Danathar/tududi:*),Bash(gh issue comment --repo Danathar/tududi:*)\n';
+    assert.deepEqual(run({ 'docs/a.md': ok }), []);
+    assert.ok(run({ 'docs/a.md': 'Bash(gh pr create --repo chrisvel/tududi:*)\n' }).length > 0);
+    assert.ok(run({ 'docs/a.md': 'gh pr create --repo Danathar/tududi-fork\n' }).length > 0);
+});
+
 test('workflows: top-level write permissions are rejected', () => {
     const all = GOOD_WF.replace('permissions:\n  contents: read', 'permissions: write-all');
     assert.match(run({ '.github/workflows/a.yml': all }).join('\n'), /write-all/);

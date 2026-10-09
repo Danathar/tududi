@@ -16,8 +16,7 @@
                 ".github/CODEOWNERS",
                 "policies/**",
                 "risk-config.json",
-                "LICENSE",
-                "LICENSE.MIT",
+                "LICENSE*",
                 "package.json",
                 "package-lock.json",
                 "AGENTS.md"

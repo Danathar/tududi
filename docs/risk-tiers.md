@@ -18,7 +18,7 @@ directory level.
 
 | Tier | Name | Covers | Required commands | Review |
 | ---- | ---- | ------ | ----------------- | ------ |
-| 1 | critical | `backend/migrations/**`, `backend/models/**`, `backend/middleware/**`, `backend/services/backupService.js`, `Dockerfile`, `scripts/docker-entrypoint.sh`, `.github/workflows/**`, `.github/CODEOWNERS`, `policies/**`, `risk-config.json`, `LICENSE`, `LICENSE.MIT`, `package.json`, `package-lock.json`, `AGENTS.md` | `npm run lint`, `npm run backend:test`, `npm run backend:test:pg`, `npm run backend:test:upgrade` | `owner` |
+| 1 | critical | `backend/migrations/**`, `backend/models/**`, `backend/middleware/**`, `backend/services/backupService.js`, `Dockerfile`, `scripts/docker-entrypoint.sh`, `.github/workflows/**`, `.github/CODEOWNERS`, `policies/**`, `risk-config.json`, `LICENSE*`, `package.json`, `package-lock.json`, `AGENTS.md` | `npm run lint`, `npm run backend:test`, `npm run backend:test:pg`, `npm run backend:test:upgrade` | `owner` |
 | 2 | high | `backend/modules/auth/**`, `backend/modules/oidc/**`, `backend/modules/oauth/**`, `backend/modules/backup/**`, `backend/modules/telegram/**`, `backend/modules/mcp/**`, `backend/modules/ai-assistant/**`, `backend/config/**`, `backend/services/permissionsService.js`, `backend/services/sessionService.js`, `docker-compose.yml`, `docker-compose.dev.yml` | `npm run lint`, `npm run backend:test` | `owner` |
 | 3 | medium | `backend/modules/**`, `backend/services/**`, `backend/utils/**`, `backend/tests/**`, `frontend/**`, `e2e/**`, `CLAUDE.md` | `npm run lint`, `npm run backend:test`, `npm run frontend:test` | `ci` |
 | 4 | low | `docs/**`, `public/locales/**`, `*.md`, `.editorconfig` | none | `ci` |
@@ -64,7 +64,7 @@ path table assigns to each path.
 - **`Dockerfile`, `scripts/docker-entrypoint.sh`, `.github/workflows/**`.** What
   ships to `ghcr.io/danathar/tududi` and what runs with repository tokens. See
   [AI security policy](security/SECURITY-AI.md).
-- **`LICENSE`, `LICENSE.MIT`, `package.json`, `package-lock.json`.** Licence
+- **`LICENSE*`, `package.json`, `package-lock.json`.** Licence
   text and identifiers are fixed by [AGENTS.md](../AGENTS.md), and the version
   must not be bumped. Dependency changes alter what runs in the image.
 - **`AGENTS.md`, `policies/**`, `risk-config.json`, `.github/CODEOWNERS`.** The
