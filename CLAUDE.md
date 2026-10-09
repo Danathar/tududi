@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**This repository is a fork (`Danathar/tududi`). Read [AGENTS.md](AGENTS.md) first.** Its rules decide where PRs, issues, and pushes go, and they override anything below.
+**This repository is a fork (`Danathar/tududi`). Read [AGENTS.md](AGENTS.md) first.** Its rules decide where PRs, issues, and pushes go (pass `--repo Danathar/tududi` to every `gh` command), and they override anything below.
 
 @AGENTS.md
 
