@@ -55,11 +55,21 @@ function lines(body) {
     return String(body ?? '').split(/\r?\n/);
 }
 
-/** First `— hive: agent=...` line of the body, or null. */
+/**
+ * First `— hive: agent=...` line of the body, or null. Lines inside fenced
+ * code blocks are examples, not a signature, and are skipped.
+ */
 export function findSignature(body) {
+    let fence = null;
     for (const line of lines(body)) {
         const trimmed = line.trim();
-        if (SIGNATURE_LINE.test(trimmed)) {
+        const marker = /^(```|~~~)/.exec(trimmed)?.[1];
+        if (marker) {
+            if (fence === null) fence = marker;
+            else if (fence === marker) fence = null;
+            continue;
+        }
+        if (fence === null && SIGNATURE_LINE.test(trimmed)) {
             return trimmed;
         }
     }

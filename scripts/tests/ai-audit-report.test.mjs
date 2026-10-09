@@ -62,6 +62,16 @@ test('signature must be its own line and name an agent', () => {
     assert.equal(findSignature(`a\r\n${SIG}\r\n`), SIG);
 });
 
+test('a signature inside a fenced code block is an example, not a signature', () => {
+    assert.equal(findSignature(`Example:\n\`\`\`\n${SIG}\n\`\`\`\n`), null);
+    assert.equal(findSignature(`~~~\n${SIG}\n~~~\n${SIG}`), SIG);
+    const human = pr({
+        author: { login: 'Danathar' },
+        body: `Docs about the format:\n\`\`\`\n${SIG}\n\`\`\``,
+    });
+    assert.equal(classify(human).agent, false);
+});
+
 test('missing linked issue is a violation', () => {
     assert.deepEqual(auditPr(pr({ closingIssuesReferences: [] })), ['linked-issue']);
 });
