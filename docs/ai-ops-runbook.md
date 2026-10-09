@@ -156,10 +156,16 @@ Rollback is re-pointing `:latest` at the last good one.
    `:latest` on its own. `gh workflow run docker-publish.yml --repo Danathar/tududi --ref main`
    republishes `main`; a run from any other ref is refused by design.
 
-Backups embed the app version (`package.json`), so a rollback within the same
-upstream version is safe for restores. A rollback across an upstream sync can
-meet `backend/services/backupService.js` refusing a backup newer than the image;
-take a backup before you move back across a sync, not after.
+Backups embed the app version (`package.json`), and
+`checkVersionCompatibility()` in `backend/services/backupService.js` only
+refuses a backup whose version is newer than the running image. It compares
+version numbers, not commits or data format. The fork keeps upstream's version
+between syncs, so two images built from different fork commits can carry the
+same version while one has a newer data model. Equal versions therefore do not
+prove a restore is safe: a rollback image can accept a backup it does not
+understand. Rolling back across an upstream sync can also hit the refusal for a
+backup newer than the image. Before you roll back, take a backup first, and test
+a restore against the target image on a copy of the data, not the live volume.
 
 ## A pull request or issue reached upstream
 
