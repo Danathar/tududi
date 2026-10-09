@@ -1,0 +1,10 @@
+{
+    "$comment": "Workflow hygiene for .github/workflows. Evaluated by scripts/check-policies.mjs. See docs/security/SECURITY-AI.md.",
+    "workflowGlobs": [".github/workflows/*.yml", ".github/workflows/*.yaml"],
+    "requireTopLevelPermissions": true,
+    "forbiddenTriggers": ["pull_request_target"],
+    "trustedActionOwners": ["actions", "github"],
+    "pinPattern": "^[0-9a-f]{40}$",
+    "ghWriteNeedsRepo": true,
+    "ghWriteCommandPattern": "\\bgh\\s+(?:pr|issue|release|workflow|label)\\s+(?:create|comment|edit|close|reopen|merge|review|delete|run)\\b"
+}

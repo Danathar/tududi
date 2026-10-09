@@ -1,0 +1,35 @@
+{
+    "$comment": "Keeps every agent from sending work to chrisvel/tududi. Evaluated by scripts/check-policies.mjs. See AGENTS.md, section 'This repository is a fork. All work happens here.'",
+    "requiredLiteral": "--repo Danathar/tududi",
+    "requiredPointer": "AGENTS.md",
+    "pointerExempt": "AGENTS.md",
+    "directionGlobs": [
+        "AGENTS.md",
+        "CLAUDE.md",
+        ".github/copilot-instructions.md",
+        ".cursor/rules/**",
+        ".github/prompts/**/*.md",
+        ".claude/skills/**/*.md",
+        ".claude/memory/README.md",
+        "docs/security/SECURITY-AI.md",
+        "docs/ai-ops-runbook.md",
+        "docs/multi-agent.md",
+        "docs/agent-boundaries.md"
+    ],
+    "scanGlobs": [
+        "*.md",
+        "docs/**/*.md",
+        ".github/**/*.md",
+        ".claude/**/*.md",
+        "policies/**/*.md"
+    ],
+    "excludeGlobs": [],
+    "writeCommandPattern": "\\bgh\\s+(?:pr|issue|release|workflow|label)\\s+(?:create|comment|edit|close|reopen|merge|review|delete|run)\\b",
+    "repoFlagPattern": "(?:--repo|-R)[ =]Danathar/tududi\\b|GH_REPO=Danathar/tududi\\b",
+    "forbiddenPatterns": [
+        "(?:--repo|-R)[ =]chrisvel/tududi\\b",
+        "GH_REPO=chrisvel/tududi\\b",
+        "gh\\s+repo\\s+set-default\\s+chrisvel/tududi\\b",
+        "git\\s+push\\s+(?:\\S+\\s+)*upstream\\b"
+    ]
+}
