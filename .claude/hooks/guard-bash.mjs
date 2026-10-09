@@ -302,7 +302,9 @@ function checkGhApi(args) {
 
 function checkGh(args, envRepo) {
     // Locate group and action (first two non-flag words).
-    const plain = args.filter((a) => !a.startsWith('-'));
+    // The value of --repo/-R is not a command word, wherever the flag sits
+    // (`gh -R chrisvel/tududi pr create` must still resolve to group "pr").
+    const plain = args.filter((a, n) => !a.startsWith('-') && !['--repo', '-R'].includes(args[n - 1]));
     const group = plain[0];
     if (!group) return null;
 
