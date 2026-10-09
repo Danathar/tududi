@@ -25,6 +25,9 @@ function pr(overrides = {}) {
         labels: [],
         url: 'https://github.com/Danathar/tududi/pull/1',
         baseRefName: 'main',
+        closingIssuesReferences: [
+            { number: 5, repository: { name: 'tududi', owner: { login: 'Danathar' } } },
+        ],
         ...overrides,
     };
 }
@@ -59,23 +62,26 @@ test('signature must be its own line and name an agent', () => {
     assert.equal(findSignature(`a\r\n${SIG}\r\n`), SIG);
 });
 
-test('missing linked issue is a violation; other-repo links do not count', () => {
-    assert.deepEqual(auditPr(pr({ body: `No link\n${SIG}` })), ['linked-issue']);
-    const b = (body) => ({ body });
-    assert.equal(hasLinkedIssue(b('Fixes chrisvel/tududi#9')), false);
-    assert.equal(hasLinkedIssue(b('resolves #12')), true);
-    assert.equal(hasLinkedIssue(b('Closes: #3')), true);
-    assert.equal(hasLinkedIssue(b('closest #3')), false);
-    assert.equal(hasLinkedIssue(b('```\nCloses #3\n```')), false);
+test('missing linked issue is a violation', () => {
+    assert.deepEqual(auditPr(pr({ closingIssuesReferences: [] })), ['linked-issue']);
 });
 
-test('resolved closingIssuesReferences decide when present', () => {
+test('body text never counts as a linked issue, nor does a missing field', () => {
+    for (const body of ['Closes #12', 'Closes #999999', '```\nCloses #3\n```']) {
+        assert.equal(hasLinkedIssue({ body: `${body}\n${SIG}` }), false);
+    }
+    const p = pr({ body: `Closes #5\n${SIG}` });
+    delete p.closingIssuesReferences;
+    assert.deepEqual(auditPr(p), ['linked-issue']);
+});
+
+test('only resolved references in this repository count', () => {
     const ref = (owner, name) => ({
         number: 5,
         repository: { name, owner: { login: owner } },
     });
     const body = `Closes #999999\n${SIG}`;
-    // Body text alone does not count once GitHub reports no resolved issue.
+    // Body text alone does not count when GitHub reports no resolved issue.
     assert.deepEqual(
         auditPr(pr({ body, closingIssuesReferences: [] })),
         ['linked-issue']
@@ -147,7 +153,8 @@ test('--since filters by merge date and counts only the window', () => {
 test('report table shows violations and counts', () => {
     const bad = pr({
         number: 7,
-        body: 'no link or signature',
+        body: 'no signature',
+        closingIssuesReferences: [],
         author: { login: 'app/danathar-atomic-hive' },
     });
     const report = buildReport([pr(), bad]);

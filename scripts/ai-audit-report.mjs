@@ -5,7 +5,7 @@
  * Input: JSON array from
  *   gh pr list --repo Danathar/tududi --state merged --limit 500 \
  *     --json number,title,author,body,mergedAt,mergedBy,labels,url,baseRefName,closingIssuesReferences
- * `baseRefName` is required for the base check; a PR without it is reported as
+ * `closingIssuesReferences` and `baseRefName` are required for the base check; a PR without it is reported as
  * a violation, not assumed to be main. `commits` may be present but is not
  * read (and asking `gh` for it with --limit 500 exceeds GitHub's GraphQL node
  * limit).
@@ -18,8 +18,8 @@
  *
  * Requirements checked per agent PR (see docs/agent-boundaries.md and AGENTS.md):
  *   linked-issue   GitHub's resolved closingIssuesReferences name an issue of
- *                  Danathar/tududi (falls back to a Closes/Fixes/Resolves #N
- *                  line outside code fences when the field is absent)
+ *                  Danathar/tududi (body text is not consulted; a missing
+ *                  field counts as no link)
  *   signature      body has a `— hive: agent=...` line
  *   human-merge    merged by a human account, not the Hive app or any bot.
  *                  docs/risk-tiers.md lets an agent queue `ci`-review (Tier 3/4)
@@ -50,7 +50,6 @@ export const AGENT_LOGINS = [
 ];
 
 const SIGNATURE_LINE = /^— hive:.*(^|\s)agent=\S+/;
-const LINKED_ISSUE = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#\d+\b/i;
 
 function lines(body) {
     return String(body ?? '').split(/\r?\n/);
@@ -79,22 +78,18 @@ export function classify(pr) {
 }
 
 /**
- * True when the PR links an issue of this repository. GitHub's own resolved
- * `closingIssuesReferences` is used when the input has it (the workflow asks
- * for it), so a typo'd number or an example inside a code fence does not
- * count. Input without that field falls back to scanning the body, with fenced
- * code blocks removed.
+ * True when GitHub's resolved `closingIssuesReferences` name an issue of this
+ * repository. Body text is never consulted: `Closes #999999`, or an example in
+ * a code fence, is not a link. Input without the field is treated as having no
+ * link, so a caller that forgot to request it gets violations, not a false pass.
  */
 export function hasLinkedIssue(pr) {
-    if (Array.isArray(pr?.closingIssuesReferences)) {
-        return pr.closingIssuesReferences.some(
-            (ref) =>
-                `${ref?.repository?.owner?.login}/${ref?.repository?.name}`.toLowerCase() ===
-                REPO.toLowerCase()
-        );
-    }
-    const text = String(pr?.body ?? '').replace(/^\s*(```|~~~)[\s\S]*?^\s*\1/gm, '');
-    return LINKED_ISSUE.test(text);
+    if (!Array.isArray(pr?.closingIssuesReferences)) return false;
+    return pr.closingIssuesReferences.some(
+        (ref) =>
+            `${ref?.repository?.owner?.login}/${ref?.repository?.name}`.toLowerCase() ===
+            REPO.toLowerCase()
+    );
 }
 
 export function isBotAccount(user) {
