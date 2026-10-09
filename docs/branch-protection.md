@@ -129,8 +129,10 @@ merge. Stage it instead:
 3. Merge it, then run the diff above against `main` to confirm the live rules
    and the file agree.
 
-Other open pull requests report the old name until they merge `main`, so they
-wait for one CI run after step 2.
+No other pull request can merge between steps 2 and 3: until the rename is on
+`main`, their CI still reports the old name. Do step 3 straight after step 2;
+after it, each open pull request merges `main` and needs one CI run, which the
+up-to-date rule requires anyway.
 
 ## When there is a second reviewer
 
