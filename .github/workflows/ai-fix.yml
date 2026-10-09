@@ -103,7 +103,7 @@ jobs:
           ref=""
           proceed=true
           if [ "$IS_PR" = "true" ]; then
-            read -r cross state head < <(gh pr view "$NUM" \
+            read -r cross state head < <(gh pr view "$NUM" --repo "$GH_REPO" \
               --json isCrossRepository,state,headRefName \
               --jq '[.isCrossRepository, .state, .headRefName] | @tsv')
             if [ "$cross" = "true" ]; then
@@ -117,7 +117,7 @@ jobs:
             fi
           fi
           if [ "$proceed" = "false" ]; then
-            gh issue comment "$NUM" --body "AI fix refused: $reason"
+            gh issue comment "$NUM" --repo "$GH_REPO" --body "AI fix refused: $reason"
             {
               echo "## AI fix refused"
               echo
@@ -143,7 +143,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           NUM: ${{ github.event.issue.number || github.event.pull_request.number }}
         run: |
-          gh issue comment "$NUM" --body "$(printf 'AI fix requested by @%s ([run](%s/%s/actions/runs/%s)).\n\nBefore applying anything, the agent reads %s and %s. It verifies each finding against the code first, and reports findings it rejects instead of forcing a change.\n' \
+          gh issue comment "$NUM" --repo "$GH_REPO" --body "$(printf 'AI fix requested by @%s ([run](%s/%s/actions/runs/%s)).\n\nBefore applying anything, the agent reads %s and %s. It verifies each finding against the code first, and reports findings it rejects instead of forcing a change.\n' \
             "$GITHUB_ACTOR" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" 'AGENTS.md' 'docs/review-rubric.md')"
 
       - name: Detect Anthropic credential
@@ -188,7 +188,7 @@ jobs:
 
             This repository is the fork Danathar/tududi, never chrisvel/tududi (upstream). Read AGENTS.md first, section "This repository is a fork. All work happens here." Every gh pr, gh issue, gh release and gh workflow command must pass --repo Danathar/tududi.
 
-            1. Read the issue or PR with `gh issue view` or `gh pr view`, including its review comments and review threads, using --repo Danathar/tududi.
+            1. Read the issue or PR with `gh issue view` or `gh pr view`, using --repo Danathar/tududi. `gh pr view` does not return inline review comments; fetch them read-only with `gh api repos/Danathar/tududi/pulls/<number>/comments` (inline comments) and `gh api repos/Danathar/tududi/pulls/<number>/reviews` (review summaries). Use GET requests only.
             2. For each finding, verify the claim against the code at this checkout. Judge it by docs/review-rubric.md. Skip, and say why, any finding that is wrong, not actionable, or needs a merge order instead of a code change.
             3. For a pull request, commit the fixes to the checked-out head branch and push it to origin. For an issue, create a branch from main and open a PR with `gh pr create --repo Danathar/tududi --base main --head <branch>`.
             4. Follow CLAUDE.md for style, tests and migrations. Do not bump the version in package.json. Do not merge anything.
@@ -196,4 +196,4 @@ jobs:
           claude_args: >-
             --max-turns 40
             --append-system-prompt "Fork rule: work only on Danathar/tududi, pass --repo Danathar/tududi to every gh write command, never touch chrisvel/tududi, push only to origin. See AGENTS.md."
-            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git:*),Bash(gh pr create --repo Danathar/tududi:*),Bash(gh pr view --repo Danathar/tududi:*),Bash(gh pr comment --repo Danathar/tududi:*),Bash(gh issue view --repo Danathar/tududi:*),Bash(gh issue comment --repo Danathar/tududi:*),Bash(npm run backend:test:*),Bash(npm run frontend:test:*),Bash(npm run lint:*),Bash(npm run backend:lint:*),Bash(npm run frontend:lint:*),Bash(npm run format:*)"
+            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git:*),Bash(gh pr create --repo Danathar/tududi:*),Bash(gh pr view --repo Danathar/tududi:*),Bash(gh pr comment --repo Danathar/tududi:*),Bash(gh issue view --repo Danathar/tududi:*),Bash(gh api repos/Danathar/tududi/pulls/:*),Bash(gh api repos/Danathar/tududi/issues/:*),Bash(gh issue comment --repo Danathar/tududi:*),Bash(npm run backend:test:*),Bash(npm run frontend:test:*),Bash(npm run lint:*),Bash(npm run backend:lint:*),Bash(npm run frontend:lint:*),Bash(npm run format:*)"
