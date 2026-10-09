@@ -28,7 +28,7 @@ Reading upstream is fine: browsing its code, issues, and history, or running
 ### The `gh` default-repository trap
 
 GitHub CLI treats a fork's parent as the default target. In a fresh clone, a
-bare `gh pr create` or `gh issue create` targets **`chrisvel/tududi`**, not
+bare `gh pr` or `gh issue` creation command targets **`chrisvel/tududi`**, not
 this fork. So:
 
 - Always pass `--repo Danathar/tududi` to every `gh pr`, `gh issue`,
@@ -69,6 +69,28 @@ CalVer, or add a suffix. Backups embed that version, and
 `backend/services/backupService.js` refuses to restore a backup that claims to
 be newer than the running app. A fork-only version would block restores in one
 direction or the other.
+
+## Agent tooling
+
+These files steer AI tools in this repository. All of them inherit the fork
+rule above: PRs and issues go to this fork, every `gh pr`, `gh issue`,
+`gh release` and `gh workflow` command takes `--repo Danathar/tududi`, and nothing targets `chrisvel/tududi`. Any file added
+later that directs an agent must state that rule too.
+
+- `.github/copilot-instructions.md`: GitHub Copilot guide.
+- `.cursor/rules/tududi.mdc`: Cursor rule (always applied).
+- `.github/prompts/`: task prompts and their catalog (`README.md`).
+- `.claude/skills/`: Claude Code skills (`open-fork-pr`, `add-migration`,
+  `run-checks`).
+- `.claude/settings.json`: Claude Code settings with the Bash guard hook.
+- `policies/`: machine-readable agent policies.
+- `docs/risk-tiers.md`: how risky a change is and who must review it.
+- `docs/security/SECURITY-AI.md`: security rules for AI-assisted changes.
+- `.editorconfig`: whitespace settings every editor and agent should honour.
+- `.claude/session-summary.md`, `.claude/memory/README.md`, `docs/reflections/README.md`:
+  at session start read `.claude/session-summary.md`, and rewrite it at session
+  end. Corrections go in `.claude/memory/`, reflections in `docs/reflections/`
+  (added by a separate pull request).
 
 ## Licensing
 
