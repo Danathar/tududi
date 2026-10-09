@@ -64,12 +64,12 @@ gh workflow list --repo Danathar/tududi --all
 ```
 
 Disabling a required check leaves pull requests waiting for a status that never
-arrives. Disable `ci.yml` only if you also relax the ruleset (issue #42). To
+arrives. Disable `ci.yml` only if you also relax the "protect main" ruleset ([`branch-protection.md`](branch-protection.md)). To
 remove a workflow permanently, delete the file in a pull request.
 
 | file | what it does | trigger | turn off |
 |---|---|---|---|
-| `ci.yml` | `test-sqlite` (lint, backend tests, legacy SQLite upgrade, frontend build) and `test-postgres`; the checks issue #42 is to require | PR to `main`, push to `main` | `gh workflow disable "CI" --repo Danathar/tududi` |
+| `ci.yml` | `test-sqlite` (lint, backend tests, legacy SQLite upgrade, frontend build) and `test-postgres`; the checks the "protect main" ruleset requires | PR to `main`, push to `main` | `gh workflow disable "CI" --repo Danathar/tududi` |
 | `docker-publish.yml` | builds per platform and pushes `ghcr.io/danathar/tududi` as `:latest`, `:sha-<short>`, `:v<version>-<short>`; refuses manual runs from any branch but `main` | push to `main`, manual | `gh workflow disable "Publish Docker image" --repo Danathar/tududi` |
 | `upgrade-docker.yml` | upgrades a volume from the previous release image to an image built from the checkout and checks data, logins and backups survive | manual, `v*` tags, weekly (Monday 06:00 UTC) | `gh workflow disable "Docker upgrade test" --repo Danathar/tududi` |
 | `coverage-gate.yml` | fails a PR whose coverage falls below the floors in `.coverage-thresholds.json` | pull request | disable it by its `name:` |
@@ -218,7 +218,7 @@ same files, or acting outside its issue.
    (`gh pr close <N> --repo Danathar/tududi`) and keep the branches for
    evidence. Nothing it opened should merge: the serial lane and the
    required checks are why a runaway cannot land by volume, so confirm the
-   ruleset is on (issue #42).
+   ruleset is active (`gh api repos/Danathar/tududi/rulesets`).
 4. **Check what merged.** `gh pr list --repo Danathar/tududi --state merged --author app/danathar-atomic-hive --limit 20`,
    and the [`agent-audit.yml`](../.github/workflows/agent-audit.yml) summary.
    Revert anything wrong by pull request.

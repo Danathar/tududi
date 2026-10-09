@@ -136,16 +136,17 @@ No agent merges its own pull request unless the owner has set that up.
 - **Required checks.** The checks meant to gate a merge are the two jobs in
   [`ci.yml`](../.github/workflows/ci.yml): `test-sqlite` (lint, backend tests,
   legacy SQLite upgrade, frontend build) and `test-postgres`. They run on every
-  pull request, but they are not enforced until the ruleset in issue #42 (an
-  owner settings change, not a pull request) is turned on; until then `main` is
-  unprotected. Check with
-  `gh api repos/Danathar/tududi/rulesets --jq '.[].name'`.
+  pull request. The active ruleset "protect main" (set up as an owner settings
+  change for issue #42) requires both, with branches up to date; it is recorded
+  in `.github/rulesets/main.json` and explained in
+  [`branch-protection.md`](branch-protection.md) (added by PR #59). Check with
+  `gh api repos/Danathar/tududi/rulesets --jq '.[] | [.name, .enforcement] | @tsv'`.
 - **Serialized merging (intended, per issue #42).** The intended merge lane is
   Hive's serialized one (`merge_strategy: hive-serialized`): one pull request at
   a time, each brought up to date with `main` and re-tested before it merges.
-  Selecting it is an owner settings change that issue #42 tracks and that had
-  not been applied when this page was written; check the Hive settings for the
-  current value. GitHub's native merge queue is not available to a
+  Selecting it is an owner action in Hive's settings that had not been done when
+  this page was written (Hive's admin writes are disabled); check the Hive
+  settings for the current value. GitHub's native merge queue is not available to a
   personal-account repository, which is why the lane lives in Hive rather than
   in a workflow here.
 - **Green is only trusted on a current branch.** A pull request that passed
