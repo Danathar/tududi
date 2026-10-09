@@ -49,9 +49,10 @@ Frontend API calls go through `frontend/utils/<resource>Service.ts`, not ad-hoc
 Backend tests are in `backend/tests/unit` and `backend/tests/integration`;
 frontend tests sit beside the components. Add or update a test with every
 behaviour change. Run one backend file with
-`cd backend && npx jest tests/unit/models/task.test.js`. Some frontend suites
-fail on a clean `main` (`MermaidDiagram`, `MarkdownRenderer.publicLinks`,
-`roleLabels`); confirm against `main` before blaming your change.
+`cd backend && npx jest tests/unit/models/task.test.js`. PR #9
+reported three frontend suites failing on a clean `main` (`MermaidDiagram`,
+`MarkdownRenderer.publicLinks`, `roleLabels`); that is historical. Rerun a
+failing suite on current `main` before calling it pre-existing.
 
 ## Migrations must run on both databases
 

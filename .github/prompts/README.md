@@ -17,7 +17,6 @@ must repeat this rule.
 | [add-migration.md](add-migration.md) | Add a migration that runs on SQLite and PostgreSQL |
 | [add-translation.md](add-translation.md) | Add or change UI strings in all 25 locales |
 | [sync-upstream.md](sync-upstream.md) | Bring upstream `chrisvel/tududi` changes into the fork by hand |
-| [review-pr.md](review-pr.md) | Review a pull request on this fork |
 
 Other agent files are listed in the "Agent tooling" section of
 [AGENTS.md](../../AGENTS.md). Claude Code skills with the same intent live in

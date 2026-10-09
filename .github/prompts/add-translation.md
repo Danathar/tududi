@@ -15,7 +15,9 @@ Task: add the UI strings `<keys>` for `<feature>`.
    `npm run translations:sync` in `.github/CONTRIBUTING.md`, it is not in
    `package.json`.
 4. Keep JSON valid and keep each file's existing key order and indentation.
-5. Run `npm run frontend:test` and `npm run lint`. Known failures on a clean
-   `main`: `MermaidDiagram`, `MarkdownRenderer.publicLinks`, `roleLabels`.
+5. Run `npm run frontend:test` and `npm run lint`. PR #9 reported
+   `MermaidDiagram`, `MarkdownRenderer.publicLinks` and `roleLabels` failing on
+   a clean `main` (historical); rerun a failing suite on current `main` before
+   calling it pre-existing.
 6. Commit, push to `origin`, open the PR with the `gh` command above and check
    the URL starts with `https://github.com/Danathar/tududi/`.

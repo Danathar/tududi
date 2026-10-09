@@ -20,8 +20,9 @@ Codebase guide: `CLAUDE.md`.
 - PostgreSQL: `npm run backend:test:pg` with `DATABASE_URL` set.
 - Migrations: `npm run migration:create <name>`, `npm run db:migrate`,
   `npm run migration:status`.
-- Known failures on a clean `main` in `npm run frontend:test`: `MermaidDiagram`,
-  `MarkdownRenderer.publicLinks`, `roleLabels`. Verify against `main`.
+- PR #9 reported `npm run frontend:test` failing on a clean `main` for
+  `MermaidDiagram`, `MarkdownRenderer.publicLinks`, `roleLabels` (historical).
+  Rerun a failing suite on current `main` before calling it pre-existing.
 
 ## Code
 
