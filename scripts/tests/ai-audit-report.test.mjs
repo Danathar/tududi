@@ -61,10 +61,34 @@ test('signature must be its own line and name an agent', () => {
 
 test('missing linked issue is a violation; other-repo links do not count', () => {
     assert.deepEqual(auditPr(pr({ body: `No link\n${SIG}` })), ['linked-issue']);
-    assert.equal(hasLinkedIssue('Fixes chrisvel/tududi#9'), false);
-    assert.equal(hasLinkedIssue('resolves #12'), true);
-    assert.equal(hasLinkedIssue('Closes: #3'), true);
-    assert.equal(hasLinkedIssue('closest #3'), false);
+    const b = (body) => ({ body });
+    assert.equal(hasLinkedIssue(b('Fixes chrisvel/tududi#9')), false);
+    assert.equal(hasLinkedIssue(b('resolves #12')), true);
+    assert.equal(hasLinkedIssue(b('Closes: #3')), true);
+    assert.equal(hasLinkedIssue(b('closest #3')), false);
+    assert.equal(hasLinkedIssue(b('```\nCloses #3\n```')), false);
+});
+
+test('resolved closingIssuesReferences decide when present', () => {
+    const ref = (owner, name) => ({
+        number: 5,
+        repository: { name, owner: { login: owner } },
+    });
+    const body = `Closes #999999\n${SIG}`;
+    // Body text alone does not count once GitHub reports no resolved issue.
+    assert.deepEqual(
+        auditPr(pr({ body, closingIssuesReferences: [] })),
+        ['linked-issue']
+    );
+    // An issue of another repository does not count.
+    assert.deepEqual(
+        auditPr(pr({ closingIssuesReferences: [ref('chrisvel', 'tududi')] })),
+        ['linked-issue']
+    );
+    assert.deepEqual(
+        auditPr(pr({ closingIssuesReferences: [ref('Danathar', 'tududi')] })),
+        []
+    );
 });
 
 test('bot-authored PR without signature line violates signature', () => {

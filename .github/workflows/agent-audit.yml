@@ -5,7 +5,7 @@ name: Agent audit trail
 #
 # Agent PRs here are opened by the Hive GitHub App (`app/danathar-atomic-hive`)
 # and end with a signature line `— hive: agent=<name> ...`. For each one the
-# script checks: a linked issue (Closes/Fixes/Resolves #N), the signature line,
+# script checks: a linked issue (GitHub's resolved closingIssuesReferences, not body text), the signature line,
 # a human merger (the bot must not merge its own PR), and base `main` of
 # Danathar/tududi. The result goes to the run summary.
 #
@@ -72,7 +72,7 @@ jobs:
           # `commits` is left out of --json on purpose: with --limit 500 it
           # exceeds GitHub's GraphQL node limit, and the audit does not read it.
           gh pr list --repo "$GH_REPO" --state merged --limit 500 --search "merged:>=$SINCE" \
-            --json number,title,author,body,mergedAt,mergedBy,labels,url,baseRefName > merged.json
+            --json number,title,author,body,mergedAt,mergedBy,labels,url,baseRefName,closingIssuesReferences > merged.json
           # --limit makes the script refuse a list that may be truncated.
           node scripts/ai-audit-report.mjs --input merged.json --since "$SINCE" \
             --limit 500 --strict --output report.md && status=0 || status=$?

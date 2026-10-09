@@ -4,7 +4,7 @@
  *
  * Input: JSON array from
  *   gh pr list --repo Danathar/tududi --state merged --limit 500 \
- *     --json number,title,author,body,mergedAt,mergedBy,labels,url,baseRefName
+ *     --json number,title,author,body,mergedAt,mergedBy,labels,url,baseRefName,closingIssuesReferences
  * `baseRefName` is required for the base check; a PR without it is reported as
  * a violation, not assumed to be main. `commits` may be present but is not
  * read (and asking `gh` for it with --limit 500 exceeds GitHub's GraphQL node
@@ -17,8 +17,9 @@
  * so a window with zero agent PRs reads as "nothing was audited", not as a pass.
  *
  * Requirements checked per agent PR (see docs/agent-boundaries.md and AGENTS.md):
- *   linked-issue   body has Closes/Fixes/Resolves #N (same repo; a reference to
- *                  another repository does not count)
+ *   linked-issue   GitHub's resolved closingIssuesReferences name an issue of
+ *                  Danathar/tududi (falls back to a Closes/Fixes/Resolves #N
+ *                  line outside code fences when the field is absent)
  *   signature      body has a `— hive: agent=...` line
  *   human-merge    merged by a human account, not the Hive app or any bot.
  *                  docs/risk-tiers.md lets an agent queue `ci`-review (Tier 3/4)
@@ -77,8 +78,23 @@ export function classify(pr) {
     return { agent: false, reason: null };
 }
 
-export function hasLinkedIssue(body) {
-    return LINKED_ISSUE.test(String(body ?? ''));
+/**
+ * True when the PR links an issue of this repository. GitHub's own resolved
+ * `closingIssuesReferences` is used when the input has it (the workflow asks
+ * for it), so a typo'd number or an example inside a code fence does not
+ * count. Input without that field falls back to scanning the body, with fenced
+ * code blocks removed.
+ */
+export function hasLinkedIssue(pr) {
+    if (Array.isArray(pr?.closingIssuesReferences)) {
+        return pr.closingIssuesReferences.some(
+            (ref) =>
+                `${ref?.repository?.owner?.login}/${ref?.repository?.name}`.toLowerCase() ===
+                REPO.toLowerCase()
+        );
+    }
+    const text = String(pr?.body ?? '').replace(/^\s*(```|~~~)[\s\S]*?^\s*\1/gm, '');
+    return LINKED_ISSUE.test(text);
 }
 
 export function isBotAccount(user) {
@@ -97,7 +113,7 @@ export function isBotAccount(user) {
 export function auditPr(pr) {
     const violations = [];
 
-    if (!hasLinkedIssue(pr.body)) violations.push('linked-issue');
+    if (!hasLinkedIssue(pr)) violations.push('linked-issue');
     if (!findSignature(pr.body)) violations.push('signature');
 
     const mergedBy = pr.mergedBy;
