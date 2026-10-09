@@ -51,9 +51,14 @@ Entry format:
 
 ## Current state (as of 2026-10-09)
 
-- **Base:** `origin/main` at `a6225863`, the merge of PR #10 (upstream sync to
+- **Base:** the last upstream sync is `a6225863`, the merge of PR #10 (upstream
   `v1.7.11`, merged as a whole tag with `git merge --no-ff`). `package.json`
-  keeps upstream's version; do not bump it.
+  keeps upstream's version; do not bump it. `main` has moved since: PR #58
+  (`5306e5b8`) pulls the PostgreSQL CI service image from ECR Public's Docker
+  library mirror (`.github/workflows/ci.yml`), and PR #52 (`d36df5a1`) added the
+  agent direction files. Other ACMM PRs land on top of it. `main`'s head is not
+  recorded here because it changes with every merge: read it with
+  `git log -1 origin/main`.
 - **Licence:** GPL-3.0-only for the fork (`LICENSE`), with upstream's MIT notice
   kept in `LICENSE.MIT`. Set up in PR #1.
 - **Image:** `.github/workflows/docker-publish.yml` publishes
