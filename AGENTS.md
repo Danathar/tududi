@@ -28,7 +28,7 @@ Reading upstream is fine: browsing its code, issues, and history, or running
 ### The `gh` default-repository trap
 
 GitHub CLI treats a fork's parent as the default target. In a fresh clone, a
-bare `gh pr create` or `gh issue create` targets **`chrisvel/tududi`**, not
+bare `gh pr` or `gh issue` creation command targets **`chrisvel/tududi`**, not
 this fork. So:
 
 - Always pass `--repo Danathar/tududi` to every `gh pr`, `gh issue`,
