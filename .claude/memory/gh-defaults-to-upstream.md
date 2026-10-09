@@ -1,7 +1,7 @@
 # gh defaults to upstream in a fork clone
 
 **Date:** 2026-10-09
-**Wrong:** running a bare `gh pr create`, `gh issue create` or `gh pr comment`
+**Wrong:** running a `gh pr create`, `gh issue create` or `gh pr comment` without `--repo Danathar/tududi`
 in a clone of this fork. GitHub CLI treats the fork's parent as the default
 repository, so the command targets `chrisvel/tududi`. No incident is recorded
 in the history; AGENTS.md was written to prevent it.

@@ -16,8 +16,10 @@ migration yourself against an existing PostgreSQL database that was created
 before it. Use a disposable database only: start a throwaway container (as the
 `test-postgres` job in `.github/workflows/ci.yml` does, `postgres:16-alpine`),
 `export DATABASE_URL=postgres://tududi:tududi@localhost:5432/tududi_scratch`,
-and print it to confirm it is the scratch database before running anything
-(`db:prepare` and `migration:run` write to whatever it names). Bootstrap with
+and confirm it names the scratch database before running anything
+(`db:prepare` and `migration:run` write to whatever it names). Check only the
+host and database name (`echo "${DATABASE_URL##*@}"`); never print the whole
+URL, which contains the password. Bootstrap with
 the base commit (`npm run db:prepare`), switch to your branch, run
 `npm run migration:run` with the same `DATABASE_URL`, then delete the container.
 Never point `DATABASE_URL` at a database holding real data.
