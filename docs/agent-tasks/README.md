@@ -55,8 +55,8 @@ The marks a change carries, and where to read them:
 
   A PR the owner opened from a local session carries the owner's login and may
   carry no signature; do not read "unsigned" as "human-written".
-- **Branch name.** Hive uses `<role>/<slug>`; the ACMM effort used
-  `acmm/<slug>`. A branch survives its deletion in the PR record:
+- **Branch name.** The ACMM effort used `acmm/<slug>`; Hive names
+  its own branches. A branch survives its deletion in the PR record:
 
   ```bash
   gh pr list --repo Danathar/tududi --state all --head <branch> --json number,state,mergedAt

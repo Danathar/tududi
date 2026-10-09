@@ -77,12 +77,12 @@ it, is described in [`agent-tasks/README.md`](agent-tasks/README.md).
 - **An issue.** Hive reads issues and files its own. ACMM issues carry the
   title prefix `[ACMM L<n>]`.
 - **A label or comment** that a workflow reacts to, such as `ai-fix-requested`
-  or an `@claude` mention. These are defined by
-  [`ai-fix.yml`](../.github/workflows/ai-fix.yml) and
-  [`claude.yml`](../.github/workflows/claude.yml); read the header of each for
-  who may trigger it.
+  or an `@claude` mention (on an issue comment, a PR comment or a PR review
+  comment). These are defined by `.github/workflows/ai-fix.yml` and
+  `.github/workflows/claude.yml`, added by PR #49 and not on `main` until it
+  merges; read the header of each for who may trigger it.
 - **Hive's own schedule**, outside this repository. When the repo is paused in
-  Hive, agents stop picking up work (see
+  Hive, its agents stop acting on it (see
   [`ai-ops-runbook.md`](ai-ops-runbook.md#pause-and-resume-the-repository-in-hive)).
 
 ## What keeps agents from colliding
@@ -103,7 +103,7 @@ reading and settled by the owner.
    requests you checked them against.
 2. **One branch per issue.** A pull request answers one issue (or one named
    group of issues) and says so with `Closes #N`. Branch names say what they
-   do: Hive uses `<role>/<slug>`; the ACMM effort used `acmm/<slug>` (see
+   do (Hive names its own branches; do not rely on a pattern): the ACMM effort used `acmm/<slug>` (see
    [`agent-tasks/2026-10-09.md`](agent-tasks/2026-10-09.md)). Branch from
    current `origin/main`; do not stack one branch on another.
 3. **Never push to a branch you did not create.** That includes another
@@ -115,7 +115,8 @@ reading and settled by the owner.
      to change them.
    - **Migrations.** Files in `backend/migrations/` are named
      `<YYYYMMDDNNNNNN>-<name>.js` and run in name order (the newest begin
-     `20261005…`). Create one with `npm run migration:create -- --name <name>`,
+     `20261005…`). Create one with `npm run migration:create <name>` (the script takes the name as its first
+     positional argument; `--name` would be taken as the name itself),
      and give it a timestamp later than every migration already on `origin/main`.
      Never edit a migration that is on `main`; add a new one. Before you push,
      rebase on `origin/main` and confirm no other branch took your number.
@@ -132,10 +133,13 @@ reading and settled by the owner.
 
 No agent merges its own pull request unless the owner has set that up.
 
-- **Required checks.** The checks that gate a merge are the two jobs in
+- **Required checks.** The checks meant to gate a merge are the two jobs in
   [`ci.yml`](../.github/workflows/ci.yml): `test-sqlite` (lint, backend tests,
-  legacy SQLite upgrade, frontend build) and `test-postgres`. The ruleset that
-  requires them is tracked in issue #42.
+  legacy SQLite upgrade, frontend build) and `test-postgres`. They run on every
+  pull request, but they are not enforced until the ruleset in issue #42 (an
+  owner settings change, not a pull request) is turned on; until then `main` is
+  unprotected. Check with
+  `gh api repos/Danathar/tududi/rulesets --jq '.[].name'`.
 - **Serialized merging.** Hive merges this repository through its serialized
   merge lane (`merge_strategy: hive-serialized`): one pull request at a time,
   each brought up to date with `main` and re-tested before it merges. GitHub's

@@ -93,8 +93,8 @@ was read; the next reading is a new dated section or file, not an edit.
 | Branch protection | `main` not protected, no rulesets; tracked in issue #42 | `gh api repos/Danathar/tududi/branches/main --jq .protected` printed `false`; `gh api repos/Danathar/tududi/rulesets` returned no rulesets |
 | Workflows on `main` | `ci.yml`, `docker-publish.yml`, `upgrade-docker.yml` | `.github/workflows/` at `a6225863`; the rest arrive with the ACMM pull requests in [`agent-tasks/2026-10-09.md`](agent-tasks/2026-10-09.md) |
 | Coverage floors | none yet: `.coverage-thresholds.json` does not exist at `a6225863` (issue #11) | file absent |
-| ACMM | issues #11 to #48 open at the time of reading, one per missing criterion | `gh issue list --repo Danathar/tududi --state open` |
-| Open pull requests | 1, `acmm/pr-automation` | `gh pr list --repo Danathar/tududi --state open` |
+| ACMM | 38 open `[ACMM L<n>]` issues (#11 to #48), one per missing criterion. The evaluator's current level was not read for this page: see the Hive dashboard card | `gh issue list --repo Danathar/tududi --state open` |
+| Open pull requests | 1 (`acmm/pr-automation`) at the first reading; 9 (#49 to #57, the `acmm/*` branches) when re-read later the same day | `gh pr list --repo Danathar/tududi --state open` |
 | Fork version | `package.json` `version` is `v1.7.11`, upstream's | `package.json:3` |
 
 ## Keeping this page honest

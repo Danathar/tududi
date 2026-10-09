@@ -23,12 +23,19 @@ because a bare `gh` in a fork clone reads upstream.
 
 ## Pause and resume the repository in Hive
 
-Hive is outside this repository; its dashboard controls whether its agents work
-on `Danathar/tududi`. To pause, use the hive dashboard's repository pause. A
-paused repository gets no new Hive runs; runs already in flight finish or can
-be cancelled from the dashboard. Resume from the same place. The repository is
-paused at the time of writing; whether it is paused now is shown on the
-dashboard, not in this repository.
+Hive is outside this repository. Its per-repo pause stops agent activity on
+`Danathar/tududi` only, and leaves the card on the dashboard, its counts and its
+ACMM evaluation in place. It is a different switch from pausing one agent
+(everywhere) or the whole fleet.
+
+- **Dashboard:** on the repo's card under PROJECTS, the owner presses
+  "pause" (it asks for a reason) or "resume".
+- **API:** `POST /api/repos/pause` with `{"repo": "<name>", "reason": "..."}`,
+  `POST /api/repos/resume` with `{"repo": "<name>"}`, and
+  `GET /api/repos/pauses` to list. Pause and resume are owner-only.
+
+Source: Hive's `src/docs/repo-pause.md`. Whether this repository is paused right
+now is shown on the dashboard; this page does not record it.
 
 What pausing does not do:
 
@@ -37,11 +44,6 @@ What pausing does not do:
 - It does not stop the Codex connector's reviews or a local Claude Code or omp
   session.
 - It does not undo anything an agent already pushed.
-
-A label-level stop also exists: an item carrying a `hive-pause/<hive>` label
-tells Hive's agents not to act on that one issue or PR until an operator removes
-the label. That label is created by Hive; check `gh label list --repo Danathar/tududi`
-to see whether it exists before relying on it.
 
 Confirm that Hive has stopped by looking for new bot activity:
 
@@ -67,7 +69,7 @@ remove a workflow permanently, delete the file in a pull request.
 
 | file | what it does | trigger | turn off |
 |---|---|---|---|
-| `ci.yml` | `test-sqlite` (lint, backend tests, legacy SQLite upgrade, frontend build) and `test-postgres`; the required checks | PR to `main`, push to `main` | `gh workflow disable "CI" --repo Danathar/tududi` |
+| `ci.yml` | `test-sqlite` (lint, backend tests, legacy SQLite upgrade, frontend build) and `test-postgres`; the checks issue #42 is to require | PR to `main`, push to `main` | `gh workflow disable "CI" --repo Danathar/tududi` |
 | `docker-publish.yml` | builds per platform and pushes `ghcr.io/danathar/tududi` as `:latest`, `:sha-<short>`, `:v<version>-<short>`; refuses manual runs from any branch but `main` | push to `main`, manual | `gh workflow disable "Publish Docker image" --repo Danathar/tududi` |
 | `upgrade-docker.yml` | upgrades a volume from the previous release image to an image built from the checkout and checks data, logins and backups survive | manual, `v*` tags, weekly (Monday 06:00 UTC) | `gh workflow disable "Docker upgrade test" --repo Danathar/tududi` |
 | `coverage-gate.yml` | fails a PR whose coverage falls below the floors in `.coverage-thresholds.json` | pull request | disable it by its `name:` |
