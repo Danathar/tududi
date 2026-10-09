@@ -17,8 +17,8 @@
     "ghWriteCommandPattern": "\\bgh\\s+(?:(?:pr|issue|release|workflow|label)\\s+(?:create|comment|edit|close|reopen|merge|review|delete|run|enable|disable|ready|upload|delete-asset|lock|unlock|transfer|pin|unpin|update-branch|develop)|run\\s+(?:rerun|cancel|delete))\\b",
     "allowedRepoValues": [
         "${{ github.repository }}",
-        "Danathar/tududi",
-        "\"$GH_REPO\"",
-        "$GH_REPO"
-    ]
+        "Danathar/tududi"
+    ],
+    "forbidTopLevelWrite": true,
+    "forbiddenRunExpressions": "\\bgithub\\.event\\.(?!(?:number|action|issue\\.number|pull_request\\.(?:number|head\\.sha|base\\.sha)|repository\\.(?:name|full_name|default_branch))(?![\\w.]))|\\bgithub\\.head_ref\\b|\\bgithub\\.ref_name\\b|\\binputs\\."
 }

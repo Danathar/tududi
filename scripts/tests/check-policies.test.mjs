@@ -255,6 +255,15 @@ test('workflows: actions/, github/, local and docker:// uses need no pin', () =>
     assert.deepEqual(run({ '.github/workflows/a.yml': wf }), []);
 });
 
+const wfWith = (jobs) =>
+    `name: x
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+${jobs}`;
+
 test('workflows: gh write command needs a valid GH_REPO or --repo', () => {
     const cmd = GOOD_WF + '      - run: gh issue comment 1 --body hi\n';
     const v = run({ '.github/workflows/a.yml': cmd });
@@ -262,12 +271,16 @@ test('workflows: gh write command needs a valid GH_REPO or --repo', () => {
     assert.match(v[0], /a\.yml:\d+: "gh issue comment" has no --repo/);
 
     const env = 'env:\n  GH_REPO: ${{ github.repository }}\njobs:';
-    assert.deepEqual(
-        run({ '.github/workflows/a.yml': cmd.replace('jobs:', env) }),
-        [],
-    );
+    assert.deepEqual(run({ '.github/workflows/a.yml': cmd.replace('jobs:', env) }), []);
+    const lit = GOOD_WF + '      - run: gh pr merge 2 --repo Danathar/tududi\n';
+    assert.deepEqual(run({ '.github/workflows/a.yml': lit }), []);
+});
+
+test('workflows: --repo "$GH_REPO" needs GH_REPO in scope', () => {
     const flag = GOOD_WF + '      - run: gh pr merge 2 --repo "$GH_REPO"\n';
-    assert.deepEqual(run({ '.github/workflows/a.yml': flag }), []);
+    const v = run({ '.github/workflows/a.yml': flag });
+    assert.equal(v.length, 1);
+    assert.match(v[0], /uses \$GH_REPO but no valid GH_REPO is set/);
 });
 
 test('workflows: GH_REPO or --repo pointing at upstream is rejected', () => {
@@ -276,12 +289,66 @@ test('workflows: GH_REPO or --repo pointing at upstream is rejected', () => {
         '.github/workflows/a.yml': cmd.replace('jobs:', 'env:\n  GH_REPO: chrisvel/tududi\njobs:'),
     });
     assert.ok(badEnv.some((x) => /GH_REPO is "chrisvel\/tududi"/.test(x)));
-    assert.ok(badEnv.some((x) => /no --repo and the workflow sets no valid GH_REPO/.test(x)));
+    assert.ok(badEnv.some((x) => /no --repo and no valid GH_REPO/.test(x)));
     const badFlag = run({
         '.github/workflows/a.yml': GOOD_WF + '      - run: gh pr merge 2 -R chrisvel/tududi\n',
     });
     assert.equal(badFlag.length, 1);
     assert.match(badFlag[0], /targets "chrisvel\/tududi"/);
+});
+
+test('workflows: GH_REPO in another job or step does not scope a write', () => {
+    const otherJob = wfWith(`  a:
+    runs-on: ubuntu-latest
+    env:
+      GH_REPO: \${{ github.repository }}
+    steps:
+      - run: gh pr view 1
+  b:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh pr close 1
+`);
+    const v = run({ '.github/workflows/a.yml': otherJob });
+    assert.equal(v.length, 1);
+    assert.match(v[0], /a\.yml:16: "gh pr close" has no --repo/);
+
+    const otherStep = wfWith(`  a:
+    runs-on: ubuntu-latest
+    steps:
+      - name: scoped
+        env:
+          GH_REPO: \${{ github.repository }}
+        run: gh pr close 1
+      - name: unscoped
+        run: |
+          gh pr close 2
+`);
+    const v2 = run({ '.github/workflows/a.yml': otherStep });
+    assert.equal(v2.length, 1);
+    assert.match(v2[0], /a\.yml:16: "gh pr close" has no --repo/);
+});
+
+test('workflows: step, job and workflow GH_REPO each scope their writes', () => {
+    const ok = wfWith(`  a:
+    runs-on: ubuntu-latest
+    env:
+      GH_REPO: Danathar/tududi
+    steps:
+      - run: gh pr close 1
+      - name: multi
+        run: |
+          gh issue comment 1 --body hi
+          gh pr merge 2 --repo "$GH_REPO"
+  b:
+    runs-on: ubuntu-latest
+    steps:
+      - name: s
+        env:
+          GH_REPO: \${{ github.repository }}
+        run: gh pr close 3
+`);
+    assert.deepEqual(run({ '.github/workflows/a.yml': ok }), []);
 });
 
 test('workflows: an unrelated --repo elsewhere does not scope another write', () => {
@@ -291,6 +358,44 @@ test('workflows: an unrelated --repo elsewhere does not scope another write', ()
     const v = run({ '.github/workflows/a.yml': wf });
     assert.equal(v.length, 1);
     assert.match(v[0], /"gh pr close" has no --repo/);
+});
+
+test('workflows: top-level write permissions are rejected', () => {
+    const all = GOOD_WF.replace('permissions:\n  contents: read', 'permissions: write-all');
+    assert.match(run({ '.github/workflows/a.yml': all }).join('\n'), /write-all/);
+    const scoped = GOOD_WF.replace('contents: read', 'contents: read\n  issues: write');
+    const v = run({ '.github/workflows/a.yml': scoped });
+    assert.equal(v.length, 1);
+    assert.match(v[0], /a\.yml:6: top-level permissions grant write/);
+    const readAll = GOOD_WF.replace('permissions:\n  contents: read', 'permissions: read-all');
+    assert.deepEqual(run({ '.github/workflows/a.yml': readAll }), []);
+    const empty = GOOD_WF.replace('permissions:\n  contents: read', 'permissions: {}');
+    assert.deepEqual(run({ '.github/workflows/a.yml': empty }), []);
+});
+
+test('workflows: job-level write permissions are allowed', () => {
+    const wf = GOOD_WF.replace('    runs-on', '    permissions:\n      packages: write\n    runs-on');
+    assert.deepEqual(run({ '.github/workflows/a.yml': wf }), []);
+});
+
+test('workflows: event expressions in run scripts are rejected, env use is not', () => {
+    const inline = GOOD_WF + '      - run: echo "${{ github.event.issue.title }}"\n';
+    const v = run({ '.github/workflows/a.yml': inline });
+    assert.equal(v.length, 1);
+    assert.match(v[0], /a\.yml:11:.*github\.event\.issue\.title.*env:/);
+
+    const block = GOOD_WF + '      - name: n\n        run: |\n          echo ok\n          echo "${{ github.head_ref }}"\n';
+    const vb = run({ '.github/workflows/a.yml': block });
+    assert.equal(vb.length, 1);
+    assert.match(vb[0], /a\.yml:14:/);
+
+    const viaEnv =
+        GOOD_WF +
+        '      - env:\n          TITLE: ${{ github.event.issue.title }}\n        run: echo "$TITLE"\n';
+    assert.deepEqual(run({ '.github/workflows/a.yml': viaEnv }), []);
+
+    const safe = GOOD_WF + '      - run: echo "${{ github.event.pull_request.number }} ${{ github.sha }}"\n';
+    assert.deepEqual(run({ '.github/workflows/a.yml': safe }), []);
 });
 
 // ---- risk tiers

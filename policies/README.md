@@ -40,15 +40,22 @@ Stops agent instructions from sending work upstream.
 For every `.github/workflows/*.yml`:
 
 - a top-level `permissions:` block is present, so the token never gets the
-  repository default;
+  repository default, and it grants no write (`write-all` or `<scope>: write`
+  is rejected; grant write on the job that needs it);
 - `pull_request_target` is not used;
 - every `uses:` outside `actions/` and `github/` is pinned to a 40-character
   commit SHA (keep the tag in a trailing `# vX` comment); local `./` and
   `docker://` references are skipped;
 - every logical line that runs a `gh` write command passes `--repo`/`-R` with
-  `Danathar/tududi`, `${{ github.repository }}` or `"$GH_REPO"`, or the workflow
-  sets `GH_REPO` to `${{ github.repository }}` or `Danathar/tududi`. Any other
-  `GH_REPO` or `--repo` value (for example `chrisvel/tududi`) fails.
+  `Danathar/tududi` or `${{ github.repository }}`; or passes `"$GH_REPO"`, or
+  nothing, when `env:` of that command's own step, its job or the workflow sets
+  `GH_REPO` to one of those values. Scope follows the YAML block, so a
+  `GH_REPO` in another job or step does not count. Any other `GH_REPO` or
+  `--repo` value (for example the upstream repository) fails;
+- `run:` scripts contain no attacker-controlled expression such as
+  `${{ github.event.issue.title }}`, `github.head_ref` or `inputs.*`; pass it
+  through `env:` and read `"$VAR"` (see `forbiddenRunExpressions`). Numbers,
+  SHAs and `github.event.repository.name` are allowed;
 - the write-command list includes `enable`, `disable`, `ready`, `upload`,
   `update-branch`, `lock` and `transfer`, and the `rerun`, `cancel` and `delete`
   verbs of `gh run`, besides

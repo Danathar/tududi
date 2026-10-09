@@ -162,6 +162,166 @@ export function checkForkTarget(root, policy, files) {
 
 // ---------------------------------------------- 2. workflow-permissions policy
 
+const indentOf = (l) => l.match(/^\s*/)[0].length;
+const isBlank = (l) => l.trim() === '';
+
+/** Index of the nearest earlier non-blank line with smaller indent, or -1. */
+function parentOf(code, i, indent = indentOf(code[i])) {
+    for (let j = i - 1; j >= 0; j--) {
+        if (!isBlank(code[j]) && indentOf(code[j]) < indent) return j;
+    }
+    return -1;
+}
+
+/**
+ * Top-level `permissions:` must exist and must not grant write access
+ * (`write-all` or any `<scope>: write`); wider scopes belong on a job.
+ */
+export function checkTopLevelPermissions(f, code, policy) {
+    const at = code.findIndex((l) => /^permissions\s*:/.test(l));
+    if (at === -1) {
+        return [
+            `${f}: no top-level "permissions:" (the token would get the repository default)`,
+        ];
+    }
+    const v = [];
+    const inline = code[at].replace(/^permissions\s*:/, '').trim();
+    if (inline === 'write-all') {
+        v.push(`${f}:${at + 1}: top-level permissions: write-all`);
+    }
+    if (policy.forbidTopLevelWrite !== false) {
+        for (let j = at + 1; j < code.length; j++) {
+            if (isBlank(code[j])) continue;
+            if (indentOf(code[j]) === 0) break;
+            if (/:\s*write\b/.test(code[j])) {
+                v.push(
+                    `${f}:${j + 1}: top-level permissions grant write ("${code[j].trim()}"); grant it on the job that needs it`,
+                );
+            }
+        }
+        if (/\bwrite\b/.test(inline) && inline !== 'write-all') {
+            v.push(`${f}:${at + 1}: top-level permissions grant write`);
+        }
+    }
+    return v;
+}
+
+/**
+ * GH_REPO values valid for the block that starts at line `a`: a direct
+ * `env:` child of that block (workflow, job or step) that sets GH_REPO.
+ */
+function blockGhRepo(code, a) {
+    // a === -1 is the workflow root: its children sit at indent 0.
+    const indent = a === -1 ? -1 : indentOf(code[a]);
+    const dash = a !== -1 && /^\s*-\s/.test(code[a]);
+    let childIndent = a === -1 ? 0 : dash ? indent + 2 : -1;
+    let end = code.length;
+    for (let j = a + 1; j < code.length; j++) {
+        if (isBlank(code[j])) continue;
+        if (indentOf(code[j]) <= indent) {
+            end = j;
+            break;
+        }
+        if (childIndent === -1) childIndent = indentOf(code[j]);
+    }
+    const found = [];
+    for (let j = a + 1; j < end; j++) {
+        const m = code[j].match(/^\s*GH_REPO\s*:\s*(.+?)\s*$/);
+        if (!m) continue;
+        const envLine = parentOf(code, j);
+        if (
+            envLine !== -1 &&
+            /^\s*env\s*:\s*$/.test(code[envLine]) &&
+            indentOf(code[envLine]) === childIndent
+        ) {
+            found.push({ line: j, value: m[1] });
+        }
+    }
+    return found;
+}
+
+/**
+ * Every `gh` write command must name this fork: `--repo`/`-R` with an allowed
+ * literal, or with `$GH_REPO` when the command's own step, its job or the
+ * workflow sets GH_REPO to an allowed value in `env:`; or no flag at all when
+ * such a GH_REPO is in scope. Scope is by YAML block, so a GH_REPO in another
+ * job or step does not count. Any GH_REPO or --repo naming another repository
+ * is a violation.
+ */
+export function checkGhScope(f, code, policy) {
+    const v = [];
+    const allowed = policy.allowedRepoValues;
+    const unq = (x) => x.replace(/^["']|["']$/g, '');
+    const okLiteral = (x) => allowed.includes(unq(x));
+    const reportedBad = new Set();
+    code.forEach((l, i) => {
+        const m = l.match(/^\s*GH_REPO\s*:\s*(.+?)\s*$/);
+        if (m && !okLiteral(m[1])) {
+            v.push(`${f}:${i + 1}: GH_REPO is "${m[1]}", expected ${allowed[0]} or Danathar/tududi`);
+            reportedBad.add(i);
+        }
+    });
+    const logical = logicalLines(code.join('\n'));
+    for (const { line, text: t } of logical) {
+        const writes = findWriteCommands(t, policy.ghWriteCommandPattern);
+        if (writes.length === 0) continue;
+        // Blocks enclosing the command: its own line, then its ancestors.
+        const chain = [];
+        let at = line - 1;
+        chain.push(at);
+        while ((at = parentOf(code, at)) !== -1) chain.push(at);
+        // A step that starts with "- run:" is its own block; a "run: |" body
+        // sits under the step's "- name:" ancestor, found by parentOf above.
+        const okEnv = (g) => okLiteral(g.value) && !reportedBad.has(g.line);
+        const scoped =
+            chain.some((a) => blockGhRepo(code, a).some(okEnv)) ||
+            blockGhRepo(code, -1).some(okEnv);
+        const flag = t.match(/(?:--repo|-R)[ =]\s*(\S+)/);
+        if (flag) {
+            const val = unq(flag[1]);
+            const viaEnv = /^\$\{?GH_REPO\}?$/.test(val);
+            if (viaEnv ? !scoped : !okLiteral(val)) {
+                v.push(
+                    viaEnv
+                        ? `${f}:${line}: "${writes[0]}" uses $GH_REPO but no valid GH_REPO is set in this step, job or workflow env`
+                        : `${f}:${line}: "${writes[0]}" targets "${val}", expected ${allowed[0]} or Danathar/tududi`,
+                );
+            }
+        } else if (!scoped) {
+            v.push(
+                `${f}:${line}: "${writes[0]}" has no --repo and no valid GH_REPO is set in this step, job or workflow env`,
+            );
+        }
+    }
+    return v;
+}
+
+/** Reject attacker-controlled event expressions inside `run:` scripts. */
+export function checkRunExpressions(f, code, policy) {
+    const v = [];
+    const bad = new RegExp(policy.forbiddenRunExpressions);
+    for (let i = 0; i < code.length; i++) {
+        const m = code[i].match(/^(\s*(?:-\s+)?)run\s*:\s*(.*)$/);
+        if (!m) continue;
+        const indent = m[1].length;
+        const body = [m[2]];
+        for (let j = i + 1; j < code.length; j++) {
+            if (!isBlank(code[j]) && indentOf(code[j]) <= indent) break;
+            body.push(code[j]);
+        }
+        body.forEach((b, k) => {
+            for (const e of b.matchAll(/\$\{\{([^}]*)\}\}/g)) {
+                if (bad.test(e[1])) {
+                    v.push(
+                        `${f}:${i + 1 + k}: \${{${e[1]}}} in a run script; pass it through env: and use "$VAR"`,
+                    );
+                }
+            }
+        });
+    }
+    return v;
+}
+
 export function checkWorkflows(root, policy, files) {
     const v = [];
     const pin = new RegExp(policy.pinPattern);
@@ -174,13 +334,8 @@ export function checkWorkflows(root, policy, files) {
         const lines = text.split(/\r?\n/);
         const code = lines.map((l) => l.replace(/(^|\s)#.*$/, ''));
 
-        if (
-            policy.requireTopLevelPermissions &&
-            !code.some((l) => /^permissions\s*:/.test(l))
-        ) {
-            v.push(
-                `${f}: no top-level "permissions:" (the token would get the repository default)`,
-            );
+        if (policy.requireTopLevelPermissions) {
+            v.push(...checkTopLevelPermissions(f, code, policy));
         }
 
         code.forEach((l, i) => {
@@ -203,33 +358,9 @@ export function checkWorkflows(root, policy, files) {
             }
         });
 
-        if (policy.ghWriteNeedsRepo) {
-            const allowed = policy.allowedRepoValues;
-            const okValue = (val) => allowed.includes(val.replace(/^["']|["']$/g, '')) || allowed.includes(val);
-            // GH_REPO values declared anywhere in the workflow: all must be allowed.
-            let envScoped = false;
-            let envBad = false;
-            code.forEach((l, i) => {
-                const m = l.match(/\bGH_REPO\s*:\s*(.+?)\s*$/);
-                if (!m) return;
-                if (okValue(m[1])) envScoped = true;
-                else {
-                    envBad = true;
-                    v.push(`${f}:${i + 1}: GH_REPO is "${m[1]}", expected ${allowed[0]} or Danathar/tududi`);
-                }
-            });
-            for (const { line, text: t } of logicalLines(code.join('\n'))) {
-                const writes = findWriteCommands(t, policy.ghWriteCommandPattern);
-                if (writes.length === 0) continue;
-                const flag = t.match(/(?:--repo|-R)[ =]\s*(\S+)/);
-                if (flag) {
-                    if (!okValue(flag[1])) {
-                        v.push(`${f}:${line}: "${writes[0]}" targets "${flag[1]}", expected ${allowed[0]} or Danathar/tududi`);
-                    }
-                } else if (!envScoped || envBad) {
-                    v.push(`${f}:${line}: "${writes[0]}" has no --repo and the workflow sets no valid GH_REPO`);
-                }
-            }
+        if (policy.ghWriteNeedsRepo) v.push(...checkGhScope(f, code, policy));
+        if (policy.forbiddenRunExpressions) {
+            v.push(...checkRunExpressions(f, code, policy));
         }
     }
     return v;
