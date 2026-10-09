@@ -82,15 +82,12 @@ test('bot self-merge is a violation, in either login spelling', () => {
     );
 });
 
-test('bot merge is allowed only with an allowed label', () => {
+test('a risk-tier-looking label does not excuse a bot merge', () => {
     const p = pr({
         mergedBy: { login: 'app/danathar-atomic-hive' },
-        labels: [{ name: 'risk/tier-1' }],
+        labels: [{ name: 'risk/tier-4' }],
     });
-    assert.deepEqual(auditPr(p, { allowBotMergeLabels: ['risk/tier-1'] }), []);
-    assert.deepEqual(auditPr(p, { allowBotMergeLabels: ['risk/tier-0'] }), [
-        'human-merge',
-    ]);
+    assert.deepEqual(auditPr(p), ['human-merge']);
 });
 
 test('base must be main of this repository', () => {

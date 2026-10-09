@@ -20,13 +20,16 @@
  *   linked-issue   body has Closes/Fixes/Resolves #N (same repo; a reference to
  *                  another repository does not count)
  *   signature      body has a `— hive: agent=...` line
- *   human-merge    merged by a human account, not the Hive app or any bot,
- *                  unless the PR carries a label passed via --allow-bot-merge-label
+ *   human-merge    merged by a human account, not the Hive app or any bot.
+ *                  docs/risk-tiers.md lets an agent queue `ci`-review (Tier 3/4)
+ *                  PRs under the Hive merge strategy, but the PR JSON carries
+ *                  no changed-file list to derive a tier from, so every bot
+ *                  merge is reported; a reviewer can then confirm the tier.
  *   base           base branch is `main` of Danathar/tududi
  *
  * Usage:
  *   node scripts/ai-audit-report.mjs --input merged.json [--since YYYY-MM-DD]
- *        [--strict] [--fail-on-zero-agent] [--allow-bot-merge-label LABEL]...
+ *        [--strict] [--fail-on-zero-agent]
  *        [--limit N] [--output report.md]
  *   gh pr list ... | node scripts/ai-audit-report.mjs --strict
  *
@@ -90,21 +93,15 @@ export function isBotAccount(user) {
 /**
  * Checks one agent PR. Returns the list of violated requirement ids.
  * @param {object} pr
- * @param {{allowBotMergeLabels?: string[]}} [options]
  */
-export function auditPr(pr, options = {}) {
-    const allowLabels = options.allowBotMergeLabels ?? [];
-    const labels = (pr.labels ?? []).map((l) => l.name);
+export function auditPr(pr) {
     const violations = [];
 
     if (!hasLinkedIssue(pr.body)) violations.push('linked-issue');
     if (!findSignature(pr.body)) violations.push('signature');
 
     const mergedBy = pr.mergedBy;
-    const botMergeAllowed = labels.some((l) => allowLabels.includes(l));
-    if (!mergedBy || !mergedBy.login) {
-        violations.push('human-merge');
-    } else if (isBotAccount(mergedBy) && !botMergeAllowed) {
+    if (!mergedBy || !mergedBy.login || isBotAccount(mergedBy)) {
         violations.push('human-merge');
     }
 
@@ -117,7 +114,7 @@ export function auditPr(pr, options = {}) {
 
 /**
  * @param {object[]} prs merged PRs
- * @param {{since?: string, allowBotMergeLabels?: string[]}} [options]
+ * @param {{since?: string}} [options]
  */
 export function buildReport(prs, options = {}) {
     const since = options.since ?? null;
@@ -140,7 +137,7 @@ export function buildReport(prs, options = {}) {
             author: pr.author?.login ?? 'unknown',
             mergedBy: pr.mergedBy?.login ?? 'unknown',
             mergedAt: (pr.mergedAt ?? '').slice(0, 10),
-            violations: auditPr(pr, options),
+            violations: auditPr(pr),
         });
     }
     const violating = rows.filter((r) => r.violations.length > 0);
@@ -200,7 +197,6 @@ export function parseArgs(argv) {
         since: null,
         strict: false,
         failOnZeroAgent: false,
-        allowBotMergeLabels: [],
         limit: null,
         output: null,
     };
@@ -228,9 +224,6 @@ export function parseArgs(argv) {
                 break;
             case '--fail-on-zero-agent':
                 opts.failOnZeroAgent = true;
-                break;
-            case '--allow-bot-merge-label':
-                opts.allowBotMergeLabels.push(need(i++, a));
                 break;
             case '--limit': {
                 const n = Number(need(i++, a));

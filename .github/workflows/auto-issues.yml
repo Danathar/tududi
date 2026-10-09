@@ -28,10 +28,12 @@ on:
 
 # Two failures arriving together must not both see "no issue yet" and each
 # open one. Queue, never cancel: a cancelled run is a failure nobody was told
-# about.
+# about. `queue: max` is required for that: by default a group holds only one
+# pending run and a newer one replaces it.
 concurrency:
   group: auto-issues
   cancel-in-progress: false
+  queue: max
 
 permissions:
   issues: write
