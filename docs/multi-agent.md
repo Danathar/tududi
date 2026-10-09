@@ -14,8 +14,8 @@ shows the current answer.
 
 This repository is `Danathar/tududi`, a fork of `chrisvel/tududi`. Every pull
 request, issue, comment, label and push goes to this fork, never to
-`chrisvel/tududi`. In a fresh clone a bare `gh pr create` or `gh issue create`
-targets upstream, so every `gh` command passes `--repo Danathar/tududi`:
+`chrisvel/tududi`. In a fresh clone, creating a pull request or issue with `gh` and no
+repository flag targets upstream, so every `gh` command passes `--repo Danathar/tududi`:
 
 ```bash
 gh pr create --repo Danathar/tududi --base main --head <branch> --title "<title>" --body-file <file>
