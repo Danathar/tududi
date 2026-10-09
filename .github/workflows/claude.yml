@@ -10,6 +10,8 @@
 #   3. For a PR, the head branch must live in this repository. Fork PRs are
 #      refused: a fork branch is untrusted code, and this job holds a write
 #      token and an Anthropic credential.
+#   (The agent allowlist names git subcommands; a bare `git:*` would permit
+#   `git -c alias.x=!cmd x`, which runs arbitrary commands with the token.)
 #   4. If neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is configured,
 #      the job writes a step summary saying so and skips the agent. It does
 #      not fail red. Set exactly one of the two secrets.
@@ -173,4 +175,4 @@ jobs:
           claude_args: >-
             --max-turns 30
             --append-system-prompt "This repository is the fork Danathar/tududi, never chrisvel/tududi (upstream). Read AGENTS.md first, section 'This repository is a fork. All work happens here.' Every gh pr, gh issue, gh release and gh workflow command must pass --repo Danathar/tududi; PRs use --base main. Never open, comment on or label anything on chrisvel/tududi, never push to any remote except origin, never bump the version in package.json. Follow CLAUDE.md for code style, tests and migrations. Judge review findings by docs/review-rubric.md: verify each claim against the code before acting, and say so when a finding is wrong or not actionable. Do not merge pull requests."
-            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git:*),Bash(gh pr create --repo Danathar/tududi:*),Bash(gh pr view --repo Danathar/tududi:*),Bash(gh pr comment --repo Danathar/tududi:*),Bash(gh issue view --repo Danathar/tududi:*),Bash(${{ runner.temp }}/gh-review-read.sh:*),Bash(gh issue comment --repo Danathar/tududi:*),Bash(npm run backend:test:*),Bash(npm run frontend:test:*),Bash(npm run lint:*),Bash(npm run backend:lint:*),Bash(npm run frontend:lint:*),Bash(npm run format:*)"
+            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git add:*),Bash(git commit:*),Bash(git checkout:*),Bash(git switch:*),Bash(git branch:*),Bash(git fetch:*),Bash(git push origin:*),Bash(gh pr create --repo Danathar/tududi:*),Bash(gh pr view --repo Danathar/tududi:*),Bash(gh pr comment --repo Danathar/tududi:*),Bash(gh issue view --repo Danathar/tududi:*),Bash(${{ runner.temp }}/gh-review-read.sh:*),Bash(gh issue comment --repo Danathar/tududi:*),Bash(npm run backend:test:*),Bash(npm run frontend:test:*),Bash(npm run lint:*),Bash(npm run backend:lint:*),Bash(npm run frontend:lint:*),Bash(npm run format:*)"
