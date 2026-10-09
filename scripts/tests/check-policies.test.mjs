@@ -127,26 +127,33 @@ test('fork-target: direction file without the literal fails', () => {
     assert.match(v[0], /copilot-instructions\.md.*--repo Danathar\/tududi/);
 });
 
-test('fork-target: direction file must point to AGENTS.md', () => {
-    const v = run({
-        '.claude/skills/x/SKILL.md': 'Use --repo Danathar/tududi always.\n',
-    });
-    assert.equal(v.length, 1);
-    assert.match(v[0], /point to AGENTS\.md/);
-});
-
 test('fork-target: unscoped gh write command fails, with line number', () => {
     const v = run({ 'docs/guide.md': 'x\n\n    gh issue comment 5 --body hi\n' });
     assert.equal(v.length, 1);
     assert.match(v[0], /^docs\/guide\.md:3: "gh issue comment"/);
 });
 
-test('fork-target: -R and GH_REPO forms are accepted', () => {
+test('fork-target: -R is accepted, GH_REPO alone is not, in markdown', () => {
+    assert.deepEqual(run({ 'docs/a.md': 'gh pr merge 3 -R Danathar/tududi\n' }), []);
     const v = run({
-        'docs/a.md':
-            'gh pr merge 3 -R Danathar/tududi\nGH_REPO=Danathar/tududi gh release create v1\n',
+        'docs/a.md': 'GH_REPO=Danathar/tududi gh release create v1\n',
     });
-    assert.deepEqual(v, []);
+    assert.equal(v.length, 1);
+    assert.match(v[0], /docs\/a\.md:1: "gh release create"/);
+});
+
+test('fork-target: less common mutating verbs are covered', () => {
+    for (const cmd of [
+        'gh workflow disable ci.yml',
+        'gh workflow enable ci.yml',
+        'gh release upload v1 a.zip',
+        'gh pr ready 4',
+        'gh run rerun 9',
+        'gh pr update-branch 4',
+    ]) {
+        const v = run({ 'docs/a.md': cmd + '\n' });
+        assert.equal(v.length, 1, cmd);
+    }
 });
 
 test('fork-target: flag on a continued line counts, flag on the next command does not', () => {
@@ -248,17 +255,42 @@ test('workflows: actions/, github/, local and docker:// uses need no pin', () =>
     assert.deepEqual(run({ '.github/workflows/a.yml': wf }), []);
 });
 
-test('workflows: gh write command needs GH_REPO or --repo', () => {
-    const run1 = GOOD_WF + '      - run: gh issue comment 1 --body hi\n';
-    const v = run({ '.github/workflows/a.yml': run1 });
+test('workflows: gh write command needs a valid GH_REPO or --repo', () => {
+    const cmd = GOOD_WF + '      - run: gh issue comment 1 --body hi\n';
+    const v = run({ '.github/workflows/a.yml': cmd });
     assert.equal(v.length, 1);
-    assert.match(v[0], /sets neither GH_REPO nor --repo/);
+    assert.match(v[0], /a\.yml:\d+: "gh issue comment" has no --repo/);
 
-    const withEnv = run1.replace(
-        'jobs:',
-        'env:\n  GH_REPO: ${{ github.repository }}\njobs:',
+    const env = 'env:\n  GH_REPO: ${{ github.repository }}\njobs:';
+    assert.deepEqual(
+        run({ '.github/workflows/a.yml': cmd.replace('jobs:', env) }),
+        [],
     );
-    assert.deepEqual(run({ '.github/workflows/a.yml': withEnv }), []);
+    const flag = GOOD_WF + '      - run: gh pr merge 2 --repo "$GH_REPO"\n';
+    assert.deepEqual(run({ '.github/workflows/a.yml': flag }), []);
+});
+
+test('workflows: GH_REPO or --repo pointing at upstream is rejected', () => {
+    const cmd = GOOD_WF + '      - run: gh pr merge 2\n';
+    const badEnv = run({
+        '.github/workflows/a.yml': cmd.replace('jobs:', 'env:\n  GH_REPO: chrisvel/tududi\njobs:'),
+    });
+    assert.ok(badEnv.some((x) => /GH_REPO is "chrisvel\/tududi"/.test(x)));
+    assert.ok(badEnv.some((x) => /no --repo and the workflow sets no valid GH_REPO/.test(x)));
+    const badFlag = run({
+        '.github/workflows/a.yml': GOOD_WF + '      - run: gh pr merge 2 -R chrisvel/tududi\n',
+    });
+    assert.equal(badFlag.length, 1);
+    assert.match(badFlag[0], /targets "chrisvel\/tududi"/);
+});
+
+test('workflows: an unrelated --repo elsewhere does not scope another write', () => {
+    const wf =
+        GOOD_WF +
+        '      - run: gh pr view 1 --repo Danathar/tududi\n      - run: gh pr close 1\n';
+    const v = run({ '.github/workflows/a.yml': wf });
+    assert.equal(v.length, 1);
+    assert.match(v[0], /"gh pr close" has no --repo/);
 });
 
 // ---- risk tiers

@@ -20,13 +20,12 @@ and needs the owner.
 Stops agent instructions from sending work upstream.
 
 - Every file that exists and matches `directionGlobs` must contain the literal
-  `--repo Danathar/tududi` and must mention `AGENTS.md` (except `AGENTS.md`
-  itself). Globs for files that do not exist are ignored.
+  `--repo Danathar/tududi`. Globs for files that do not exist are ignored.
 - In those files and in every `.md` under the repository root, `docs/`,
   `.github/`, `.claude/` and `policies/` (`scanGlobs`), each `gh pr|issue|release|workflow|label`
   write command (`create`, `comment`, `edit`, `close`, `reopen`, `merge`,
-  `review`, `delete`, `run`) must carry `--repo Danathar/tududi`, `-R Danathar/tududi`,
-  or `GH_REPO=Danathar/tududi` on the same logical line. A command continued
+  `review`, `delete`, `run`) must carry `--repo Danathar/tududi`, or `-R Danathar/tududi`
+  on the same logical line (an environment variable is not enough in markdown). A command continued
   with a trailing backslash is one line. There is no exemption for prose: describe
   an unscoped command in words, or add the flag.
 - No scanned line may pass `--repo`/`-R`/`GH_REPO` for `chrisvel/tududi`, make the upstream
@@ -46,7 +45,13 @@ For every `.github/workflows/*.yml`:
 - every `uses:` outside `actions/` and `github/` is pinned to a 40-character
   commit SHA (keep the tag in a trailing `# vX` comment); local `./` and
   `docker://` references are skipped;
-- a workflow that runs a `gh` write command sets `GH_REPO` or passes `--repo`.
+- every logical line that runs a `gh` write command passes `--repo`/`-R` with
+  `Danathar/tududi`, `${{ github.repository }}` or `"$GH_REPO"`, or the workflow
+  sets `GH_REPO` to `${{ github.repository }}` or `Danathar/tududi`. Any other
+  `GH_REPO` or `--repo` value (for example `chrisvel/tududi`) fails.
+- the write-command list includes `enable`, `disable`, `ready`, `upload`,
+  `update-branch`, `lock`, `transfer` and `gh run rerun|cancel|delete`, besides
+  `create`, `comment`, `edit`, `close`, `reopen`, `merge`, `review`, `delete`, `run`.
 
 ## Risk tiers
 

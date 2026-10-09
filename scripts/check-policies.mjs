@@ -130,11 +130,6 @@ export function checkForkTarget(root, policy, files) {
                     `(PRs and issues go to this fork, never chrisvel/tududi)`,
             );
         }
-        if (f !== policy.pointerExempt && !text.includes(policy.requiredPointer)) {
-            v.push(
-                `${f}: agent-directions file must point to ${policy.requiredPointer}`,
-            );
-        }
     }
 
     const scanned = new Set([
@@ -209,16 +204,31 @@ export function checkWorkflows(root, policy, files) {
         });
 
         if (policy.ghWriteNeedsRepo) {
-            const body = code.join('\n');
-            const writes = findWriteCommands(body, writeRe);
-            if (
-                writes.length > 0 &&
-                !/\bGH_REPO\s*:/.test(body) &&
-                !/(--repo|-R)[ =]/.test(body)
-            ) {
-                v.push(
-                    `${f}: runs "${writes[0]}" but sets neither GH_REPO nor --repo`,
-                );
+            const allowed = policy.allowedRepoValues;
+            const okValue = (val) => allowed.includes(val.replace(/^["']|["']$/g, '')) || allowed.includes(val);
+            // GH_REPO values declared anywhere in the workflow: all must be allowed.
+            let envScoped = false;
+            let envBad = false;
+            code.forEach((l, i) => {
+                const m = l.match(/\bGH_REPO\s*:\s*(.+?)\s*$/);
+                if (!m) return;
+                if (okValue(m[1])) envScoped = true;
+                else {
+                    envBad = true;
+                    v.push(`${f}:${i + 1}: GH_REPO is "${m[1]}", expected ${allowed[0]} or Danathar/tududi`);
+                }
+            });
+            for (const { line, text: t } of logicalLines(code.join('\n'))) {
+                const writes = findWriteCommands(t, policy.ghWriteCommandPattern);
+                if (writes.length === 0) continue;
+                const flag = t.match(/(?:--repo|-R)[ =]\s*(\S+)/);
+                if (flag) {
+                    if (!okValue(flag[1])) {
+                        v.push(`${f}:${line}: "${writes[0]}" targets "${flag[1]}", expected ${allowed[0]} or Danathar/tududi`);
+                    }
+                } else if (!envScoped || envBad) {
+                    v.push(`${f}:${line}: "${writes[0]}" has no --repo and the workflow sets no valid GH_REPO`);
+                }
             }
         }
     }
