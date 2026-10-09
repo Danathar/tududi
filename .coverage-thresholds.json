@@ -1,0 +1,15 @@
+{
+    "$comment": "Coverage floors enforced by scripts/coverage-gate.mjs (.github/workflows/coverage-gate.yml). 'measured' is the Jest reading on main a6225863 (Node 26 locally; backend: npm run backend:test:coverage, frontend: npm run frontend:test:coverage, both with --coverageReporters=json-summary). 'floor' sits about 3 points below measured so ordinary churn passes but a real drop fails. Floors only go up: .github/workflows/auto-qa.yml proposes raises via a tracking issue (rules in .github/auto-qa-tuning.json); a human edits this file. Scope is whatever each Jest config's collectCoverageFrom selects: backend covers routes, models, middleware and services only (not backend/modules); frontend covers frontend/**/*.{ts,tsx}. Frontend has known failing suites on main (MermaidDiagram, MarkdownRenderer.publicLinks, roleLabels); Jest still writes coverage for the rest, so the number is slightly understated.",
+    "areas": {
+        "backend": {
+            "summary": "backend/coverage/coverage-summary.json",
+            "measured": { "lines": 91.22, "statements": 90.06, "functions": 90.85, "branches": 82.25 },
+            "floor": { "lines": 88, "statements": 87, "functions": 87, "branches": 79 }
+        },
+        "frontend": {
+            "summary": "coverage-frontend/coverage-summary.json",
+            "measured": { "lines": 36.04, "statements": 35.76, "functions": 29.71, "branches": 26.69 },
+            "floor": { "lines": 33, "statements": 32, "functions": 26, "branches": 23 }
+        }
+    }
+}
