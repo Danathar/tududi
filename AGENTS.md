@@ -70,6 +70,24 @@ CalVer, or add a suffix. Backups embed that version, and
 be newer than the running app. A fork-only version would block restores in one
 direction or the other.
 
+## Agent tooling
+
+These files steer AI tools in this repository. All of them inherit the fork
+rule above: PRs and issues go to this fork, every `gh` command takes
+`--repo Danathar/tududi`, and nothing targets `chrisvel/tududi`. Any file added
+later that directs an agent must state that rule too.
+
+- `.github/copilot-instructions.md`: GitHub Copilot guide.
+- `.cursor/rules/tududi.mdc`: Cursor rule (always applied).
+- `.github/prompts/`: task prompts and their catalog (`README.md`).
+- `.claude/skills/`: Claude Code skills (`open-fork-pr`, `add-migration`,
+  `run-checks`).
+- `.claude/settings.json`: Claude Code settings with the Bash guard hook.
+- `policies/`: machine-readable agent policies.
+- `docs/risk-tiers.md`: how risky a change is and who must review it.
+- `docs/security/SECURITY-AI.md`: security rules for AI-assisted changes.
+- `.editorconfig`: whitespace settings every editor and agent should honour.
+
 ## Licensing
 
 This fork is licensed **GPL-3.0-only** ([LICENSE](LICENSE)). It incorporates

@@ -1,0 +1,56 @@
+---
+description: Tududi repository rules - fork-only workflow, commands, module pattern, dialect-safe migrations, translations, licence
+alwaysApply: true
+---
+
+# Tududi (Danathar/tududi fork)
+
+Fork rule: this repository is `Danathar/tududi`, a fork of `chrisvel/tududi`.
+PRs and issues go to this fork. Pass `--repo Danathar/tududi` to every
+`gh pr`, `gh issue`, `gh release` and `gh workflow` command; never target
+`chrisvel/tududi`, and push only to `origin`. Full rules: `AGENTS.md`, section
+"This repository is a fork. All work happens here." (it wins over this file).
+Codebase guide: `CLAUDE.md`.
+
+## Commands (root `package.json`)
+
+- Dev: `npm start` (frontend :8080, backend :3002), after `npm run db:init`.
+- Checks: `npm run lint`, `npm run format`, `npm test`,
+  `npm run frontend:test`, `npm run build`, `npm run backend:test:upgrade`.
+- PostgreSQL: `npm run backend:test:pg` with `DATABASE_URL` set.
+- Migrations: `npm run migration:create <name>`, `npm run db:migrate`,
+  `npm run migration:status`.
+- Known failures on a clean `main` in `npm run frontend:test`: `MermaidDiagram`,
+  `MarkdownRenderer.publicLinks`, `roleLabels`. Verify against `main`.
+
+## Code
+
+- Backend: `backend/modules/<feature>/` with `routes.js` (thin) ->
+  `repository.js` (Sequelize) and optional `operations/`, `core/`. Routes never
+  use models directly. Register new modules in `backend/app.js`.
+- Frontend: React 18 + TypeScript; global state in `frontend/store/useStore.ts`,
+  server data via SWR, API calls via `frontend/utils/<resource>Service.ts`.
+- Prettier: 4 spaces, single quotes, semicolons, ES5 trailing commas.
+- Add or update tests with every behaviour change (`backend/tests/unit`,
+  `backend/tests/integration`).
+
+## Migrations
+
+Every new migration runs on SQLite and PostgreSQL. Use the `safe*` helpers in
+`backend/utils/migration-utils.js`; no `PRAGMA`, `sqlite_master`,
+`AUTOINCREMENT`, backtick identifiers or `0`/`1` booleans. See
+`docs/database.md`, "Writing dialect-safe migrations".
+
+## Translations
+
+Source: `public/locales/en/translation.json`. Add each new key to all 25 locale
+folders under `public/locales/`. No sync script exists.
+
+## Licence and versions
+
+GPL-3.0-only fork. Never edit or delete `LICENSE.MIT`; do not revert licence
+identifiers to MIT or ISC; do not bump the `package.json` version; no scheduled
+upstream sync; image is `ghcr.io/danathar/tududi`. Conventional Commit
+messages; no `git commit -s`.
+
+Other agent files are listed in the "Agent tooling" section of `AGENTS.md`.
