@@ -50,7 +50,8 @@ For every `.github/workflows/*.yml`:
   sets `GH_REPO` to `${{ github.repository }}` or `Danathar/tududi`. Any other
   `GH_REPO` or `--repo` value (for example `chrisvel/tududi`) fails.
 - the write-command list includes `enable`, `disable`, `ready`, `upload`,
-  `update-branch`, `lock`, `transfer` and `gh run rerun|cancel|delete`, besides
+  `update-branch`, `lock` and `transfer`, and the `rerun`, `cancel` and `delete`
+  verbs of `gh run`, besides
   `create`, `comment`, `edit`, `close`, `reopen`, `merge`, `review`, `delete`, `run`.
 
 ## Risk tiers
