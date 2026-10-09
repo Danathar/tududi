@@ -40,6 +40,8 @@ const allowed = [
     'git remote set-url origin https://github.com/Danathar/tududi',
     'gh api graphql -f query=\'query($o:String!){ repository(owner:$o,name:"tududi"){ id } }\' -f o=Danathar',
     'gh discussion list --repo chrisvel/tududi',
+    'gh auth status',
+    'gh codespace list',
     'git push origin HEAD',
     'git push -u origin acmm/claude-guard',
     'git -C ../wt push origin main',
@@ -93,6 +95,9 @@ const blocked = [
     ['gh api graphql --input payload.json', 'graphql'],
     ['gh api graphql -F query=@payload.graphql', 'graphql'],
     ['gh api graphql -f query="$Q"', 'graphql'],
+    ['gh codespace create -R chrisvel/tududi', 'chrisvel/tududi'],
+    ['gh somenewgroup create --repo someone/else', 'someone/else'],
+    ['gh somenewgroup sync chrisvel/tududi', 'chrisvel/tududi'],
     // Compound commands, subshells, wrappers.
     ['git status && gh pr create --title t', 'no --repo'],
     ['git status; gh issue create --title t', 'no --repo'],

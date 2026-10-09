@@ -57,6 +57,7 @@ const GH_GROUPS = {
     ruleset: ['list', 'view', 'check'],
     cache: ['list'],
     discussion: ['view', 'list'],
+    codespace: ['list', 'view', 'logs', 'ports'],
 };
 
 // Words that may precede the real command and carry no meaning for us.
@@ -329,7 +330,20 @@ function checkGh(args, envRepo) {
     if (!group) return null;
 
     if (group === 'api') return checkGhApi(args.slice(args.indexOf('api') + 1));
-    if (!Object.hasOwn(GH_GROUPS, group)) return null; // auth, config, browse, search, ...
+    if (!Object.hasOwn(GH_GROUPS, group)) {
+        // Groups we do not know (auth, config, browse, search, ...) are allowed,
+        // unless they are explicitly aimed at a repository other than the fork
+        // (e.g. `gh codespace create -R chrisvel/tududi`): fail closed on that.
+        const aimed = repoFlag(args) ?? envRepo;
+        const readish = ['view', 'list', 'status', 'get', 'download', 'clone', 'diff', 'checks', 'watch', 'logs'];
+        if (aimed !== null && !isFork(aimed) && !readish.includes(plain[1] ?? '')) {
+            return block(`Blocked: \`gh ${group} ${plain[1] ?? ''}\` targets "${aimed}", not Danathar/tududi.`);
+        }
+        if (args.some(namesUpstream) && !readish.includes(plain[1] ?? '')) {
+            return block(`Blocked: \`gh ${group} ${plain[1] ?? ''}\` names ${UPSTREAM}.`);
+        }
+        return null;
+    }
 
     const action = plain[1] ?? '';
     const flagRepo = repoFlag(args);
