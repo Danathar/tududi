@@ -23,6 +23,21 @@ The first prints `true`; the second lists `protect main` as `active`. Anything
 else means the ruleset was removed or disabled and `main` again accepts a
 direct push from any token with `contents: write`.
 
+Being active does not prove the rules are the ones in the file; an edit in the
+GitHub UI could leave only `deletion`. Compare the live ruleset with the file
+(prints nothing when they match):
+
+```bash
+diff <(gh api repos/Danathar/tududi/rulesets/24817503 \
+         --jq '{name,target,enforcement,conditions,bypass_actors,rules}' | jq -S .) \
+     <(jq -S '{name,target,enforcement,conditions,bypass_actors,rules}' \
+         .github/rulesets/main.json)
+```
+
+GitHub fills in defaults for `pull_request` parameters that were not sent
+(`require_extra_approval_for_unattributed_changes: true`,
+`required_reviewers: []`); the file spells them out so this diff stays empty.
+
 ## Why
 
 Every gate this repository has sits behind a pull request: the `CI` workflow,
@@ -98,6 +113,24 @@ the live ruleset from the file:
 gh api --method PUT repos/Danathar/tududi/rulesets/24817503 \
   --input .github/rulesets/main.json
 ```
+
+### Renaming a required check
+
+That order deadlocks when the pull request renames `test-sqlite` or
+`test-postgres` (or the `ci.yml` job behind it): the pull request reports only
+the new name while the live ruleset waits for the old one, so it can never
+merge. Stage it instead:
+
+1. Open the pull request that renames the job and changes
+   `.github/rulesets/main.json` to the new name. Wait for its new check to pass.
+2. While it is open, PUT the file from that branch to the live ruleset (the
+   command above, run in a checkout of the branch). The pull request can now
+   merge on its new check.
+3. Merge it, then run the diff above against `main` to confirm the live rules
+   and the file agree.
+
+Other open pull requests report the old name until they merge `main`, so they
+wait for one CI run after step 2.
 
 ## When there is a second reviewer
 
