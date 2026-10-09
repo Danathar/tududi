@@ -63,10 +63,22 @@ export function findSignature(body) {
     let fence = null;
     for (const line of lines(body)) {
         const trimmed = line.trim();
-        const marker = /^(```|~~~)/.exec(trimmed)?.[1];
-        if (marker) {
-            if (fence === null) fence = marker;
-            else if (fence === marker) fence = null;
+        const open = /^(`{3,}|~{3,})(.*)$/.exec(trimmed);
+        if (open) {
+            const [, marker, rest] = open;
+            if (fence === null) {
+                fence = marker;
+                continue;
+            }
+            // CommonMark: a closing fence is the same character, at least as
+            // long as the opener, and has no info string.
+            if (
+                marker[0] === fence[0] &&
+                marker.length >= fence.length &&
+                rest.trim() === ''
+            ) {
+                fence = null;
+            }
             continue;
         }
         if (fence === null && SIGNATURE_LINE.test(trimmed)) {

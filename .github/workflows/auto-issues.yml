@@ -1,6 +1,6 @@
 name: Auto issues
 
-# When `CI` or `Publish Docker image` fails on a push to main, open one
+# When `CI` or `Publish Docker image` fails, times out or fails to start on a push to main, open one
 # tracking issue per workflow, or comment on it if it is already open. Until
 # this file existed nothing told anyone that main had gone red or that the
 # ghcr.io/danathar/tududi image had stopped updating.
@@ -40,7 +40,9 @@ permissions: {}
 
 jobs:
   main-red:
-    if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.event == 'push'
+    # A timed-out or never-started run leaves main unverified just as a red one
+    # does. `cancelled` is not reported: a newer push superseding a run is normal.
+    if: contains(fromJSON('["failure", "timed_out", "startup_failure"]'), github.event.workflow_run.conclusion) && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -53,6 +55,7 @@ jobs:
           # Event fields are attacker-influenced (a commit message is whatever
           # its author wrote), so they reach the shell only as env vars.
           WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
           COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message }}
@@ -62,8 +65,8 @@ jobs:
           export TITLE
           subject=${COMMIT_MESSAGE%%$'\n'*}
           # Indented code block: whatever the subject contains stays text.
-          body=$(printf 'The `%s` workflow failed on a push to `main` on %s.\n\nCommit: %s\nRun: %s\n\nFirst line of the commit message:\n\n    %s\n\nThis issue is not closed automatically; close it once `main` is green again.\n' \
-            "$WORKFLOW_NAME" "$(date -u +%Y-%m-%d)" "$HEAD_SHA" "$RUN_URL" "$subject")
+          body=$(printf 'The `%s` workflow ended with conclusion `%s` on a push to `main` on %s.\n\nCommit: %s\nRun: %s\n\nFirst line of the commit message:\n\n    %s\n\nThis issue is not closed automatically; close it once `main` is green again.\n' \
+            "$WORKFLOW_NAME" "$CONCLUSION" "$(date -u +%Y-%m-%d)" "$HEAD_SHA" "$RUN_URL" "$subject")
           # List rather than search: the search index lags, and `in:title` is a
           # word match, not an exact one. Match the exact title AND the Actions
           # bot as author, so an issue anyone else opens with this title is

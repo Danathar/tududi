@@ -72,6 +72,15 @@ test('a signature inside a fenced code block is an example, not a signature', ()
     assert.equal(classify(human).agent, false);
 });
 
+test('a longer fence is not closed by a shorter inner fence', () => {
+    const body = `\`\`\`\`md\n\`\`\`\n${SIG}\n\`\`\`\n\`\`\`\``;
+    assert.equal(findSignature(body), null);
+    // closed properly, a later signature counts again
+    assert.equal(findSignature(`${body}\n${SIG}`), SIG);
+    // different fence character does not close
+    assert.equal(findSignature(`\`\`\`\n~~~\n${SIG}`), null);
+});
+
 test('missing linked issue is a violation', () => {
     assert.deepEqual(auditPr(pr({ closingIssuesReferences: [] })), ['linked-issue']);
 });
