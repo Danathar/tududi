@@ -157,11 +157,9 @@ test('exit code: non-strict never fails on violations, strict does', () => {
     assert.equal(run(['--output', 'x.md', '--strict'], [pr()]).code, 0);
 });
 
-test('exit code: --fail-on-zero-agent only fails when nothing was audited', () => {
+test('exit code: zero agent PRs is not a violation, even in strict mode', () => {
     const none = [pr({ author: { login: 'Danathar' }, body: 'x' })];
-    assert.equal(run(['--output', 'x.md', '--fail-on-zero-agent'], none).code, 1);
     assert.equal(run(['--output', 'x.md', '--strict'], none).code, 0);
-    assert.equal(run(['--output', 'x.md', '--fail-on-zero-agent'], [pr()]).code, 0);
 });
 
 test('exit code 2 for bad input, bad flags and truncated lists', () => {
@@ -169,5 +167,8 @@ test('exit code 2 for bad input, bad flags and truncated lists', () => {
     assert.equal(run(['--output', 'x.md'], { a: 1 }).code, 2);
     assert.equal(run(['--bogus'], []).code, 2);
     assert.equal(run(['--limit', '1', '--output', 'x.md'], [pr()]).code, 2);
-    assert.throws(() => parseArgs(['--since', '2026-13-45']));
+    for (const bad of ['2026-13-45', '2026-02-30', '2026-02-29', '2026-1-5']) {
+        assert.throws(() => parseArgs(['--since', bad]), /real date/);
+    }
+    assert.equal(parseArgs(['--since', '2028-02-29']).since, '2028-02-29');
 });

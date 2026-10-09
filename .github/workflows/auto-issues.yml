@@ -66,10 +66,10 @@ jobs:
           # word match, not an exact one. Match the exact title AND the Actions
           # bot as author, so an issue anyone else opens with this title is
           # never the one a failure is reported into.
-          existing=$(gh issue list --state open --limit 1000 --json number,title,author \
+          existing=$(gh issue list --repo "$GH_REPO" --state open --limit 1000 --json number,title,author \
             --jq '[.[] | select(.title == env.TITLE and (.author.login == "app/github-actions" or .author.login == "github-actions[bot]" or .author.login == "github-actions"))][0].number // empty')
           if [ -n "$existing" ]; then
-            gh issue comment "$existing" --body "$body"
+            gh issue comment "$existing" --repo "$GH_REPO" --body "$body"
           else
-            gh issue create --title "$TITLE" --body "$body"
+            gh issue create --repo "$GH_REPO" --title "$TITLE" --body "$body"
           fi

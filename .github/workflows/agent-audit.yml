@@ -66,9 +66,12 @@ jobs:
             [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
             *) echo "::error::since must be YYYY-MM-DD, got '$SINCE'"; exit 2 ;;
           esac
+          if [ "$(date -u -d "$SINCE" +%F 2>/dev/null || true)" != "$SINCE" ]; then
+            echo "::error::since must be a real date, got '$SINCE'"; exit 2
+          fi
           # `commits` is left out of --json on purpose: with --limit 500 it
           # exceeds GitHub's GraphQL node limit, and the audit does not read it.
-          gh pr list --state merged --limit 500 --search "merged:>=$SINCE" \
+          gh pr list --repo "$GH_REPO" --state merged --limit 500 --search "merged:>=$SINCE" \
             --json number,title,author,body,mergedAt,mergedBy,labels,url,baseRefName > merged.json
           # --limit makes the script refuse a list that may be truncated.
           node scripts/ai-audit-report.mjs --input merged.json --since "$SINCE" \

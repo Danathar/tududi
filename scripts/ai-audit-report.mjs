@@ -29,13 +29,13 @@
  *
  * Usage:
  *   node scripts/ai-audit-report.mjs --input merged.json [--since YYYY-MM-DD]
- *        [--strict] [--fail-on-zero-agent]
+ *        [--strict]
  *        [--limit N] [--output report.md]
  *   gh pr list ... | node scripts/ai-audit-report.mjs --strict
  *
  * Exit codes: 0 report written (and, with --strict, no violations);
- * 1 --strict and at least one violation (or --fail-on-zero-agent and none
- * audited); 2 bad usage or unreadable/truncated input.
+ * 1 --strict and at least one violation (zero agent PRs is reported, never a
+ * violation); 2 bad usage or unreadable/truncated input.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -191,12 +191,18 @@ export function renderMarkdown(report) {
     return out.join('\n');
 }
 
+/** YYYY-MM-DD that round-trips, so 2026-02-30 is rejected, not read as March. */
+export function isRealDate(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const d = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
 export function parseArgs(argv) {
     const opts = {
         input: null,
         since: null,
         strict: false,
-        failOnZeroAgent: false,
         limit: null,
         output: null,
     };
@@ -212,18 +218,12 @@ export function parseArgs(argv) {
                 break;
             case '--since':
                 opts.since = need(i++, a);
-                if (
-                    !/^\d{4}-\d{2}-\d{2}$/.test(opts.since) ||
-                    Number.isNaN(Date.parse(opts.since))
-                ) {
+                if (!isRealDate(opts.since)) {
                     throw new Error('--since must be a real date, YYYY-MM-DD');
                 }
                 break;
             case '--strict':
                 opts.strict = true;
-                break;
-            case '--fail-on-zero-agent':
-                opts.failOnZeroAgent = true;
                 break;
             case '--limit': {
                 const n = Number(need(i++, a));
@@ -266,7 +266,6 @@ export function main(argv, readInput = readFileSync, write = writeFileSync) {
     if (opts.output) write(opts.output, md);
     else process.stdout.write(md + '\n');
     if (opts.strict && report.violationCount > 0) return 1;
-    if (opts.failOnZeroAgent && report.agent === 0) return 1;
     return 0;
 }
 
