@@ -134,7 +134,9 @@ Every new migration runs on both SQLite and PostgreSQL. The full checklist is
 - [ ] Docs changed with behaviour: the matching file under `docs/`, and
       `CLAUDE.md` or `AGENTS.md` if a rule or command changed.
 - [ ] Workflows: top-level `permissions:` least-privilege, third-party actions
-      pinned to a full commit SHA with a `# vX` comment, event-controlled
+      (anything outside `actions/*`, which `ci.yml` and the other workflows
+      here reference by major tag) pinned to a full commit SHA with a `# vX`
+      comment, event-controlled
       strings passed through `env:` rather than interpolated into `run:`, no
       `pull_request_target`. A workflow that calls `gh` sets
       `GH_REPO: ${{ github.repository }}`.
