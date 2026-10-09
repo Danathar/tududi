@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 // PreToolUse hook for Claude Code's Bash tool (wired up in .claude/settings.json).
 //
+// Threat model: this hook prevents an agent that is following instructions
+// from carelessly or accidentally targeting upstream (chrisvel/tududi) or
+// running destructive commands. It is NOT a sandbox against deliberate
+// obfuscation (eval of built strings, shell variables, scripts written to disk
+// and executed, aliases, ...). The real boundaries are token scope (this
+// fork's tokens and GitHub App cannot write to chrisvel/tududi) and Hive's
+// proxy; findings that need deliberate obfuscation are out of scope here.
+//
 // Why: this repository is a fork (Danathar/tududi) of chrisvel/tududi. A bare
 // `gh pr create` in a fork targets the upstream parent, so an agent can open
 // PRs or issues on someone else's project by accident. AGENTS.md ("This
@@ -58,6 +66,26 @@ const GH_GROUPS = {
     cache: ['list'],
     discussion: ['view', 'list'],
     codespace: ['list', 'view', 'logs', 'ports'],
+};
+
+// gh groups outside GH_GROUPS that may run without a repo target.
+// true = every action is read-only or local; array = only those actions.
+const GH_OTHER_READONLY = {
+    auth: ['status'],
+    browse: true,
+    search: true,
+    status: true,
+    config: ['get', 'list'],
+    alias: ['list'],
+    extension: ['list', 'search', 'browse'],
+    'ssh-key': ['list'],
+    'gpg-key': ['list'],
+    org: ['list'],
+    project: ['list', 'view', 'field-list', 'item-list'],
+    attestation: ['verify', 'inspect', 'trusted-root'],
+    completion: true,
+    help: true,
+    version: true,
 };
 
 // Words that may precede the real command and carry no meaning for us.
@@ -337,18 +365,15 @@ function checkGh(args, envRepo) {
 
     if (group === 'api') return checkGhApi(args.slice(args.indexOf('api') + 1));
     if (!Object.hasOwn(GH_GROUPS, group)) {
-        // Groups we do not know (auth, config, browse, search, ...) are allowed,
-        // unless they are explicitly aimed at a repository other than the fork
-        // (e.g. `gh codespace create -R chrisvel/tududi`): fail closed on that.
-        const aimed = repoFlag(args) ?? envRepo;
-        const readish = ['view', 'list', 'status', 'get', 'download', 'clone', 'diff', 'checks', 'watch', 'logs'];
-        if (aimed !== null && !isFork(aimed) && !readish.includes(plain[1] ?? '')) {
-            return block(`Blocked: \`gh ${group} ${plain[1] ?? ''}\` targets "${aimed}", not Danathar/tududi.`);
-        }
-        if (args.some(namesUpstream) && !readish.includes(plain[1] ?? '')) {
-            return block(`Blocked: \`gh ${group} ${plain[1] ?? ''}\` names ${UPSTREAM}.`);
-        }
-        return null;
+        // Fail closed: groups outside GH_GROUPS pass only via the explicit
+        // read-only allowlist (GH_OTHER_READONLY). This also covers `gh alias set`,
+        // which could define an alias that hides a write.
+        const allowed = GH_OTHER_READONLY[group];
+        if (allowed === true || (Array.isArray(allowed) && allowed.includes(plain[1] ?? ''))) return null;
+        return block(
+            `Blocked: \`gh ${group} ${plain[1] ?? ''}\` is not on the read-only allowlist ` +
+                '(unknown or mutating gh command; the target repository cannot be verified).'
+        );
     }
 
     const action = plain[1] ?? '';
@@ -395,12 +420,13 @@ function checkGh(args, envRepo) {
 /** AGENTS.md: PRs are created with an explicit `--base main` and `--head <branch>`. */
 function checkPrCreate(args) {
     const flagValue = (long, short) => {
+        let found = null;
         for (let i = 0; i < args.length; i++) {
             const a = args[i];
-            if (a === long || a === short) return args[i + 1] ?? '';
-            if (a.startsWith(`${long}=`)) return a.slice(long.length + 1);
+            if (a === long || a === short) found = args[i + 1] ?? '';
+            else if (a.startsWith(`${long}=`)) found = a.slice(long.length + 1);
         }
-        return null;
+        return found; // gh honours the last occurrence of a repeated flag
     };
     const base = flagValue('--base', '-B');
     const head = flagValue('--head', '-H');
@@ -417,16 +443,30 @@ function checkPrCreate(args) {
 // git
 // ---------------------------------------------------------------------------
 
-function checkGit(args) {
-    // Skip global options to find the subcommand.
+// git config keys that can redirect where a push goes or how it authenticates.
+const RISKY_GIT_CONFIG = /^(remote\.|url\.|push\.|credential\.|core\.sshcommand$)/i;
+
+function checkGit(args, inlineEnv = {}) {
+    // Walk global options to find the subcommand, vetting `-c key=value`.
     let i = 0;
     while (i < args.length && args[i].startsWith('-')) {
-        i += ['-C', '-c', '--git-dir', '--work-tree', '--namespace'].includes(args[i]) ? 2 : 1;
+        const a = args[i];
+        let configKey = null;
+        if (a === '-c' || a === '--config-env') configKey = (args[i + 1] ?? '').split('=')[0];
+        else if (a.startsWith('--config-env=')) configKey = a.slice(13).split('=')[0];
+        if (configKey !== null && RISKY_GIT_CONFIG.test(configKey)) {
+            return block(`Blocked: \`git ${a} ${configKey}=...\` could redirect pushes or credentials.`);
+        }
+        i += ['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env'].includes(a) ? 2 : 1;
     }
     const sub = args[i];
     const rest = args.slice(i + 1);
 
-    if (sub === 'push') return checkGitPush(rest);
+    if (sub === 'push') {
+        const envKey = Object.keys(inlineEnv).find((k) => /^(GIT_CONFIG_|GIT_SSH)/i.test(k));
+        if (envKey) return block(`Blocked: \`git push\` with ${envKey}= could redirect the push.`);
+        return checkGitPush(rest);
+    }
     if (sub === 'remote') return checkGitRemote(rest);
     return null;
 }
@@ -461,8 +501,15 @@ function checkGitPush(rest) {
 
 function checkGitRemote(rest) {
     const sub = rest[0];
-    const flags = rest.slice(1).filter((a) => a.startsWith('-'));
-    const plain = rest.slice(1).filter((a) => !a.startsWith('-'));
+    const flags = [];
+    const plain = [];
+    for (let k = 1; k < rest.length; k++) {
+        const a = rest[k];
+        if (a.startsWith('-')) {
+            flags.push(a);
+            if (['-t', '-m', '--track', '--master'].includes(a)) k++; // option takes a value
+        } else plain.push(a);
+    }
     const [name, url] = plain;
     const originHint =
         'AGENTS.md defines origin as https://github.com/Danathar/tududi; it must not be removed, renamed or re-pointed.';
@@ -508,6 +555,17 @@ function checkSegment(words, state) {
         if (!w.length) return null;
         const cmd = basename(w[0]);
         if (!WRAPPERS.has(cmd)) break;
+        // `env -S 'gh pr create'` / `env --split-string=...` runs a command string.
+        if (cmd === 'env') {
+            for (let k = 1; k < w.length; k++) {
+                const a = w[k];
+                let script = null;
+                if (a === '-S' || a === '--split-string') script = w[k + 1] ?? '';
+                else if (a.startsWith('--split-string=')) script = a.slice(15);
+                else if (/^-S./.test(a)) script = a.slice(2);
+                if (script !== null) return checkCommand(script, state);
+            }
+        }
         // Look through the wrapper for the real command.
         const idx = w.findIndex((x, n) => n > 0 && ['gh', 'git', ...SHELLS, 'eval'].includes(basename(x)));
         for (const x of w.slice(1, idx === -1 ? w.length : idx)) {
@@ -533,7 +591,7 @@ function checkSegment(words, state) {
         const envRepo = inlineEnv.GH_REPO ?? state.exportedGhRepo ?? null;
         return checkGh(args, envRepo);
     }
-    if (cmd === 'git') return checkGit(args);
+    if (cmd === 'git') return checkGit(args, inlineEnv);
     if (SHELLS.has(cmd)) {
         const c = args.findIndex((a) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a));
         // The script is the first non-option word after -c (`sh -c -- 'cmd'`, `sh -c -x 'cmd'`).
