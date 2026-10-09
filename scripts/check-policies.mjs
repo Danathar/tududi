@@ -292,6 +292,16 @@ export function checkGhScope(f, code, policy) {
         starts.forEach((from, n) => {
             const seg = t.slice(from, starts[n + 1] ?? t.length);
             const cmd = seg.match(new RegExp(policy.ghWriteCommandPattern))[0];
+            // A command-local GH_REPO (`GH_REPO=x gh ...`, `env GH_REPO=x gh ...`)
+            // overrides the scoped env: value, so it must be valid itself.
+            const prefix = t.slice(0, from).split(/;|&&|\|\||\||\(|`/).pop();
+            const local = prefix.match(/\bGH_REPO=(\S+)/);
+            if (local && !okLiteral(local[1])) {
+                v.push(
+                    `${f}:${line}: "${cmd}" is preceded by GH_REPO=${local[1]}, expected ${allowed[0]} or Danathar/tududi`,
+                );
+                return;
+            }
             const flag = seg.match(REPO_FLAG);
             if (flag) {
                 const val = flag[1];
@@ -303,7 +313,7 @@ export function checkGhScope(f, code, policy) {
                             : `${f}:${line}: "${cmd}" targets "${val}", expected ${allowed[0]} or Danathar/tududi`,
                     );
                 }
-            } else if (!scoped) {
+            } else if (!scoped && !local) {
                 v.push(
                     `${f}:${line}: "${cmd}" has no --repo and no valid GH_REPO is set in this step, job or workflow env`,
                 );
@@ -316,7 +326,8 @@ export function checkGhScope(f, code, policy) {
 /** Reject attacker-controlled event expressions inside `run:` scripts. */
 export function checkRunExpressions(f, code, policy) {
     const v = [];
-    const bad = new RegExp(policy.forbiddenRunExpressions);
+    // Contexts are case-insensitive and `a['b']` equals `a.b`.
+    const bad = new RegExp(policy.forbiddenRunExpressions, 'i');
     for (let i = 0; i < code.length; i++) {
         const m = code[i].match(/^(\s*(?:-\s+)?)run\s*:\s*(.*)$/);
         if (!m) continue;
@@ -328,7 +339,8 @@ export function checkRunExpressions(f, code, policy) {
         }
         body.forEach((b, k) => {
             for (const e of b.matchAll(/\$\{\{([^}]*)\}\}/g)) {
-                if (bad.test(e[1])) {
+                const norm = e[1].replace(/\[\s*(['"])(.*?)\1\s*\]/g, '.$2');
+                if (bad.test(norm)) {
                     v.push(
                         `${f}:${i + 1 + k}: \${{${e[1]}}} in a run script; pass it through env: and use "$VAR"`,
                     );

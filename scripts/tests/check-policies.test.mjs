@@ -398,6 +398,69 @@ test('fork-target: markdown allowedTools shape passes, upstream and lookalike fa
     assert.ok(run({ 'docs/a.md': 'gh pr create --repo Danathar/tududi-fork\n' }).length > 0);
 });
 
+test('workflows: command-local GH_REPO overrides are checked', () => {
+    const scopedJob = (cmd) =>
+        wfWith(`  a:
+    runs-on: ubuntu-latest
+    env:
+      GH_REPO: \${{ github.repository }}
+    steps:
+      - run: ${cmd}
+`);
+    for (const bad of [
+        'GH_REPO=chrisvel/tududi gh pr close 1',
+        'env GH_REPO=chrisvel/tududi gh issue create',
+        'echo hi && GH_REPO="chrisvel/tududi" gh pr merge 2',
+    ]) {
+        const v = run({ '.github/workflows/a.yml': scopedJob(bad) });
+        assert.equal(v.length, 1, bad);
+        assert.match(v[0], /is preceded by GH_REPO=/);
+    }
+    assert.deepEqual(
+        run({ '.github/workflows/a.yml': scopedJob('GH_REPO=Danathar/tududi gh pr close 1') }),
+        [],
+    );
+    // A local value does not leak into the next command after a separator.
+    const v = run({
+        '.github/workflows/a.yml': wfWith(`  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: GH_REPO=Danathar/tududi gh pr close 1; gh pr close 2
+`),
+    });
+    assert.equal(v.length, 1);
+    assert.match(v[0], /"gh pr close" has no --repo/);
+});
+
+test('policies cover gh pr revert and gh label clone in markdown and workflows', () => {
+    for (const cmd of ['gh pr revert 12', 'gh label clone other/repo']) {
+        assert.equal(run({ 'docs/a.md': cmd + '\n' }).length, 1, cmd);
+        assert.equal(
+            run({ '.github/workflows/a.yml': GOOD_WF + `      - run: ${cmd}\n` }).length,
+            1,
+            cmd,
+        );
+    }
+    assert.deepEqual(run({ 'docs/a.md': 'gh pr revert 12 --repo Danathar/tududi\n' }), []);
+});
+
+test('workflows: index-syntax and mixed-case event expressions are rejected', () => {
+    for (const expr of [
+        "github['event']['issue']['title']",
+        'github["event"].issue.title',
+        'GitHub.Event.Comment.Body',
+        "github['head_ref']",
+    ]) {
+        const v = run({
+            '.github/workflows/a.yml': GOOD_WF + `      - run: echo "\${{ ${expr} }}"\n`,
+        });
+        assert.equal(v.length, 1, expr);
+        assert.match(v[0], /in a run script/);
+    }
+    const safe = GOOD_WF + "      - run: echo \"${{ github['event']['pull_request']['number'] }}\"\n";
+    assert.deepEqual(run({ '.github/workflows/a.yml': safe }), []);
+});
+
 test('workflows: top-level write permissions are rejected', () => {
     const all = GOOD_WF.replace('permissions:\n  contents: read', 'permissions: write-all');
     assert.match(run({ '.github/workflows/a.yml': all }).join('\n'), /write-all/);

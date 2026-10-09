@@ -52,6 +52,8 @@ For every `.github/workflows/*.yml`:
   `GH_REPO` to one of those values. Scope follows the YAML block, so a
   `GH_REPO` in another job or step does not count. Any other `GH_REPO` or
   `--repo` value (for example the upstream repository) fails;
+- a command-local `GH_REPO=<value>` before a `gh` write command (including
+  `env GH_REPO=<value> gh ...`) must itself be an allowed value;
 - `run:` scripts contain no attacker-controlled expression such as
   `${{ github.event.issue.title }}`, `github.head_ref` or `inputs.*`; pass it
   through `env:` and read `"$VAR"` (see `forbiddenRunExpressions`). Numbers,
@@ -60,6 +62,16 @@ For every `.github/workflows/*.yml`:
   `update-branch`, `lock` and `transfer`, and the `rerun`, `cancel` and `delete`
   verbs of `gh run`, besides
   `create`, `comment`, `edit`, `close`, `reopen`, `merge`, `review`, `delete`, `run`.
+
+## Threat model
+
+The checker catches accidental omissions: an agent-direction file or workflow
+that forgets `--repo Danathar/tududi`, a missing `permissions:` block, an
+unpinned action, an event expression interpolated into a script. It is not a
+shell or YAML parser and does not defend against deliberately obfuscated
+commands (variables built at runtime, `eval`, generated scripts, aliases). The
+hard boundaries are the repository-scoped `GITHUB_TOKEN` and Hive's proxy; see
+[docs/security/SECURITY-AI.md](../docs/security/SECURITY-AI.md).
 
 ## Risk tiers
 
