@@ -1,0 +1,71 @@
+name: Auto-QA
+
+# Weekly self-tuning of the coverage floors in .coverage-thresholds.json.
+# Measures backend and frontend coverage, runs scripts/auto-qa-tuner.mjs
+# (rules in .github/auto-qa-tuning.json) and reports in the step summary. When a
+# raise is warranted it opens or updates ONE tracking issue holding the
+# proposed diff. It never pushes a commit and never lowers a floor: a human
+# applies the diff in a pull request.
+# Issues are opened in this repository only (GH_REPO below); never on the
+# upstream chrisvel/tududi. See AGENTS.md.
+
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: auto-qa
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  tune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Backend coverage
+        run: npm run backend:test:coverage -- --coverageReporters=json-summary --coverageReporters=text-summary
+
+      - name: Frontend coverage
+        continue-on-error: true
+        run: npm run frontend:test:coverage -- --coverageReporters=json-summary --coverageReporters=text-summary
+
+      - name: Propose floors
+        id: tune
+        run: |
+          node scripts/auto-qa-tuner.mjs --out-dir auto-qa-out | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Open or update the tracking issue
+        if: steps.tune.outputs.raise == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: 'Auto-QA: coverage floors can be raised'
+        run: |
+          # List rather than search (the search index lags and in:title is a
+          # word match). Match the exact title AND the Actions bot as author so
+          # an issue someone else opens with this title is never reused.
+          existing=$(gh issue list --state open --limit 1000 --json number,title,author \
+            --jq '[.[] | select(.title == env.TITLE and (.author.login == "app/github-actions" or .author.login == "github-actions[bot]" or .author.login == "github-actions"))][0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body-file auto-qa-out/issue-body.md
+            gh issue comment "$existing" --body "Proposal refreshed by run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+          else
+            gh issue create --title "$TITLE" --body-file auto-qa-out/issue-body.md
+          fi

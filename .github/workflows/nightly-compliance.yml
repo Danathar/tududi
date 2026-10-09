@@ -1,0 +1,143 @@
+name: Nightly compliance
+
+# Checks that drift slowly and are too slow or too noisy for ci.yml: the full
+# backend suite, lint, npm audit of production dependencies, the licence rules
+# from AGENTS.md (section Licensing) and the coverage gate. On a scheduled
+# failure it opens or updates ONE tracking issue in this repository (GH_REPO
+# below; never upstream chrisvel/tududi). It never closes the issue.
+# Tunables (audit blocking, recorded licence hash): .github/auto-qa-tuning.json.
+#
+# npm audit is report-only by default (nightly.audit_blocking = false) because
+# main carries known high/critical advisories that need dependency upgrades.
+
+on:
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-compliance
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  compliance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Licence compliance
+        id: licence
+        continue-on-error: true
+        run: |
+          cfg=.github/auto-qa-tuning.json
+          rc=0
+          want=$(jq -r '.licence.license_mit_sha256' "$cfg")
+          got=$(sha256sum LICENSE.MIT | cut -d' ' -f1)
+          if [ "$got" != "$want" ]; then
+            echo "LICENSE.MIT changed: sha256 $got, recorded $want"; rc=1
+          fi
+          want_pkg=$(jq -r '.licence.package_license' "$cfg")
+          got_pkg=$(jq -r '.license' package.json)
+          if [ "$got_pkg" != "$want_pkg" ]; then
+            echo "package.json license is $got_pkg, expected $want_pkg"; rc=1
+          fi
+          want_lock=$(jq -r '.packages[""].license' package-lock.json)
+          if [ "$want_lock" != "$want_pkg" ]; then
+            echo "package-lock.json root license is $want_lock, expected $want_pkg"; rc=1
+          fi
+          want_sw=$(jq -r '.licence.swagger_license' "$cfg")
+          if ! grep -Eq "name: '$want_sw'" backend/config/swagger.js; then
+            echo "backend/config/swagger.js license name is not $want_sw"; rc=1
+          fi
+          [ "$rc" -eq 0 ] && echo "Licence checks passed."
+          exit "$rc"
+
+      - name: Lint
+        id: lint
+        continue-on-error: true
+        run: npm run lint
+
+      - name: Backend tests (full suite)
+        id: tests
+        continue-on-error: true
+        run: npm run backend:test:coverage -- --coverageReporters=json-summary --coverageReporters=text-summary
+
+      - name: Frontend coverage
+        continue-on-error: true
+        run: npm run frontend:test:coverage -- --coverageReporters=json-summary --coverageReporters=text-summary
+
+      - name: Coverage gate
+        id: gate
+        continue-on-error: true
+        run: node scripts/coverage-gate.mjs
+
+      - name: npm audit (production dependencies)
+        id: audit
+        continue-on-error: true
+        run: |
+          level=$(jq -r '.nightly.audit_level' .github/auto-qa-tuning.json)
+          npm audit --omit=dev --audit-level="$level"
+
+      - name: Summarize and decide
+        id: verdict
+        env:
+          LICENCE: ${{ steps.licence.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          GATE: ${{ steps.gate.outcome }}
+          AUDIT: ${{ steps.audit.outcome }}
+        run: |
+          blocking=$(jq -r '.nightly.audit_blocking' .github/auto-qa-tuning.json)
+          failed=""
+          for pair in "licence:$LICENCE" "lint:$LINT" "backend tests:$TESTS" "coverage gate:$GATE"; do
+            [ "${pair#*:}" = "success" ] || failed="$failed ${pair%%:*};"
+          done
+          if [ "$AUDIT" != "success" ] && [ "$blocking" = "true" ]; then
+            failed="$failed npm audit;"
+          fi
+          {
+            echo "## Nightly compliance"
+            echo
+            echo "| check | result |"
+            echo "| --- | --- |"
+            echo "| licence | $LICENCE |"
+            echo "| lint | $LINT |"
+            echo "| backend tests | $TESTS |"
+            echo "| coverage gate | $GATE |"
+            echo "| npm audit (blocking=$blocking) | $AUDIT |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+          [ -z "$failed" ]
+
+      - name: Open or update the tracking issue
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: 'Nightly compliance failing'
+          FAILED: ${{ steps.verdict.outputs.failed }}
+        run: |
+          body=$(printf 'The nightly compliance run failed on %s.\n\nFailed checks:%s\n\nRun: %s/%s/actions/runs/%s\n\nThis issue is not closed automatically; close it once the nightly is green.\n' \
+            "$(date -u +%Y-%m-%d)" "${FAILED:- unknown (see run)}" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")
+          existing=$(gh issue list --state open --limit 1000 --json number,title,author \
+            --jq '[.[] | select(.title == env.TITLE and (.author.login == "app/github-actions" or .author.login == "github-actions[bot]" or .author.login == "github-actions"))][0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$TITLE" --body "$body"
+          fi
