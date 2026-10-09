@@ -226,5 +226,5 @@ Scheduled workflows (`upgrade-docker.yml`, and others with a `schedule:`) run
 only from the default branch, can be delayed under load, and GitHub disables
 schedules in a repository with no activity for 60 days. Check with
 `gh workflow list --repo Danathar/tududi --all`; re-enable a disabled one with
-`gh workflow enable`, and start one by hand with
+`gh workflow enable "<name>" --repo Danathar/tududi`, and start one by hand with
 `gh workflow run "<name>" --repo Danathar/tududi`.

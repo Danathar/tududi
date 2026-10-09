@@ -30,7 +30,7 @@ it; if a later fact contradicts a row, add a dated note under the table.
 ## Following one change end to end
 
 ```text
-file/line --git blame--> commit --gh api commits/<sha>/pulls--> PR
+file/line --git blame--> commit --gh api repos/Danathar/tududi/commits/<sha>/pulls--> PR
 PR --Closes #N--> issue (the task statement)
 PR --signature line / author--> agent
 issue/branch/PR --this directory--> the ledger row

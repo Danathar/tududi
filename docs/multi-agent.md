@@ -140,11 +140,14 @@ No agent merges its own pull request unless the owner has set that up.
   owner settings change, not a pull request) is turned on; until then `main` is
   unprotected. Check with
   `gh api repos/Danathar/tududi/rulesets --jq '.[].name'`.
-- **Serialized merging.** Hive merges this repository through its serialized
-  merge lane (`merge_strategy: hive-serialized`): one pull request at a time,
-  each brought up to date with `main` and re-tested before it merges. GitHub's
-  native merge queue is not available to a personal-account repository, which
-  is why the lane lives in Hive rather than in a workflow here.
+- **Serialized merging (intended, per issue #42).** The intended merge lane is
+  Hive's serialized one (`merge_strategy: hive-serialized`): one pull request at
+  a time, each brought up to date with `main` and re-tested before it merges.
+  Selecting it is an owner settings change that issue #42 tracks and that had
+  not been applied when this page was written; check the Hive settings for the
+  current value. GitHub's native merge queue is not available to a
+  personal-account repository, which is why the lane lives in Hive rather than
+  in a workflow here.
 - **Green is only trusted on a current branch.** A pull request that passed
   before `main` moved has not been tested against today's `main`. Rebase first.
 - **Image publishing follows merging.** Every push to `main` publishes
