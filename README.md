@@ -1,3 +1,12 @@
+[![CI](https://github.com/Danathar/tududi/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Danathar/tududi/actions/workflows/ci.yml)
+[![Coverage gate](https://github.com/Danathar/tududi/actions/workflows/coverage-gate.yml/badge.svg?branch=main)](https://github.com/Danathar/tududi/actions/workflows/coverage-gate.yml)
+[![Nightly compliance](https://github.com/Danathar/tududi/actions/workflows/nightly-compliance.yml/badge.svg?branch=main)](https://github.com/Danathar/tududi/actions/workflows/nightly-compliance.yml)
+[![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-1f6feb)](https://deepwiki.com/Danathar/tududi)
+[![Maintenance assisted by Hivecommons Hive](https://img.shields.io/badge/maintenance%20assisted%20by-Hivecommons%20Hive-1f6feb)](https://github.com/hivecommons/hive)
+[![ACMM L6 Fully Autonomous](https://img.shields.io/badge/ACMM-L6%20Fully%20Autonomous-2da44e)](#maintained-with-hive-acmm-l6)
+[![AI assisted](https://img.shields.io/badge/AI-assisted-d29922)](#about-this-project)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+
 > [!IMPORTANT]
 > This is a customized fork of [`chrisvel/tududi`](https://github.com/chrisvel/tududi), tailored for its owner, [Danathar](https://github.com/Danathar). It is not intended to replace upstream tududi. For the official project, its releases and its Docker images, see [upstream](https://github.com/chrisvel/tududi). Issues about this fork belong [here](https://github.com/Danathar/tududi/issues).
 
@@ -345,11 +354,26 @@ Contributions to tududi are welcome! Whether it's bug fixes, new features, docum
 - Translation guidelines
 - Pull request checklist
 
+## Maintained with Hive (ACMM L6)
+
+Maintenance is assisted by Hive, which runs a fleet of AI agents against this repo at ACMM level 6 (Fully Autonomous).
+
+**What L6 permits:** Agents file issues and open pull requests. Pull requests that are not outreach auto-merge once the required checks pass. Outreach pull requests stay held for a human. The reviewer agent comments with file and line references but never approves, merges or closes anything.
+
+**Agent pull requests** pass the same gates as anyone else's. See [`docs/branch-protection.md`](docs/branch-protection.md) and [`docs/risk-tiers.md`](docs/risk-tiers.md) for the gates, and [`docs/multi-agent.md`](docs/multi-agent.md) for how agents share the repo.
+
+Learn more: [Hive](https://github.com/hivecommons/hive), [Hive Hub](https://hive.coop/hubs), [ACMM levels](https://github.com/hivecommons/hive#acmm-levels), and the [full ACMM policy matrix](https://github.com/hivecommons/hive#policy-matrix).
+
 ## 📜 License
 
 This fork, created on 2026-10-05, is licensed under the [GNU General Public License v3.0](LICENSE).
 
 It incorporates code from [`chrisvel/tududi`](https://github.com/chrisvel/tududi), Copyright 2024, 2025 Tududi Developers, released under the MIT License. That code remains under MIT; its licence text and copyright notice are preserved in [LICENSE.MIT](LICENSE.MIT) as the MIT licence requires. The combined work - upstream code together with this fork's changes - is distributed under GPL-3.0.
+
+## About this project
+
+> [!NOTE]
+> Work on this fork is done with AI assistance and should be treated cautiously. It is a personal fork, not the [official tududi](https://github.com/chrisvel/tududi). For the official project, see [upstream](https://github.com/chrisvel/tududi). Issues about this fork belong [here](https://github.com/Danathar/tududi/issues). It comes as-is: review changes before you apply them, and keep backups of your tududi data.
 
 ## 📬 Contact
 
