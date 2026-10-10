@@ -261,6 +261,14 @@ const blockedLocal = [
     ['PATH=/tmp/evil:$PATH npm test', 'PATH'],
     ['npm test --script-shell=./evil.sh', '--script-shell'],
     ['npm --prefix /tmp/evil test', '--prefix'],
+    // npm expands any unambiguous prefix of a config key, so the denied
+    // options are still reachable abbreviated (#73 closed only the full names).
+    ['npm test --node-opt=--import=data:text/javascript,1', '--node-opt'],
+    ['npm test --node-o=--require=./x.js', '--node-o'],
+    ['npm run backend:test --node-o=--import=data:x', '--node-o'],
+    ['npm test --script-sh=./evil.sh', '--script-sh'],
+    ['npm test --userconf=/tmp/evil.npmrc', '--userconf'],
+    ['npm test --globalconf=/tmp/evil.npmrc', '--globalconf'],
     ['npm test -- --config \'{"globalSetup":"/tmp/x.js"}\'', 'allowlist'],
     ['npm run backend:test -- --outputFile=.claude/hooks/guard-bash.mjs --json', 'allowlist'],
     ['npm run frontend:test -- --setupFiles ./x.js', 'allowlist'],
