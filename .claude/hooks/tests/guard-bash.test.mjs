@@ -178,6 +178,7 @@ const blocked = [
     ['git config rename-section foo remote.origin', 'rename-section'],
     ['git config --rename-section foo remote.origin', 'rename-section'],
     ['git config rename-section remote.origin foo', 'could redirect'],
+    ['git config rename-section foo core', 'rename-section'],
     // Compound commands, subshells, wrappers.
     ['git status && gh pr create --title t', 'no --repo'],
     ['git status; gh issue create --title t', 'no --repo'],

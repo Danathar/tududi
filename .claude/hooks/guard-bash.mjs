@@ -520,7 +520,7 @@ function checkGitConfig(rest) {
     // Section renames move settings between names: check both the old and the new
     // section (`git config rename-section foo remote.origin` adopts foo.pushurl).
     const renames = verbRenames || rest.includes('--rename-section');
-    if (renames && positionals.some((p) => RISKY_GIT_CONFIG.test(`${p}.x`))) {
+    if (renames && positionals.some((p) => RISKY_GIT_CONFIG.test(`${p}.x`) || p.toLowerCase() === 'core')) {
         return block('Blocked: `git config rename-section` involving a remote/url/credential section could redirect pushes.');
     }
     if (rest.includes('--edit') || rest.includes('-e')) {
