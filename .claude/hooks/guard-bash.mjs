@@ -487,7 +487,7 @@ function checkGitConfig(rest) {
 
     // Collect positionals, skipping the values of options that take one
     // (`git config -f .git/config remote.origin.url <url>`).
-    const valueFlags = ['-f', '--file', '--blob', '--type', '--default', '--comment'];
+    const valueFlags = ['-f', '--file', '--blob', '--type', '--default', '--comment', '--value', '--url'];
     const positionals = [];
     for (let k = 0; k < rest.length; k++) {
         const a = rest[k];
@@ -499,6 +499,7 @@ function checkGitConfig(rest) {
     const verbs = ['set', 'unset', 'replace-all', 'add', 'rename-section', 'remove-section', 'edit'];
     const readVerbs = ['get', 'list'];
     let modifies = false;
+    const verbRenames = positionals[0] === 'rename-section';
     if (positionals.length && readVerbs.includes(positionals[0])) return null;
     if (positionals.length && verbs.includes(positionals[0])) {
         if (positionals[0] === 'edit') {
@@ -515,6 +516,12 @@ function checkGitConfig(rest) {
         rest.some((a) => /^--(unset|unset-all|add|replace-all|remove-section|rename-section)$/.test(a));
     if (key !== undefined && RISKY_GIT_CONFIG.test(key) && modifies) {
         return block(`Blocked: \`git config ${key}\` write could redirect pushes or credentials.`);
+    }
+    // Section renames move settings between names: check both the old and the new
+    // section (`git config rename-section foo remote.origin` adopts foo.pushurl).
+    const renames = verbRenames || rest.includes('--rename-section');
+    if (renames && positionals.some((p) => RISKY_GIT_CONFIG.test(`${p}.x`))) {
+        return block('Blocked: `git config rename-section` involving a remote/url/credential section could redirect pushes.');
     }
     if (rest.includes('--edit') || rest.includes('-e')) {
         return block('Blocked: `git config --edit` could redirect pushes or credentials.');
