@@ -49,14 +49,12 @@ Entry format:
 
 ---
 
-## Current state (as of 2026-10-09)
+## Current state (as of 2026-10-10)
 
 - **Base:** the last upstream sync is `a6225863`, the merge of PR #10 (upstream
   `v1.7.11`, merged as a whole tag with `git merge --no-ff`). `package.json`
-  keeps upstream's version; do not bump it. `main` has moved since: PR #58
-  (`5306e5b8`) pulls the PostgreSQL CI service image from ECR Public's Docker
-  library mirror (`.github/workflows/ci.yml`), and PR #52 (`d36df5a1`) added the
-  agent direction files. Other ACMM PRs land on top of it. `main`'s head is not
+  keeps upstream's version; do not bump it. On 2026-10-10 `upstream/main`
+  (`4ecf6023`) was 49 commits ahead of `origin/main`. `main`'s head is not
   recorded here because it changes with every merge: read it with
   `git log -1 origin/main`.
 - **Licence:** GPL-3.0-only for the fork (`LICENSE`), with upstream's MIT notice
@@ -68,31 +66,38 @@ Entry format:
   the task page (PR #8, issue #6); drag a task from All Tasks onto a sidebar area
   to set its area (PR #9, issue #7).
 - **CI:** `.github/workflows/ci.yml` runs `test-sqlite` and `test-postgres` on
-  PRs to `main` and pushes to `main`. It does not run `npm run frontend:test`.
+  PRs to `main` and pushes to `main` (PostgreSQL image from ECR Public's Docker
+  library mirror since PR #58). It does not run `npm run frontend:test`;
+  `coverage-gate.yml` runs the frontend suite for coverage and tolerates its
+  known failures.
+- **Branch protection:** ruleset `protect main` (id 24817503) is active: pull
+  requests only, `test-sqlite` and `test-postgres` required, branch up to date
+  with `main`. See [../docs/branch-protection.md](../docs/branch-protection.md).
 - **Known failing frontend suites on `main`:** `MermaidDiagram.test.tsx`,
   `MarkdownRenderer.publicLinks.test.tsx`, `roleLabels.test.ts`
   (see [memory/known-frontend-test-failures.md](memory/known-frontend-test-failures.md)).
-- **Agent tooling:** the ACMM tickets #11-#48 on `Danathar/tududi` ask for agent
-  and automation scaffolding. They are being worked as separate PRs from
-  worktrees under `~/workspace/tududi-wt/<slug>` (branch `acmm/<slug>`); PRs
-  #49 and #50 were open when this was written. Which of them have merged is not
-  recorded here: check the issue list.
+- **Agent tooling:** all ACMM tickets except #42 are closed by PRs #49-#57,
+  #59 and #60 (outcomes and merge commits in
+  [../docs/agent-tasks/2026-10-09.md](../docs/agent-tasks/2026-10-09.md)).
+  `.claude/settings.json` runs `.claude/hooks/guard-bash.mjs` before every Bash
+  call; `policy-check.yml` enforces `policies/` on every PR.
 - **Hive:** the owner's agent orchestrator works this repo through its GitHub
-  App; the repo is paused in Hive as of this writing (stated by the owner, not
-  checked from this repository).
-- **Gotcha:** `.gitignore:17` has `.claude*`, so new files under `.claude/` need
-  `git add -f` until that line is changed.
+  App; the repo was paused in Hive while the ACMM tickets were worked (stated
+  by the owner, not checked from this repository). #42 waits on setting this
+  repo's Hive `merge_strategy` to `hive-serialized`.
+- **Secrets:** `claude.yml` and `ai-fix.yml` skip their agent step until one of
+  `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` is added as a repository
+  secret.
 
-## Last session: 2026-10-09 - learning artifacts for the ACMM tickets
+## Last session: 2026-10-09 - ACMM tickets #11-#48
 
-**Done:** added `.claude/memory/` (#17), this file (#23, #32) and
-`docs/reflections/` (#33, #38), written from the history of PRs #1-#10 and from
-AGENTS.md. Entries were checked against the commits, PR bodies and files they
-cite. The three frontend failures were re-run on `a6225863`.
-**In flight:** the PR that adds these files (branch `acmm/learning-artifacts`),
-and the other ACMM PRs.
-**Blocked on:** owner review and merge of the ACMM PRs.
-**Watch:** see Open threads.
+**Done:** PRs #49-#60 merged (#58 moved CI's PostgreSQL image off Docker Hub,
+#60 closed two hook gaps found in review); ruleset 24817503 applied; labels
+`ai-fix-requested` and `area/*` created for `ai-fix.yml` and `labeler.yml`.
+**In flight:** nothing.
+**Blocked on:** the owner setting Hive's merge strategy for #42.
+**Watch:** `npm audit` reported one high and one critical production advisory
+when `nightly-compliance.yml` was written (report-only there); not triaged.
 
 ## Open threads
 
@@ -103,11 +108,13 @@ and the other ACMM PRs.
   `frontend/components/Tasks.tsx:85-90` on `a6225863` still tests
   `status !== 'done'` only. Not reproduced here; decide whether to fix it. See
   [../docs/reflections/2026-10-09-pr-9-review-findings.md](../docs/reflections/2026-10-09-pr-9-review-findings.md).
-- `.gitignore` swallows `.claude/` and `.cursor` paths (see Gotcha above).
+- `.claude/hooks/guard-bash.mjs` is a guard against careless commands, not a
+  sandbox (threat model at the top of the file). One known P3 gap: a
+  `git config rename-section <x> core` can carry a `sshCommand` into `core`.
 
 ## Next steps
 
-1. Review and merge the ACMM PRs; close the issues each PR names with `Closes #N`.
+1. Set Hive's merge strategy for `tududi` to `hive-serialized` and close #42.
 2. Settle the PR #9 predicate question above.
 3. Next upstream sync is manual (AGENTS.md: no scheduled sync). Follow the PR #10
    method: merge the whole tag, run the checks, list the migrations.
