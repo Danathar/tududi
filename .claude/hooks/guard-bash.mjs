@@ -38,7 +38,7 @@
 // read-only command or an `echo` is fine.
 
 import { basename } from 'node:path';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 export const FORK = 'danathar/tududi';
@@ -520,7 +520,7 @@ function checkGitConfig(rest) {
     // Section renames move settings between names: check both the old and the new
     // section (`git config rename-section foo remote.origin` adopts foo.pushurl).
     const renames = verbRenames || rest.includes('--rename-section');
-    if (renames && positionals.some((p) => RISKY_GIT_CONFIG.test(`${p}.x`))) {
+    if (renames && positionals.some((p) => RISKY_GIT_CONFIG.test(`${p}.x`) || p.toLowerCase() === 'core')) {
         return block('Blocked: `git config rename-section` involving a remote/url/credential section could redirect pushes.');
     }
     if (rest.includes('--edit') || rest.includes('-e')) {
@@ -696,24 +696,61 @@ export function checkCommand(command, state = {}) {
 // Entry point
 // ---------------------------------------------------------------------------
 
-function main() {
+/**
+ * Decide on one hook invocation. Returns the exit code and stderr text.
+ * Claude Code only blocks on exit 2; any other non-zero code (such as the 1 Node
+ * uses for an uncaught exception) lets the command run, so every failure path
+ * here must map to 2. `check` is injectable so that path can be tested.
+ */
+export function decide(raw, check = checkCommand) {
     let payload;
     try {
-        payload = JSON.parse(readFileSync(0, 'utf8'));
+        payload = JSON.parse(raw);
     } catch {
-        process.stderr.write('guard-bash: could not parse hook input as JSON; blocking (fail closed).\n');
-        process.exit(2);
+        return { code: 2, stderr: 'guard-bash: could not parse hook input as JSON; blocking (fail closed).\n' };
     }
-    if (payload?.tool_name && payload.tool_name !== 'Bash') process.exit(0);
-    const command = payload?.tool_input?.command;
-    if (typeof command !== 'string' || !command.trim()) process.exit(0);
+    try {
+        if (payload?.tool_name && payload.tool_name !== 'Bash') return { code: 0, stderr: '' };
+        const command = payload?.tool_input?.command;
+        if (typeof command !== 'string' || !command.trim()) return { code: 0, stderr: '' };
 
-    const result = checkCommand(command);
-    if (result) {
-        process.stderr.write(`guard-bash: ${result.reason}\n`);
-        process.exit(2);
+        const result = check(command);
+        if (result) return { code: 2, stderr: `guard-bash: ${result.reason}\n` };
+        return { code: 0, stderr: '' };
+    } catch (err) {
+        return {
+            code: 2,
+            stderr: `guard-bash: internal error (${err?.message ?? err}); blocking (fail closed).\n`,
+        };
     }
-    process.exit(0);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+function main() {
+    let raw = '';
+    try {
+        raw = readFileSync(0, 'utf8');
+    } catch {
+        // fall through: empty input fails JSON parsing and blocks
+    }
+    const { code, stderr } = decide(raw);
+    if (stderr) process.stderr.write(stderr);
+    process.exit(code);
+}
+
+/**
+ * True when this file is the script being run. Node resolves symlinks for
+ * import.meta.url but leaves process.argv[1] as typed, so a hook invoked through
+ * a symlinked path (e.g. /home -> /var/home on Fedora Atomic) must be compared
+ * after realpath. If resolution itself fails, run anyway: a guard that silently
+ * does nothing is worse than one that runs when imported.
+ */
+function isMainModule() {
+    if (!process.argv[1]) return false;
+    try {
+        return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+    } catch {
+        return true;
+    }
+}
+
+if (isMainModule()) main();
