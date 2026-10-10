@@ -76,15 +76,15 @@ Entry format:
 - **Known failing frontend suites on `main`:** `MermaidDiagram.test.tsx`,
   `MarkdownRenderer.publicLinks.test.tsx`, `roleLabels.test.ts`
   (see [memory/known-frontend-test-failures.md](memory/known-frontend-test-failures.md)).
-- **Agent tooling:** all ACMM tickets except #42 are closed by PRs #49-#57,
+- **Agent tooling:** all ACMM tickets #11-#48 are closed, by PRs #49-#57,
   #59 and #60 (outcomes and merge commits in
   [../docs/agent-tasks/2026-10-09.md](../docs/agent-tasks/2026-10-09.md)).
   `.claude/settings.json` runs `.claude/hooks/guard-bash.mjs` before every Bash
   call; `policy-check.yml` enforces `policies/` on every PR.
 - **Hive:** the owner's agent orchestrator works this repo through its GitHub
   App; the repo was paused in Hive while the ACMM tickets were worked (stated
-  by the owner, not checked from this repository). #42 waits on setting this
-  repo's Hive `merge_strategy` to `hive-serialized`.
+  by the owner, not checked from this repository). Its merge strategy is
+  `hive-serialized` (set 2026-10-10, #42).
 - **Secrets:** `claude.yml` and `ai-fix.yml` skip their agent step until one of
   `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` is added as a repository
   secret.
@@ -95,7 +95,7 @@ Entry format:
 #60 closed two hook gaps found in review); ruleset 24817503 applied; labels
 `ai-fix-requested` and `area/*` created for `ai-fix.yml` and `labeler.yml`.
 **In flight:** nothing.
-**Blocked on:** the owner setting Hive's merge strategy for #42.
+**Blocked on:** nothing.
 **Watch:** `npm audit` reported one high and one critical production advisory
 when `nightly-compliance.yml` was written (report-only there); not triaged.
 
@@ -114,7 +114,6 @@ when `nightly-compliance.yml` was written (report-only there); not triaged.
 
 ## Next steps
 
-1. Set Hive's merge strategy for `tududi` to `hive-serialized` and close #42.
-2. Settle the PR #9 predicate question above.
-3. Next upstream sync is manual (AGENTS.md: no scheduled sync). Follow the PR #10
+1. Settle the PR #9 predicate question above.
+2. Next upstream sync is manual (AGENTS.md: no scheduled sync). Follow the PR #10
    method: merge the whole tag, run the checks, list the migrations.
