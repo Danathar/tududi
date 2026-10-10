@@ -798,6 +798,11 @@ const NPM_DENIED = new Set([
     'node-options', 'script-shell', 'shell', 'userconfig', 'globalconfig', 'prefix', 'c', 'call',
     'editor', 'browser', 'viewer', 'git', 'node-gyp', 'onload-script', 'init-module', 'logs-dir', 'cache',
 ]);
+// npm expands any unambiguous prefix of a config key to the full key
+// (`--node-o` -> `--node-options`, `--script-sh` -> `--script-shell`), so a
+// denied option reached unabbreviated is still reachable abbreviated. Treat any
+// option that is a non-empty prefix of a denied key as that denied key.
+const isNpmDeniedAbbrev = (n) => n.length > 0 && [...NPM_DENIED].some((d) => d.startsWith(n));
 const NPM_TEST_ALIASES = new Set(['test', 't', 'tst']);
 const NPM_RUN_ALIASES = new Set(['run', 'run-script', 'rum', 'urn']);
 
@@ -854,7 +859,8 @@ function checkNpm(args) {
         }
         const name = a.replace(/^--?/, '').split('=')[0].toLowerCase().replace(/_/g, '-');
         const bare = name.replace(/^no-/, '');
-        if (NPM_DENIED.has(name) || NPM_DENIED.has(bare) || /^-[cC]/.test(a)) {
+        if (NPM_DENIED.has(name) || NPM_DENIED.has(bare)
+            || isNpmDeniedAbbrev(name) || isNpmDeniedAbbrev(bare) || /^-[cC]/.test(a)) {
             return blockLocal(`Blocked: \`npm ${a.split('=')[0]}\` can run injected code or another package's scripts.`);
         }
     }
