@@ -2,9 +2,12 @@
 // as Claude Code does: JSON on stdin, decision from the exit code (0 allow,
 // 2 block) and stderr.
 import { test } from 'node:test';
+import { mkdtempSync, symlinkSync, rmSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { decide } from '../guard-bash.mjs';
 
 const HOOK = fileURLToPath(new URL('../guard-bash.mjs', import.meta.url));
 
@@ -231,4 +234,40 @@ test('malformed hook input fails closed', () => {
     const r = spawnSync(process.execPath, [HOOK], { input: 'not json', encoding: 'utf8' });
     assert.equal(r.status, 2);
     assert.match(r.stderr, /fail/i);
+});
+
+test('internal errors exit 2 (fail closed), not 1', () => {
+    const payload = JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'ls' } });
+    const r = decide(payload, () => {
+        throw new Error('boom');
+    });
+    assert.equal(r.code, 2);
+    assert.match(r.stderr, /internal error \(boom\); blocking \(fail closed\)/);
+});
+
+test('hook still blocks when invoked through a symlinked path', () => {
+    const dir = mkdtempSync(join('/var/tmp', 'guard-bash-link-'));
+    try {
+        const link = join(dir, 'hooks-link');
+        symlinkSync(dirname(HOOK), link);
+        const input = JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'gh pr create --title t' } });
+        const r = spawnSync(process.execPath, [join(link, 'guard-bash.mjs')], { input, encoding: 'utf8' });
+        assert.equal(r.status, 2, `expected block via symlink, got ${r.status}: ${r.stderr}`);
+        assert.match(r.stderr, /no --repo/);
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test('hook still blocks when the script file itself is a symlink', () => {
+    const dir = mkdtempSync(join('/var/tmp', 'guard-bash-link-'));
+    try {
+        const link = join(dir, 'guard.mjs');
+        symlinkSync(HOOK, link);
+        const input = JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'git push upstream main' } });
+        const r = spawnSync(process.execPath, [link], { input, encoding: 'utf8' });
+        assert.equal(r.status, 2, `expected block via file symlink, got ${r.status}: ${r.stderr}`);
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
 });
