@@ -31,6 +31,24 @@
 //     remote, or no explicit remote.
 //   - git remote set-url that points a push URL at a real upstream.
 //
+// It also keeps the commands that .claude/settings.json auto-approves
+// (`node --test`, `npm test` / `npm run *test*`, `git status|diff|log|show|
+// branch`) from being turned into arbitrary code execution or arbitrary file
+// writes, which would walk past the `Read(.env*)` deny rules and the `ask`/`deny`
+// rules on the files that bound agents (#65, #69). Blocked:
+//   - NODE_OPTIONS, npm_config_*, LD_PRELOAD, BASH_ENV and similar code-loading
+//     variables, set inline, through `env`, or with export/declare -x.
+//   - node code-loading flags (-e/-p/-r, --eval, --print, --require, --import,
+//     --loader, --env-file, ...); under `node --test` only an allowlist of
+//     test-runner flags and in-repo relative file patterns.
+//   - npm --node-options, --script-shell, --prefix, --userconfig, ...; arguments
+//     forwarded to a test script pass only a jest allowlist.
+//   - git file-writing or file-reading options on any subcommand other than
+//     push/remote/config (--output*, --no-index, --orderfile/-O, format-patch
+//     -o, ...), GIT_* environment other than identity/locking variables, pagers
+//     and editors other than cat/true, and `-c`/config writes of keys that run
+//     programs (core.pager, core.fsmonitor, diff.*, alias.*, include.*, ...).
+//
 // Read-only gh commands (view, list, status, diff, checks, api GET, ...) are
 // always allowed. The command is split into segments on && || ; | & newlines,
 // subshells and command substitutions; shell -c / eval strings are analysed
@@ -96,6 +114,8 @@ const WRAPPERS = new Set([
     'timeout', 'setsid', 'stdbuf', 'ionice', 'chronic',
 ]);
 const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash']);
+// Commands whose auto-approved forms (.claude/settings.json) are vetted below.
+const NODE_CMDS = ['node', 'nodejs', 'npm'];
 
 // ---------------------------------------------------------------------------
 // Tokenizer
@@ -259,7 +279,7 @@ export function extractSubstitutions(input) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const isAssignment = (w) => /^[A-Za-z_][A-Za-z0-9_]*=/.test(w);
+const isAssignment = (w) => /^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(w);
 
 /** Normalise OWNER/REPO, HOST/OWNER/REPO, or a github URL to "owner/repo". */
 export function normalizeRepo(value) {
@@ -301,6 +321,32 @@ function repoFlag(args) {
 }
 
 const block = (reason) => ({ blocked: true, reason: `${reason}\n${GUIDANCE}` });
+
+const LOCAL_GUIDANCE =
+    'The auto-approved test and git commands must not run injected code or write ' +
+    'files: that would bypass the .env read-deny and the ask/deny rules on the files ' +
+    'that bound agents (see docs/security/SECURITY-AI.md). Run the plain command, or ' +
+    'ask the owner to run this one.';
+const blockLocal = (reason) => ({ blocked: true, reason: `${reason}\n${LOCAL_GUIDANCE}` });
+
+// ---------------------------------------------------------------------------
+// Environment
+// ---------------------------------------------------------------------------
+
+/** Variables that make any process (node, npm, bash, the loader) run extra code. */
+function isCodeEnv(name) {
+    return (
+        /^(NODE_OPTIONS|NODE_PATH|NODE_REPL_EXTERNAL_MODULE|LD_PRELOAD|LD_AUDIT|LD_LIBRARY_PATH|BASH_ENV|LESSOPEN|LESSCLOSE)$/.test(name) ||
+        /^DYLD_/.test(name) ||
+        /^npm_config_/i.test(name)
+    );
+}
+
+function checkCodeEnv(names) {
+    const hit = names.find(isCodeEnv);
+    if (hit) return blockLocal(`Blocked: setting ${hit} can load and run arbitrary code in the commands that follow.`);
+    return null;
+}
 
 // ---------------------------------------------------------------------------
 // gh
@@ -454,6 +500,66 @@ function checkPrCreate(args) {
 // (push.* keys such as push.default or push.autoSetupRemote cannot change the target.)
 const RISKY_GIT_CONFIG = /^(remote\.|url\.|credential\.|core\.sshcommand$)/i;
 
+// git config keys that make git run a program or read/write another file.
+const EXEC_GIT_CONFIG =
+    /^(core\.(pager|editor|fsmonitor|hookspath|askpass|gitproxy|attributesfile|excludesfile|worktree)$|pager\.|diff\.|difftool\.|merge\.|mergetool\.|filter\.|alias\.|include\.|includeif\.|gpg\.|ssh\.|sequence\.editor$|interactive\.difffilter$|uploadpack\.|protocol\.|sendemail\.)/i;
+
+// GIT_* variables that only set identity, locking or pathspec behaviour.
+const SAFE_GIT_ENV = new Set([
+    'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_AUTHOR_DATE',
+    'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'GIT_COMMITTER_DATE',
+    'GIT_TERMINAL_PROMPT', 'GIT_OPTIONAL_LOCKS', 'GIT_MERGE_AUTOEDIT',
+    'GIT_LITERAL_PATHSPECS', 'GIT_GLOB_PATHSPECS', 'GIT_NOGLOB_PATHSPECS', 'GIT_ICASE_PATHSPECS',
+    'GIT_FLUSH', 'GIT_ADVICE', 'GIT_PROGRESS_DELAY',
+]);
+// Variables naming a program git runs; harmless only with these values.
+const PROGRAM_ENV = new Set(['GIT_PAGER', 'PAGER', 'GIT_EDITOR', 'GIT_SEQUENCE_EDITOR', 'EDITOR', 'VISUAL']);
+const SAFE_PROGRAMS = new Set(['', 'cat', 'true', ':']);
+
+function checkGitEnv(env) {
+    for (const [name, value] of Object.entries(env)) {
+        const unsafe = PROGRAM_ENV.has(name)
+            ? !SAFE_PROGRAMS.has(String(value ?? '\0'))
+            : name === 'PATH' || (/^GIT_/.test(name) && !SAFE_GIT_ENV.has(name));
+        if (unsafe) {
+            return blockLocal(`Blocked: \`git\` with ${name}= in its environment can run another program or read/write other files.`);
+        }
+    }
+    return null;
+}
+
+// Value-taking short options of the diff/log family; a cluster's value starts at them.
+const GIT_SHORT_VALUED = 'SGIlnUMCBXL';
+// Subcommands whose -o names an output file or directory.
+const GIT_O_WRITES = new Set(['format-patch', 'archive', 'bugreport', 'diagnose']);
+
+/**
+ * Options that make an otherwise read-only git command write a file at a chosen
+ * path (`--output=`, format-patch `-o`) or read any file on the machine
+ * (`diff --no-index`, `--orderfile`/`-O`). Pathspecs after `--` are not options.
+ */
+function checkGitFileOptions(sub, rest) {
+    for (const a of rest) {
+        if (a === '--') break;
+        if (/^--out/.test(a)) return blockLocal(`Blocked: \`git ${sub} ${a.split('=')[0]}\` writes a file at a chosen path.`);
+        if (/^--no-ind/.test(a)) return blockLocal(`Blocked: \`git ${sub} --no-index\` reads files outside the repository's history (e.g. .env).`);
+        if (/^--orde/.test(a)) return blockLocal(`Blocked: \`git ${sub} --orderfile\` reads an arbitrary file.`);
+        if (/^--upload-pack/.test(a)) {
+            return blockLocal(`Blocked: \`git ${sub} ${a.split('=')[0]}\` runs a chosen program.`);
+        }
+        if (/^-[^-]/.test(a)) {
+            if (GIT_O_WRITES.has(sub) && a.includes('o')) {
+                return blockLocal(`Blocked: \`git ${sub} -o\` writes files at a chosen path.`);
+            }
+            for (const ch of a.slice(1)) {
+                if (ch === 'O') return blockLocal(`Blocked: \`git ${sub} -O\` reads a chosen file (--orderfile) or runs a program (grep --open-files-in-pager).`);
+                if (GIT_SHORT_VALUED.includes(ch)) break;
+            }
+        }
+    }
+    return null;
+}
+
 function checkGit(args, inlineEnv = {}, exported = {}) {
     // Walk global options to find the subcommand, vetting `-c key=value`.
     let i = 0;
@@ -465,19 +571,29 @@ function checkGit(args, inlineEnv = {}, exported = {}) {
         if (configKey !== null && RISKY_GIT_CONFIG.test(configKey)) {
             return block(`Blocked: \`git ${a} ${configKey}=...\` could redirect pushes or credentials.`);
         }
+        if (configKey !== null && EXEC_GIT_CONFIG.test(configKey)) {
+            return blockLocal(`Blocked: \`git ${a} ${configKey}=...\` can make git run a program or read other files.`);
+        }
+        if (a.startsWith('--exec-path=')) {
+            return blockLocal('Blocked: `git --exec-path=...` makes git run programs from a chosen directory.');
+        }
         i += ['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env'].includes(a) ? 2 : 1;
     }
     const sub = args[i];
     const rest = args.slice(i + 1);
+    const env = { ...exported, ...inlineEnv };
 
     if (sub === 'push') {
-        const envKey = Object.keys({ ...exported, ...inlineEnv }).find((k) => /^(GIT_CONFIG_|GIT_SSH)/i.test(k));
+        const envKey = Object.keys(env).find((k) => /^(GIT_CONFIG_|GIT_SSH)/i.test(k));
         if (envKey) return block(`Blocked: \`git push\` with ${envKey}= could redirect the push.`);
-        return checkGitPush(rest);
+        return checkGitEnv(env) ?? checkGitPush(rest);
     }
+    const envBlock = checkGitEnv(env);
+    if (envBlock) return envBlock;
     if (sub === 'remote') return checkGitRemote(rest);
     if (sub === 'config') return checkGitConfig(rest);
-    return null;
+    if (sub === undefined) return null;
+    return checkGitFileOptions(sub, rest);
 }
 
 /** Writes to push-redirecting config keys (`git config remote.origin.url ...`). */
@@ -517,11 +633,14 @@ function checkGitConfig(rest) {
     if (key !== undefined && RISKY_GIT_CONFIG.test(key) && modifies) {
         return block(`Blocked: \`git config ${key}\` write could redirect pushes or credentials.`);
     }
+    if (key !== undefined && EXEC_GIT_CONFIG.test(key) && modifies) {
+        return blockLocal(`Blocked: \`git config ${key}\` write can make git run a program or read other files.`);
+    }
     // Section renames move settings between names: check both the old and the new
     // section (`git config rename-section foo remote.origin` adopts foo.pushurl).
     const renames = verbRenames || rest.includes('--rename-section');
-    if (renames && positionals.some((p) => RISKY_GIT_CONFIG.test(`${p}.x`) || p.toLowerCase() === 'core')) {
-        return block('Blocked: `git config rename-section` involving a remote/url/credential section could redirect pushes.');
+    if (renames && positionals.some((p) => RISKY_GIT_CONFIG.test(`${p}.x`) || EXEC_GIT_CONFIG.test(`${p}.x`) || p.toLowerCase() === 'core')) {
+        return block('Blocked: `git config rename-section` involving a remote/url/credential section (or one that runs programs) could redirect pushes.');
     }
     if (rest.includes('--edit') || rest.includes('-e')) {
         return block('Blocked: `git config --edit` could redirect pushes or credentials.');
@@ -596,6 +715,164 @@ function checkGitRemote(rest) {
 }
 
 // ---------------------------------------------------------------------------
+// node / npm (#65, #69)
+// ---------------------------------------------------------------------------
+
+/** A file pattern or path that stays inside the checkout: relative, no `..`. */
+function isInRepoPath(p) {
+    return !/^[/~]/.test(p) && !/^[a-z][a-z0-9+.-]*:/i.test(p) && !p.split(/[\\/]/).includes('..');
+}
+
+// node flags that load or run code, read an env file, or write a file.
+const NODE_DENIED = /^--(eval|print|require|import|loader|experimental-loader|env-file|env-file-if-exists|experimental-config-file|experimental-default-config-file|inspect|inspect-brk|inspect-wait|inspect-port|debug-port|run|snapshot-blob|build-snapshot|build-snapshot-config|experimental-sea-config|openssl-config|experimental-policy|redirect-warnings|report-directory|report-filename|diagnostic-dir|cpu-prof-dir|heap-prof-dir|tls-keylog|localstorage-file|test-reporter|test-reporter-destination)(=|$)/;
+// Short node flags that run code: -e, -p, -r (and clusters such as -pe).
+const NODE_DENIED_SHORT = /^-[a-zA-Z]*[epr]/;
+
+// Under `node --test`, only these flags (value = takes a value).
+const NODE_TEST_FLAGS = {
+    '--test': false, '--test-only': false, '--test-force-exit': false, '--test-update-snapshots': false,
+    '--test-name-pattern': true, '--test-skip-pattern': true, '--test-concurrency': true,
+    '--test-timeout': true, '--test-shard': true, '--test-isolation': true,
+    '--test-reporter': true, '--test-reporter-destination': true,
+    '--experimental-test-coverage': false, '--test-coverage-branches': true, '--test-coverage-functions': true,
+    '--test-coverage-lines': true, '--test-coverage-include': true, '--test-coverage-exclude': true,
+    '--experimental-test-module-mocks': false, '--experimental-test-snapshots': false,
+    '--experimental-strip-types': false, '--no-experimental-strip-types': false,
+    '--experimental-transform-types': false, '--experimental-vm-modules': false,
+    '--no-warnings': false, '--enable-source-maps': false, '--trace-warnings': false,
+    '--trace-uncaught': false, '--trace-deprecation': false, '--unhandled-rejections': true,
+    '--stack-trace-limit': true, '--watch': false,
+};
+const NODE_TEST_REPORTERS = new Set(['spec', 'tap', 'dot', 'junit', 'lcov']);
+
+function checkNode(args) {
+    const isTest = args.some((a) => a === '--test' || a.startsWith('--test='));
+    if (isTest) {
+        // The auto-approved `node --test` shape: allowlist every word. Node may
+        // still read options after the first file pattern, so all words are vetted.
+        for (let k = 0; k < args.length; k++) {
+            const a = args[k];
+            if (a === '--') continue;
+            if (!a.startsWith('-')) {
+                if (!isInRepoPath(a)) return blockLocal(`Blocked: \`node --test ${a}\` names a file outside the checkout.`);
+                continue;
+            }
+            const eq = a.indexOf('=');
+            const name = eq === -1 ? a : a.slice(0, eq);
+            if (!Object.hasOwn(NODE_TEST_FLAGS, name)) {
+                return blockLocal(`Blocked: \`node --test ${name}\` is not on the test-runner flag allowlist (it can load code, read .env or write files).`);
+            }
+            if (!NODE_TEST_FLAGS[name]) continue;
+            const value = eq === -1 ? args[++k] ?? '' : a.slice(eq + 1);
+            if (name === '--test-reporter' && !NODE_TEST_REPORTERS.has(value)) {
+                return blockLocal(`Blocked: \`node --test --test-reporter ${value}\` loads a reporter module; use a built-in reporter.`);
+            }
+            if (name === '--test-reporter-destination' && !['stdout', 'stderr'].includes(value)) {
+                return blockLocal('Blocked: `node --test --test-reporter-destination` writes a file; use stdout or stderr.');
+            }
+        }
+        return null;
+    }
+    // Any other node run: refuse the code-loading flags among node's own options.
+    // The script is the first plain word that is not the value of a preceding
+    // `--flag value` option; words after it are the script's own arguments.
+    let maybeValue = false;
+    for (const a of args) {
+        if (a === '--') break;
+        if (!a.startsWith('-')) {
+            if (!maybeValue) break;
+            maybeValue = false;
+            continue;
+        }
+        if (NODE_DENIED.test(a) || (!a.startsWith('--') && NODE_DENIED_SHORT.test(a))) {
+            return blockLocal(`Blocked: \`node ${a.split('=')[0]}\` loads or runs code (or reads/writes files) outside the script.`);
+        }
+        maybeValue = !a.includes('=');
+    }
+    return null;
+}
+
+// npm options (normalised: lower case, `_` as `-`) that run code, change which
+// package.json or npmrc is used, or swap the shell that runs scripts.
+const NPM_DENIED = new Set([
+    'node-options', 'script-shell', 'shell', 'userconfig', 'globalconfig', 'prefix', 'c', 'call',
+    'editor', 'browser', 'viewer', 'git', 'node-gyp', 'onload-script', 'init-module', 'logs-dir', 'cache',
+]);
+const NPM_TEST_ALIASES = new Set(['test', 't', 'tst']);
+const NPM_RUN_ALIASES = new Set(['run', 'run-script', 'rum', 'urn']);
+
+// jest flags a test script may receive (value = takes a value). Anything else
+// (--config, --setupFiles, --globalSetup, --reporters, --outputFile, --rootDir,
+// --coverageDirectory, --testEnvironment, ...) can load code or write files.
+const JEST_FLAGS = {
+    ci: false, coverage: false, noCoverage: false, runInBand: false, i: false, verbose: false,
+    silent: false, bail: false, b: false, watch: false, watchAll: false, detectOpenHandles: false,
+    forceExit: false, passWithNoTests: false, listTests: false, onlyChanged: false, o: false,
+    onlyFailures: false, f: false, updateSnapshot: false, u: false, colors: false, noColors: false,
+    logHeapUsage: false, noStackTrace: false, expand: false, e: false, clearMocks: false,
+    resetMocks: false, restoreMocks: false, errorOnDeprecated: false, json: false, useStderr: false,
+    cache: false, noCache: false, lastCommit: false, randomize: false, watchman: false,
+    noWatchman: false, findRelatedTests: false, showConfig: false, debug: false, help: false, version: false,
+    t: true, testNamePattern: true, testPathPattern: true, testPathPatterns: true,
+    testPathIgnorePatterns: true, maxWorkers: true, w: true, testTimeout: true, seed: true,
+    shard: true, changedSince: true, maxConcurrency: true,
+};
+const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+
+function checkTestScriptArgs(script, scriptArgs) {
+    for (let k = 0; k < scriptArgs.length; k++) {
+        const a = scriptArgs[k];
+        if (a === '--') continue;
+        if (!a.startsWith('-')) {
+            if (!isInRepoPath(a)) return blockLocal(`Blocked: \`npm ${script}\` argument "${a}" names a path outside the checkout.`);
+            continue;
+        }
+        const eq = a.indexOf('=');
+        const raw = (eq === -1 ? a : a.slice(0, eq)).replace(/^--?/, '');
+        const name = camel(raw);
+        if (!Object.hasOwn(JEST_FLAGS, name)) {
+            return blockLocal(`Blocked: \`npm ${script}\` with \`${a.split('=')[0]}\` is not on the test-argument allowlist (it can load code or write files).`);
+        }
+        if (JEST_FLAGS[name] && eq === -1) k++; // skip the value
+        if (/^testPath/.test(name)) {
+            const value = eq === -1 ? scriptArgs[k] ?? '' : a.slice(eq + 1);
+            if (!isInRepoPath(value)) return blockLocal(`Blocked: \`npm ${script} --${raw}\` names a path outside the checkout.`);
+        }
+    }
+    return null;
+}
+
+function checkNpm(args) {
+    const dd = args.indexOf('--');
+    const npmArgs = dd === -1 ? args : args.slice(0, dd);
+    const afterDd = dd === -1 ? [] : args.slice(dd + 1);
+    const positionals = [];
+    for (const a of npmArgs) {
+        if (!a.startsWith('-')) {
+            positionals.push(a);
+            continue;
+        }
+        const name = a.replace(/^--?/, '').split('=')[0].toLowerCase().replace(/_/g, '-');
+        const bare = name.replace(/^no-/, '');
+        if (NPM_DENIED.has(name) || NPM_DENIED.has(bare) || /^-[cC]/.test(a)) {
+            return blockLocal(`Blocked: \`npm ${a.split('=')[0]}\` can run injected code or another package's scripts.`);
+        }
+    }
+    const [sub, ...more] = positionals;
+    let script = null;
+    let scriptArgs = [];
+    if (NPM_TEST_ALIASES.has(sub)) {
+        script = 'test';
+        scriptArgs = more;
+    } else if (NPM_RUN_ALIASES.has(sub) && more.length) {
+        script = `run ${more[0]}`;
+        scriptArgs = more.slice(1);
+    }
+    if (script === null || !/test/i.test(script)) return null;
+    return checkTestScriptArgs(script, [...scriptArgs, ...afterDd]);
+}
+
+// ---------------------------------------------------------------------------
 // Segment / command analysis
 // ---------------------------------------------------------------------------
 
@@ -606,10 +883,12 @@ function checkSegment(words, state) {
         while (w.length && (isAssignment(w[0]) || KEYWORDS.has(w[0]))) {
             if (isAssignment(w[0])) {
                 const eq = w[0].indexOf('=');
-                inlineEnv[w[0].slice(0, eq)] = w[0].slice(eq + 1);
+                inlineEnv[w[0].slice(0, eq).replace(/\+$/, '')] = w[0].slice(eq + 1);
             }
             w.shift();
         }
+        const envBlock = checkCodeEnv(Object.keys(inlineEnv));
+        if (envBlock) return envBlock;
         if (!w.length) return null;
         const cmd = basename(w[0]);
         if (!WRAPPERS.has(cmd)) break;
@@ -642,14 +921,14 @@ function checkSegment(words, state) {
             }
         }
         // Look through the wrapper for the real command.
-        const idx = w.findIndex((x, n) => n > 0 && ['gh', 'git', ...SHELLS, 'eval'].includes(basename(x)));
+        const idx = w.findIndex((x, n) => n > 0 && ['gh', 'git', ...SHELLS, 'eval', ...NODE_CMDS].includes(basename(x)));
         for (const x of w.slice(1, idx === -1 ? w.length : idx)) {
             if (isAssignment(x)) {
                 const eq = x.indexOf('=');
-                inlineEnv[x.slice(0, eq)] = x.slice(eq + 1);
+                inlineEnv[x.slice(0, eq).replace(/\+$/, '')] = x.slice(eq + 1);
             }
         }
-        if (idx === -1) return null;
+        if (idx === -1) return checkCodeEnv(Object.keys(inlineEnv));
         w = w.slice(idx);
     }
 
@@ -658,10 +937,24 @@ function checkSegment(words, state) {
 
     if (cmd === 'export' || ((cmd === 'declare' || cmd === 'typeset') && args.some((a) => /^-[a-zA-Z]*x/.test(a)))) {
         for (const a of args) {
+            if (a.startsWith('-')) continue;
             if (a.startsWith('GH_REPO=')) state.exportedGhRepo = a.slice(8);
-            if (/^(GIT_CONFIG_|GIT_SSH)/i.test(a)) (state.exportedEnv ??= {})[a.split('=')[0]] = a;
+            const eq = a.indexOf('=');
+            const name = (eq === -1 ? a : a.slice(0, eq)).replace(/\+$/, '');
+            const envBlock = checkCodeEnv([name]);
+            if (envBlock) return envBlock;
+            // A bare `export NAME` exports a value we cannot see.
+            (state.exportedEnv ??= {})[name] = eq === -1 ? undefined : a.slice(eq + 1);
         }
         return null;
+    }
+    if (NODE_CMDS.includes(cmd)) {
+        // A PATH set in the same command picks which `sh`, `node` or `jest` runs.
+        if ('PATH' in inlineEnv || 'PATH' in (state.exportedEnv ?? {})) {
+            return blockLocal(`Blocked: \`${cmd}\` with PATH= set in the same command can run a different program.`);
+        }
+        if (cmd === 'npm') return checkNpm(args);
+        return checkNode(args);
     }
     if (cmd === 'gh') {
         const envRepo = inlineEnv.GH_REPO ?? state.exportedGhRepo ?? null;

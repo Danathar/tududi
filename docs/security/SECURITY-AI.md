@@ -46,6 +46,17 @@ a model:
 - API tokens from the app's Settings and any `ghp_`, `github_pat_`, `sk-` or
   `xox` style string you find.
 
+`.claude/settings.json` denies reading `.env` files with the Read tool and asks
+before writing the files that bound agents. The Bash guard
+(`.claude/hooks/guard-bash.mjs`) keeps the auto-approved commands (`node --test`,
+`npm test` and the other test scripts, `git status|diff|log|show|branch`) from
+getting around those rules: it blocks code-loading flags and variables
+(`node -e`/`--import`/`--require`, `npm --node-options`, `NODE_OPTIONS`,
+`npm_config_*`), test-runner options that load modules or write files, git
+options that read or write arbitrary files (`--output`, `--no-index`, `-O`,
+`format-patch -o`), and git pagers, external diffs and config keys that run
+programs. If a task needs one of those, the owner runs it.
+
 If a secret reaches a commit, issue, log or prompt, stop and tell the owner so
 it can be rotated. Deleting the commit does not undo the exposure. Add new
 secrets to GitHub Actions secrets or the host's environment, never to a file in

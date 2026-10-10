@@ -77,6 +77,33 @@ const allowed = [
     'npm run lint',
     'cat <<EOF\ngh pr create\nEOF',
     'git commit -m "$(cat <<\'EOF\'\nuse gh pr create --repo Danathar/tududi\nEOF\n)"',
+    // The auto-approved test and read-only git commands in their normal forms (#65, #69).
+    'node --test .claude/hooks/tests/guard-bash.test.mjs',
+    'node --test scripts/tests/check-policies.test.mjs .claude/hooks/tests/guard-bash.test.mjs',
+    'node --test --test-reporter=spec --test-name-pattern "fork" .claude/hooks/tests/guard-bash.test.mjs',
+    'node --test --test-reporter tap --test-reporter-destination stdout scripts/tests/check-policies.test.mjs',
+    'node scripts/check-policies.mjs',
+    'node scripts/check-policies.mjs -p',
+    'node --version',
+    'npm test',
+    'npm test --silent',
+    'npm test -- --coverage',
+    'npm run backend:test -- tests/unit/foo.test.js',
+    'npm run frontend:test -- -t "renders the list" --runInBand',
+    'npm run backend:test -- --testPathPattern=tests/integration --maxWorkers=2',
+    'npm run test:ui',
+    'npm run frontend:lint',
+    'git log --oneline -20',
+    'git log -p -- .claude/hooks',
+    'git log -S"Order" --oneline',
+    'git diff --stat HEAD~1',
+    'git show HEAD --stat',
+    'git branch -a',
+    'git checkout --ours backend/app.js',
+    'GIT_PAGER=cat git log -1',
+    'GIT_AUTHOR_NAME=x GIT_AUTHOR_EMAIL=y git commit -m msg',
+    'git -c color.ui=always diff',
+    'env FOO=1 npm test',
 ];
 
 const blocked = [
@@ -202,6 +229,69 @@ const blocked = [
     ['git push origin main && git push upstream main', 'origin'],
 ];
 
+// Code execution / file writes through auto-approved commands (#65, #69).
+// [command, fragment of the expected stderr]
+const blockedLocal = [
+    // node: code-loading flags, under --test and outside it.
+    ["node --test --import 'data:text/javascript,1' t.test.mjs", 'allowlist'],
+    ['node --test --require ./x.js t.test.mjs', 'allowlist'],
+    ['node --test --env-file=.env t.test.mjs', 'allowlist'],
+    ['node --inspect=0.0.0.0:9229 --test t.test.mjs', 'allowlist'],
+    ['node --test --test-reporter ./evil.mjs t.test.mjs', 'reporter'],
+    ['node --test --test-reporter-destination=.claude/hooks/guard-bash.mjs t.test.mjs', 'destination'],
+    ['node --test /tmp/evil.test.mjs', 'outside the checkout'],
+    ['node --test ../evil.test.mjs', 'outside the checkout'],
+    ['node -e "require(\'fs\').readFileSync(\'.env\')"', '-e'],
+    ['node -pe 1', '-pe'],
+    ['node --eval=1', '--eval'],
+    ['node --env-file=.env scripts/check-policies.mjs', '--env-file'],
+    ['node -C dev --import=data:x app.js', '--import'],
+    ['nodejs -r ./x.js app.js', '-r'],
+    ['env node --import=data:x app.js', '--import'],
+    // npm: --node-options, NODE_OPTIONS and friends.
+    ['npm test --node-options=--import=data:text/javascript,1', '--node-options'],
+    ['npm run frontend:test --node-options=--require=./anyfile.js', '--node-options'],
+    ['npm run backend:test --node_options=--import=data:x', '--node_options'],
+    ['NODE_OPTIONS=--import=data:text/javascript,1 npm test', 'NODE_OPTIONS'],
+    ['export NODE_OPTIONS=--require=./x.js; npm test', 'NODE_OPTIONS'],
+    ['env NODE_OPTIONS=--import=x npm test', 'NODE_OPTIONS'],
+    ['NODE_OPTIONS+=--import=x npm test', 'NODE_OPTIONS'],
+    ['npm_config_node_options=--import=x npm test', 'npm_config_node_options'],
+    ['BASH_ENV=./evil.sh npm run test:ui', 'BASH_ENV'],
+    ['PATH=/tmp/evil:$PATH npm test', 'PATH'],
+    ['npm test --script-shell=./evil.sh', '--script-shell'],
+    ['npm --prefix /tmp/evil test', '--prefix'],
+    ['npm test -- --config \'{"globalSetup":"/tmp/x.js"}\'', 'allowlist'],
+    ['npm run backend:test -- --outputFile=.claude/hooks/guard-bash.mjs --json', 'allowlist'],
+    ['npm run frontend:test -- --setupFiles ./x.js', 'allowlist'],
+    ['npm test -- /tmp/evil.test.js', 'outside the checkout'],
+    ['npm test -- --rootDir=/', 'allowlist'],
+    // git: file writes and file reads past the Read/Write rules.
+    ["git log -1 --format='x' --output=.claude/hooks/guard-bash.mjs", 'writes a file'],
+    ['git diff --output .claude/settings.json HEAD', 'writes a file'],
+    ['git show HEAD --output=LICENSE.MIT', 'writes a file'],
+    ['git log --outp=x', 'writes a file'],
+    ['git format-patch -1 -o .claude/hooks', '-o'],
+    ['git format-patch -1 --output-directory=.claude', 'writes a file'],
+    ['git diff --no-index /dev/null .env', 'no-index'],
+    ['git diff -O.env HEAD', '-O'],
+    ['git log --orderfile=.env -p', 'orderfile'],
+    ['bash -c "git log --output=x"', 'writes a file'],
+    // git: environment and config that run programs.
+    ['GIT_EXTERNAL_DIFF=./evil.sh git diff HEAD~1 HEAD', 'GIT_EXTERNAL_DIFF'],
+    ['GIT_PAGER=./evil.sh git log', 'GIT_PAGER'],
+    ['PAGER="sh -c id" git log', 'PAGER'],
+    ['export GIT_PAGER=./evil.sh; git log', 'GIT_PAGER'],
+    ['env GIT_CONFIG_PARAMETERS="\'core.pager=./evil.sh\'" git log', 'GIT_CONFIG_PARAMETERS'],
+    ['GIT_TRACE=/tmp/x git status', 'GIT_TRACE'],
+    ['git -c core.pager=./evil.sh log', 'core.pager'],
+    ['git -c core.fsmonitor=./evil.sh status', 'core.fsmonitor'],
+    ['git -c diff.external=./evil.sh diff', 'diff.external'],
+    ['git config core.fsmonitor ./evil.sh', 'core.fsmonitor'],
+    ['git config alias.st "!sh evil"', 'alias.st'],
+    ['git --exec-path=/tmp/evil log', 'exec-path'],
+];
+
 for (const command of allowed) {
     test(`allows: ${command.replace(/\n/g, '\\n')}`, () => {
         const r = run(command);
@@ -219,6 +309,16 @@ for (const [command, fragment] of blocked) {
             `stderr should mention "${fragment}": ${r.stderr}`
         );
         assert.match(r.stderr, /Danathar\/tududi/);
+    });
+}
+
+for (const [command, fragment] of blockedLocal) {
+    test(`blocks: ${command.replace(/\n/g, '\\n')}`, () => {
+        const r = run(command);
+        assert.equal(r.status, 2, `expected block, got ${r.status}`);
+        assert.match(r.stderr, /guard-bash: /);
+        assert.ok(r.stderr.includes(fragment), `stderr should mention "${fragment}": ${r.stderr}`);
+        assert.match(r.stderr, /SECURITY-AI\.md/);
     });
 }
 
