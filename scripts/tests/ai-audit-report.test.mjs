@@ -8,6 +8,7 @@ import {
     findSignature,
     hasLinkedIssue,
     main,
+    mergerKind,
     parseArgs,
     renderMarkdown,
 } from '../ai-audit-report.mjs';
@@ -120,23 +121,47 @@ test('bot-authored PR without signature line violates signature', () => {
     assert.deepEqual(auditPr(pr({ body: 'Closes #5' })), ['signature']);
 });
 
-test('bot self-merge is a violation, in either login spelling', () => {
+test('a merge by the Hive App is the Hive lane: allowed, in either login spelling', () => {
     for (const login of ['app/danathar-atomic-hive', 'danathar-atomic-hive[bot]']) {
-        assert.deepEqual(auditPr(pr({ mergedBy: { login } })), ['human-merge']);
+        assert.deepEqual(auditPr(pr({ mergedBy: { login, is_bot: true } })), []);
+        assert.equal(mergerKind({ login, is_bot: true }), 'hive-lane');
     }
-    assert.deepEqual(auditPr(pr({ mergedBy: null })), ['human-merge']);
-    assert.deepEqual(
-        auditPr(pr({ mergedBy: { login: 'x', is_bot: true } })),
-        ['human-merge']
-    );
+    assert.equal(mergerKind({ login: 'Danathar', is_bot: false }), 'human');
 });
 
-test('a risk-tier-looking label does not excuse a bot merge', () => {
+test('any other bot, and an unknown or missing merger, is a violation', () => {
+    for (const mergedBy of [
+        null,
+        {},
+        { login: '' },
+        { login: 'app/dependabot', is_bot: true },
+        { login: 'github-actions[bot]' },
+        { login: 'someone', is_bot: true },
+        { login: 'app/danathar-atomic-hive-evil', is_bot: true },
+    ]) {
+        assert.deepEqual(auditPr(pr({ mergedBy })), ['merger'], JSON.stringify(mergedBy));
+    }
+});
+
+test('a label does not change who may merge', () => {
     const p = pr({
-        mergedBy: { login: 'app/danathar-atomic-hive' },
+        mergedBy: { login: 'app/dependabot', is_bot: true },
         labels: [{ name: 'risk/tier-4' }],
     });
-    assert.deepEqual(auditPr(p), ['human-merge']);
+    assert.deepEqual(auditPr(p), ['merger']);
+});
+
+test('the report counts and marks Hive-lane merges separately', () => {
+    const lane = pr({ number: 3, mergedBy: { login: 'app/danathar-atomic-hive' } });
+    const human = pr({ number: 4 });
+    const bad = pr({ number: 5, mergedBy: { login: 'app/dependabot', is_bot: true } });
+    const report = buildReport([lane, human, bad]);
+    assert.equal(report.hiveLane, 1);
+    assert.equal(report.violationCount, 1);
+    const md = renderMarkdown(report);
+    assert.match(md, /app\/danathar-atomic-hive \(Hive lane\) \| ok/);
+    assert.match(md, /Merged by Hive lane: 1 of 3/);
+    assert.match(md, /violates: merger/);
 });
 
 test('base must be main of this repository', () => {
@@ -201,7 +226,7 @@ function run(argv, input) {
 }
 
 test('exit code: non-strict never fails on violations, strict does', () => {
-    const bad = [pr({ mergedBy: { login: 'danathar-atomic-hive[bot]' } })];
+    const bad = [pr({ mergedBy: { login: 'app/dependabot', is_bot: true } })];
     assert.equal(run(['--output', 'x.md'], bad).code, 0);
     assert.equal(run(['--output', 'x.md', '--strict'], bad).code, 1);
     assert.equal(run(['--output', 'x.md', '--strict'], [pr()]).code, 0);
