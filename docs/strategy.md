@@ -60,7 +60,7 @@ repository does; run the command for today's answer.
 | Change flow is visible | PR counts, review findings, CI outcomes, read by `scripts/pr-metrics.mjs` | [`metrics.md`](metrics.md), dated snapshots in [`metrics/`](metrics/) |
 | The published image tracks `main` | newest `docker-publish.yml` run on `main` succeeded; `:sha-<short>` matches `main` | `gh run list --repo Danathar/tududi --workflow docker-publish.yml --branch main --limit 5` |
 | Upstream sync lag stays known | commits on `upstream/main` that `origin/main` lacks | below |
-| Agent work is traceable | every agent PR has `Closes #N`, a signature line and a human merger | [`agent-tasks/`](agent-tasks/README.md), the `agent-audit.yml` run summary |
+| Agent work is traceable | every agent PR has `Closes #N`, a signature line and a human or Hive-lane (App) merger | [`agent-tasks/`](agent-tasks/README.md), the `agent-audit.yml` run summary |
 
 None of these is a velocity target. Throughput and coverage percentage are not
 goals; optimising them would mean rushing review or padding tests.

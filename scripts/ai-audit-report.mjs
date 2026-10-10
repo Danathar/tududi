@@ -21,11 +21,14 @@
  *                  Danathar/tududi (body text is not consulted; a missing
  *                  field counts as no link)
  *   signature      body has a `— hive: agent=...` line
- *   human-merge    merged by a human account, not the Hive app or any bot.
- *                  docs/risk-tiers.md lets an agent queue `ci`-review (Tier 3/4)
- *                  PRs under the Hive merge strategy, but the PR JSON carries
- *                  no changed-file list to derive a tier from, so every bot
- *                  merge is reported; a reviewer can then confirm the tier.
+ *   merger         merged by a human account, or by the Hive App itself (the
+ *                  `hive-serialized` merge lane: the App merges after the
+ *                  ruleset's required checks pass, docs/branch-protection.md).
+ *                  Hive-lane merges are allowed and reported separately as
+ *                  `Hive lane`. Any other bot, and an unknown or missing
+ *                  merger, is a violation. The PR JSON carries no changed-file
+ *                  list, so the audit cannot check which risk tier a Hive-lane
+ *                  merge was; the ruleset and docs/risk-tiers.md own that.
  *   base           base branch is `main` of Danathar/tududi
  *
  * Usage:
@@ -123,6 +126,13 @@ export function isBotAccount(user) {
     );
 }
 
+/** @returns {'human'|'hive-lane'|'other'} who merged: see the `merger` rule. */
+export function mergerKind(user) {
+    if (!user || !user.login) return 'other';
+    if (AGENT_LOGINS.includes(user.login)) return 'hive-lane';
+    return isBotAccount(user) ? 'other' : 'human';
+}
+
 /**
  * Checks one agent PR. Returns the list of violated requirement ids.
  * @param {object} pr
@@ -133,10 +143,7 @@ export function auditPr(pr) {
     if (!hasLinkedIssue(pr)) violations.push('linked-issue');
     if (!findSignature(pr.body)) violations.push('signature');
 
-    const mergedBy = pr.mergedBy;
-    if (!mergedBy || !mergedBy.login || isBotAccount(mergedBy)) {
-        violations.push('human-merge');
-    }
+    if (mergerKind(pr.mergedBy) === 'other') violations.push('merger');
 
     const urlOk =
         typeof pr.url === 'string' && pr.url.startsWith(PR_URL_PREFIX);
@@ -169,6 +176,7 @@ export function buildReport(prs, options = {}) {
             detected: c.reason,
             author: pr.author?.login ?? 'unknown',
             mergedBy: pr.mergedBy?.login ?? 'unknown',
+            hiveLane: mergerKind(pr.mergedBy) === 'hive-lane',
             mergedAt: (pr.mergedAt ?? '').slice(0, 10),
             violations: auditPr(pr),
         });
@@ -181,6 +189,7 @@ export function buildReport(prs, options = {}) {
         nonAgent,
         rows,
         violationCount: violating.length,
+        hiveLane: rows.filter((r) => r.hiveLane).length,
     };
 }
 
@@ -211,10 +220,12 @@ export function renderMarkdown(report) {
                 ? 'ok'
                 : `violates: ${r.violations.join(', ')}`;
         out.push(
-            `| [#${r.number}](${r.url}) ${cell(r.title)} | ${r.mergedAt} | ${r.detected} | ${cell(r.author)} | ${cell(r.mergedBy)} | ${result} |`
+            `| [#${r.number}](${r.url}) ${cell(r.title)} | ${r.mergedAt} | ${r.detected} | ${cell(r.author)} | ${cell(r.mergedBy)}${r.hiveLane ? ' (Hive lane)' : ''} | ${result} |`
         );
     }
     out.push(
+        '',
+        `Merged by Hive lane: ${report.hiveLane} of ${report.agent} audited agent PR(s).`,
         '',
         report.violationCount === 0
             ? 'All audited agent PRs meet the audit-trail requirements.'
