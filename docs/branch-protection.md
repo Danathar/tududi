@@ -94,7 +94,10 @@ rule. The same guarantee comes from two pieces together:
 
 The ACMM evaluation credits its Merge queue criterion when both hold. The Hive
 side is a setting on the Hive dashboard (ACMM evaluation, Merge queue row for
-`tududi`, **Use serialized merge lane**), not a file in this repository.
+`tududi`, **Use serialized merge lane**), not a file in this repository. It has
+been `hive-serialized` since 2026-10-10; an authenticated
+`GET /api/repos/merge-strategy?repo=tududi` on the Hive dashboard API reads it
+back.
 
 ## Applying or changing the ruleset
 
