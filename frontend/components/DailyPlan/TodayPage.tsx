@@ -19,6 +19,7 @@ import {
     saveDailyPlanItems,
     toPlanItemInputs,
 } from '../../utils/dailyPlanService';
+import { focusKey, focusScopeParams, useFocus } from '../../utils/focus';
 import {
     CalendarEvent,
     fetchCalendarEvents,
@@ -27,6 +28,7 @@ import {
 import { deleteTask, toggleTaskCompletion } from '../../utils/tasksService';
 import { getUserTimezone } from '../../utils/dateUtils';
 import { isTaskDone } from '../../constants/taskStatus';
+import { isHabitDoneForNow } from '../../utils/habitUtils';
 import { useToast } from '../Shared/ToastContext';
 import { useDailyPlanProgress } from '../../store/dailyPlanStore';
 import { useStore } from '../../store/useStore';
@@ -66,6 +68,8 @@ const movedPastDay = (
 const TodayPage: React.FC = () => {
     const aiAllowed = useAiAllowed();
     const { t, i18n } = useTranslation();
+    const focus = useFocus();
+    const focusId = focusKey(focus);
     const { showErrorToast, showUndoToast } = useToast();
     const setProgress = useDailyPlanProgress((s) => s.setProgress);
     const quote = useDailyQuote(i18n.language);
@@ -99,13 +103,15 @@ const TodayPage: React.FC = () => {
         let cancelled = false;
         (async () => {
             try {
-                const plan = await fetchDailyPlan();
+                const scope = focusScopeParams(focus);
+                const plan = await fetchDailyPlan(undefined, scope);
                 if (cancelled) return;
                 setPlanResponse(plan);
 
-                const candidateList = await fetchPlanCandidates().catch(
-                    () => null
-                );
+                const candidateList = await fetchPlanCandidates(
+                    undefined,
+                    scope
+                ).catch(() => null);
                 if (cancelled) return;
                 setCandidates(candidateList);
             } catch (err) {
@@ -121,7 +127,7 @@ const TodayPage: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, [t]);
+    }, [t, focusId]);
 
     // Calendar feeds belong to the Calendar feature; with it off Today shows
     // no events and no prompt to connect a calendar.
@@ -222,17 +228,19 @@ const TodayPage: React.FC = () => {
     );
 
     // Completing a recurring task reopens the same task for its next due
-    // date, so the plan records the day's occurrence as done itself.
+    // date, and a habit stays open after a check-in, so the plan records the
+    // day's occurrence as done itself.
     const syncCompletedTask = useCallback(
         (updated: Task) => {
             const planDate = planResponse?.date;
             mergePlannedTask(updated, {
-                occurrence_done:
-                    !!planDate &&
-                    isRecurring(updated) &&
-                    !isTaskDone(updated.status) &&
-                    !!updated.due_date &&
-                    updated.due_date.slice(0, 10) > planDate,
+                occurrence_done: updated.habit_mode
+                    ? isHabitDoneForNow(updated)
+                    : !!planDate &&
+                      isRecurring(updated) &&
+                      !isTaskDone(updated.status) &&
+                      !!updated.due_date &&
+                      updated.due_date.slice(0, 10) > planDate,
             });
         },
         [mergePlannedTask, planResponse?.date]

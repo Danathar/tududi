@@ -320,10 +320,20 @@ See [docs/architecture.md](docs/architecture.md) for full diagrams; the essentia
     - Example manifests in `docs/examples/kubernetes`
     - One replica, block storage for SQLite, ingress and backup notes
 
-32. **[Blog](docs/23-blog.md)**
+32. **[Onboarding](docs/24-onboarding.md)**
+    - The welcome page at `/welcome`: the welcome video and one button, seen once by every account
+    - Empty-state starters on Areas and Habits
+    - `users.onboarding_starter`, `POST /api/onboarding/starter`, admin onboarding numbers
+
+33. **[Blog](docs/23-blog.md)**
     - A front page note and the public notes it links become the blog
     - Superadmin picks the front page in Admin → Blog
     - `/blog` in the app, or the root of `TUDUDI_BLOG_HOSTS` (blog.tududi.com)
+
+34. **[Focus](docs/25-focus.md)**
+    - The Focus chip in the top bar: one area, optionally a project and tags, saved in `ui_settings.focus`
+    - Scopes Today, Upcoming, Tasks, Projects, Notes and live search; capture defaults to the Focus project and tags
+    - `area_uid`, `project_uid` and `tags` query params resolved by `backend/services/scopeService.js`; the API, MCP and Telegram stay unscoped
 
 ---
 
@@ -340,7 +350,7 @@ Tududi is a self-hosted task management system designed around hierarchical orga
 **Key Capabilities:**
 - **Hierarchical Organization:** Areas > Goals > Projects > Tasks > Subtasks
 - **Smart Recurring Tasks:** Multiple patterns with parent-child tracking
-- **Multi-Language Support:** 25 languages via i18next
+- **Multi-Language Support:** 26 languages via i18next
 - **Collaboration:** Project sharing with granular permissions
 - **REST API:** Swagger docs + personal API tokens
 - **Telegram Integration:** Create tasks via messages, daily digests
@@ -358,7 +368,7 @@ Tududi is a self-hosted task management system designed around hierarchical orga
 - Webpack 5 (build) + webpack-dev-server (development)
 - Tailwind CSS 3.4 + Heroicons
 - Zustand (global state) + SWR (server state)
-- React Router 6, i18next (25 languages)
+- React Router 6, i18next (26 languages)
 
 **Backend:**
 - Express 4.21 + Sequelize 6.37 (ORM)

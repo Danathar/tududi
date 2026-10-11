@@ -428,6 +428,7 @@
     "norwegian": "挪威语",
     "polish": "波兰语",
     "slovenian": "斯洛文尼亚语",
+    "slovak": "斯洛伐克语",
     "swedish": "瑞典语",
     "firstDayOfWeek": "一周的第一天",
     "name": "姓名",
@@ -1594,6 +1595,7 @@
     "system": "系统",
     "customize": "自定义",
     "addTag": "添加标签",
+    "new": "新建标签",
     "loadingTags": "正在加载标签...",
     "errorLoadingTags": "加载标签时出错。",
     "toggleDropdownMenu": "打开或关闭菜单",
@@ -2977,5 +2979,22 @@
     "missingBody": "它可能已被移动或撤下。其他文章只需一次点击。",
     "allPosts": "所有文章",
     "morePosts": "更多博客文章"
+  },
+  "focus": {
+    "chip": "专注",
+    "title": "专注于",
+    "activeTitle": "专注：{{label}}",
+    "area": "领域",
+    "anyArea": "任意领域",
+    "project": "项目",
+    "anyProject": "任意项目",
+    "tags": "标签",
+    "hint": "今天、即将到来、任务、项目、笔记和搜索只显示这些内容。新任务会自动带上该项目和标签。",
+    "apply": "应用",
+    "clear": "清除",
+    "clearFocus": "清除专注",
+    "locked": "由你的专注设定。可在顶部栏的标签中清除。",
+    "emptyHint": "仅显示 {{label}}",
+    "saveError": "无法保存专注设置。"
   }
 }

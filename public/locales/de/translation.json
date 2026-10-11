@@ -783,6 +783,7 @@
     "norwegian": "Norwegisch",
     "polish": "Polnisch",
     "slovenian": "Slowenisch",
+    "slovak": "Slowakisch",
     "swedish": "Schwedisch",
     "firstDayOfWeek": "Erster Tag der Woche",
     "name": "Name",
@@ -1679,6 +1680,7 @@
     "system": "System",
     "customize": "Anpassen",
     "addTag": "Tag hinzufügen",
+    "new": "Neuer Tag",
     "loadingTags": "Tags werden geladen...",
     "errorLoadingTags": "Fehler beim Laden der Tags.",
     "toggleDropdownMenu": "Menü öffnen oder schließen",
@@ -2987,5 +2989,22 @@
     "missingBody": "Er wurde vielleicht verschoben oder entfernt. Die anderen Beiträge sind nur einen Klick entfernt.",
     "allPosts": "Alle Beiträge",
     "morePosts": "Mehr aus dem Blog"
+  },
+  "focus": {
+    "chip": "Fokus",
+    "title": "Fokus auf",
+    "activeTitle": "Fokus: {{label}}",
+    "area": "Bereich",
+    "anyArea": "Alle Bereiche",
+    "project": "Projekt",
+    "anyProject": "Alle Projekte",
+    "tags": "Tags",
+    "hint": "Heute, Demnächst, Aufgaben, Projekte, Notizen und die Suche zeigen nur das. Neue Aufgaben bekommen das Projekt und die Tags.",
+    "apply": "Anwenden",
+    "clear": "Aufheben",
+    "clearFocus": "Fokus aufheben",
+    "locked": "Durch deinen Fokus gesetzt. Hebe ihn über den Chip in der oberen Leiste auf.",
+    "emptyHint": "Zeigt nur {{label}}",
+    "saveError": "Der Fokus konnte nicht gespeichert werden."
   }
 }

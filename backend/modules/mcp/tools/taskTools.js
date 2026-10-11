@@ -14,17 +14,21 @@ const {
 } = require('../../tasks/operations/recurring');
 const { handleCompletionStatus } = require('../../tasks/operations/completion');
 const { Op } = require('sequelize');
-const { Task, Project, Tag } = require('../../../models');
+const { sequelize, Task, Project, Tag, Area } = require('../../../models');
 const {
     validateProjectAccess,
     validateDeferUntilAndDueDate,
+    validateAreaAccess,
+    validateAssignee,
     getRecurringParentEndDate,
 } = require('../../tasks/utils/validation');
+const { notifyAssignee } = require('../../tasks/operations/assignment');
 const {
     processDueDateForStorage,
     processDeferUntilForStorage,
 } = require('../../../utils/timezone-utils');
 const permissionsService = require('../../../services/permissionsService');
+const { resolveTagsForTransaction } = require('./tagResolver');
 const relationsService = require('../../tasks/relations/service');
 const {
     computeTaskMetrics,
@@ -96,11 +100,19 @@ const recurrenceInputSchemaProperties = {
     },
 };
 
+// The area set directly on a task (tasks in a project get theirs from it).
+const AREA_INCLUDE = {
+    model: Area,
+    attributes: ['id', 'name', 'uid', 'color'],
+    required: false,
+};
+
 async function findTaskByIdentifier(identifier) {
     const isNumeric = !isNaN(identifier);
 
     const includeOptions = [
         { model: Project, as: 'Project' },
+        AREA_INCLUDE,
         { model: Tag, as: 'Tags' },
         {
             model: Task,
@@ -257,6 +269,7 @@ function registerTaskTools(server, context, tools) {
             const tasks = await taskRepository.findAll(whereClause, {
                 include: [
                     { model: Project, as: 'Project' },
+                    AREA_INCLUDE,
                     { model: Tag, as: 'Tags' },
                 ],
                 limit: limit,
@@ -382,6 +395,20 @@ function registerTaskTools(server, context, tools) {
                     type: 'number',
                     description: 'Project ID to assign task to',
                 },
+                area_id: {
+                    type: 'number',
+                    description: 'Area ID to assign task to directly',
+                },
+                area_uid: {
+                    type: 'string',
+                    description:
+                        'Area UID to assign task to directly (alternative to area_id)',
+                },
+                assigned_to: {
+                    type: 'string',
+                    description:
+                        'Person UID to assign the task to (see list_people)',
+                },
                 tags: {
                     type: 'array',
                     items: { type: 'string' },
@@ -398,6 +425,15 @@ function registerTaskTools(server, context, tools) {
             const resolvedProjectId = params.project_id
                 ? await validateProjectAccess(params.project_id, context.userId)
                 : null;
+            const resolvedAreaId = await validateAreaAccess(
+                params.area_uid || params.area_id,
+                context.userId
+            );
+            const assignedTo = await validateAssignee(
+                params.assigned_to,
+                context.userId,
+                { projectId: resolvedProjectId }
+            );
 
             const recurrenceType = params.recurrence_type || 'none';
             let dueDateInput = params.due_date || null;
@@ -437,6 +473,8 @@ function registerTaskTools(server, context, tools) {
                 due_date: dueDate,
                 defer_until: deferUntil,
                 project_id: resolvedProjectId,
+                area_id: resolvedAreaId,
+                assigned_to: assignedTo,
                 recurrence_type: recurrenceType,
                 recurrence_interval: params.recurrence_interval ?? null,
                 recurrence_end_date: params.recurrence_end_date || null,
@@ -466,18 +504,22 @@ function registerTaskTools(server, context, tools) {
             }
 
             await entitlements.assertCanCreate(context.userId, 'task');
-            const task = await taskRepository.create(taskData);
+            const task = await sequelize.transaction(async (transaction) => {
+                const task = await taskRepository.create(taskData, {
+                    transaction,
+                });
 
-            if (params.tags && params.tags.length > 0) {
-                const tagInstances = [];
-                for (const tagName of params.tags) {
-                    const [tag] = await Tag.findOrCreate({
-                        where: { name: tagName, user_id: context.userId },
-                    });
-                    tagInstances.push(tag);
+                const tagInstances = await resolveTagsForTransaction(
+                    params.tags,
+                    context.userId,
+                    transaction
+                );
+                if (tagInstances !== undefined) {
+                    await task.setTags(tagInstances, { transaction });
                 }
-                await task.setTags(tagInstances);
-            }
+
+                return task;
+            });
 
             const reloadedTask = await taskRepository.findByIdAndUser(
                 task.id,
@@ -485,10 +527,13 @@ function registerTaskTools(server, context, tools) {
                 {
                     include: [
                         { model: Project, as: 'Project' },
+                        AREA_INCLUDE,
                         { model: Tag, as: 'Tags' },
                     ],
                 }
             );
+
+            await notifyAssignee(reloadedTask, null, context.userId);
 
             const serialized = await serializeTask(
                 reloadedTask,
@@ -564,6 +609,21 @@ function registerTaskTools(server, context, tools) {
             description:
                 'Project ID to assign task to (use null to remove project)',
         },
+        area_id: {
+            type: 'number',
+            description:
+                'Area ID to assign task to directly (use null to remove area)',
+        },
+        area_uid: {
+            type: 'string',
+            description:
+                'Area UID to assign task to directly (alternative to area_id)',
+        },
+        assigned_to: {
+            type: ['string', 'null'],
+            description:
+                'Person UID to assign the task to (see list_people), or null to unassign',
+        },
         today: {
             type: 'boolean',
             description: 'Add to Today list',
@@ -614,6 +674,7 @@ function registerTaskTools(server, context, tools) {
                 throw new Error('Access denied');
             }
 
+            const previousAssignedTo = task.assigned_to;
             const updates = {};
             if (params.name !== undefined) updates.name = params.name;
             const incomingNote = params.note ?? params.description;
@@ -663,6 +724,29 @@ function registerTaskTools(server, context, tools) {
                     context.userId
                 );
                 updates.project_id = validProjectId;
+            }
+            const areaIdentifier =
+                params.area_uid !== undefined
+                    ? params.area_uid
+                    : params.area_id;
+            if (areaIdentifier !== undefined) {
+                updates.area_id = await validateAreaAccess(
+                    areaIdentifier,
+                    context.userId
+                );
+            }
+            if (params.assigned_to !== undefined) {
+                updates.assigned_to = await validateAssignee(
+                    params.assigned_to,
+                    context.userId,
+                    {
+                        projectId:
+                            updates.project_id !== undefined
+                                ? updates.project_id
+                                : task.project_id,
+                        currentAssignedTo: task.assigned_to,
+                    }
+                );
             }
             if (params.today !== undefined) updates.today = params.today;
 
@@ -747,25 +831,32 @@ function registerTaskTools(server, context, tools) {
             // future recurring instances get regenerated, matching PATCH /api/task/:uid
             await handleRecurrenceUpdate(task, RECURRENCE_FIELDS, params);
 
-            await task.update(updates);
+            await sequelize.transaction(async (transaction) => {
+                await task.update(updates, { transaction });
 
-            if (params.tags !== undefined) {
-                const tagInstances = [];
-                for (const tagName of params.tags) {
-                    const [tag] = await Tag.findOrCreate({
-                        where: { name: tagName, user_id: context.userId },
-                    });
-                    tagInstances.push(tag);
+                const tagInstances = await resolveTagsForTransaction(
+                    params.tags,
+                    context.userId,
+                    transaction
+                );
+                if (tagInstances !== undefined) {
+                    await task.setTags(tagInstances, { transaction });
                 }
-                await task.setTags(tagInstances);
-            }
+            });
 
             const reloadedTask = await taskRepository.findById(task.id, {
                 include: [
                     { model: Project, as: 'Project' },
+                    AREA_INCLUDE,
                     { model: Tag, as: 'Tags' },
                 ],
             });
+
+            await notifyAssignee(
+                reloadedTask,
+                previousAssignedTo,
+                context.userId
+            );
 
             const serialized = await serializeTask(
                 reloadedTask,
@@ -844,6 +935,7 @@ function registerTaskTools(server, context, tools) {
             const reloadedTask = await taskRepository.findById(task.id, {
                 include: [
                     { model: Project, as: 'Project' },
+                    AREA_INCLUDE,
                     { model: Tag, as: 'Tags' },
                 ],
             });
@@ -928,6 +1020,7 @@ function registerTaskTools(server, context, tools) {
             const reloadedTask = await taskRepository.findById(task.id, {
                 include: [
                     { model: Project, as: 'Project' },
+                    AREA_INCLUDE,
                     { model: Tag, as: 'Tags' },
                 ],
             });
@@ -1075,6 +1168,7 @@ function registerTaskTools(server, context, tools) {
                 {
                     include: [
                         { model: Project, as: 'Project' },
+                        AREA_INCLUDE,
                         { model: Tag, as: 'Tags' },
                     ],
                 }

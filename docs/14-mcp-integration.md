@@ -234,6 +234,9 @@ Create a new task.
 | `due_date` | string | No | ISO 8601 date |
 | `defer_until` | string | No | ISO 8601 date/time; task is hidden from view until this point |
 | `project_id` | number | No | Assign to a project |
+| `area_id` | number | No | Assign directly to an area (tasks in a project take the project's area) |
+| `area_uid` | string | No | Area UID, alternative to `area_id` |
+| `assigned_to` | string | No | Person UID to assign the task to (from `list_people`) |
 | `tags` | string[] | No | Array of tag names to apply |
 | `recurrence_type` | string | No | `none`, `daily`, `weekly`, `monthly`, `monthly_weekday`, or `monthly_last_day` |
 | `recurrence_interval` | number | No | Repeat every N days/weeks/months (default: 1) |
@@ -285,6 +288,9 @@ Update an existing task.
 | `due_date` | string | No | New due date (ISO 8601) |
 | `defer_until` | string | No | New defer until date/time (ISO 8601); pass `null` or `""` to clear it |
 | `project_id` | number | No | Reassign to a project (`null` to remove) |
+| `area_id` | number | No | Assign directly to an area (`null` to remove) |
+| `area_uid` | string | No | Area UID, alternative to `area_id` |
+| `assigned_to` | string | No | Person UID to assign the task to (`null` to unassign) |
 | `today` | boolean | No | Add to Today list |
 | `tags` | string[] | No | Array of tag names (replaces existing tags) |
 | `recurrence_type` | string | No | `none`, `daily`, `weekly`, `monthly`, `monthly_weekday`, or `monthly_last_day` |
@@ -504,6 +510,8 @@ Get a single project by UID.
 |-----------|------|----------|-------------|
 | `uid` | string | Yes | Project UID |
 
+Project responses from `list_projects`, `get_project`, `create_project` and `update_project` include `goal` and `is_maintenance`.
+
 ---
 
 #### `create_project`
@@ -522,6 +530,7 @@ Create a new project. Refused for an account whose role does not allow creating 
 | `tags` | string[] | No | Array of tag names |
 | `goal_id` | number | No | Goal ID to link the project to (must be your own goal) |
 | `goal_uid` | string | No | Goal UID, as an alternative to `goal_id` |
+| `is_maintenance` | boolean | No | Mark as a maintenance project; cannot be combined with a goal |
 
 ---
 
@@ -541,6 +550,7 @@ Update an existing project.
 | `pinned` | boolean | No | Pin to sidebar |
 | `goal_id` | number | No | Link to a goal you own; `null` unlinks (owner only) |
 | `goal_uid` | string | No | Goal UID, as an alternative to `goal_id`; `null` or empty unlinks |
+| `is_maintenance` | boolean | No | `true` marks as maintenance and unlinks any goal (owner only if a goal is set); linking a goal sets it back to `false` |
 
 ---
 

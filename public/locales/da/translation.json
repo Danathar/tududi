@@ -309,6 +309,7 @@
     "norwegian": "Norsk",
     "polish": "Polsk",
     "slovenian": "Slovensk",
+    "slovak": "Slovakisk",
     "swedish": "Svensk",
     "title": "Profilindstillinger",
     "appearance": "Udseende",
@@ -1594,6 +1595,7 @@
     "system": "System",
     "customize": "Tilpas",
     "addTag": "Tilføj Tag",
+    "new": "Nyt tag",
     "loadingTags": "Indlæser tags...",
     "errorLoadingTags": "Fejl ved indlæsning af tags.",
     "toggleDropdownMenu": "Åbn eller luk menuen",
@@ -2978,5 +2980,22 @@
     "missingBody": "Det er måske flyttet eller fjernet. De andre indlæg er ét klik væk.",
     "allPosts": "Alle indlæg",
     "morePosts": "Mere fra bloggen"
+  },
+  "focus": {
+    "chip": "Fokus",
+    "title": "Fokusér på",
+    "activeTitle": "Fokus: {{label}}",
+    "area": "Område",
+    "anyArea": "Alle områder",
+    "project": "Projekt",
+    "anyProject": "Alle projekter",
+    "tags": "Tags",
+    "hint": "I dag, Kommende, Opgaver, Projekter, Noter og søgning viser kun dette. Nye opgaver får projektet og tags.",
+    "apply": "Anvend",
+    "clear": "Ryd",
+    "clearFocus": "Ryd fokus",
+    "locked": "Sat af dit fokus. Ryd det fra chippen i topbjælken.",
+    "emptyHint": "Viser kun {{label}}",
+    "saveError": "Fokus kunne ikke gemmes."
   }
 }

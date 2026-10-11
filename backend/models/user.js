@@ -142,7 +142,7 @@ module.exports = (sequelize) => {
                 allowNull: true,
                 defaultValue: {
                     ai_assistant_enabled: false,
-                    pomodoro_enabled: true,
+                    pomodoro_enabled: false,
                     eisenhower_enabled: false,
                     kanban_enabled: false,
                     habits_enabled: true,
@@ -292,6 +292,14 @@ module.exports = (sequelize) => {
                 type: DataTypes.BOOLEAN,
                 allowNull: false,
                 defaultValue: true,
+            },
+            onboarded_at: {
+                type: DataTypes.DATE,
+                allowNull: true,
+            },
+            onboarding_starter: {
+                type: DataTypes.STRING,
+                allowNull: true,
             },
             email_verification_token: {
                 type: DataTypes.STRING,

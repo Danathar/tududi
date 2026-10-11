@@ -309,6 +309,7 @@
     "norwegian": "Norja",
     "polish": "Puola",
     "slovenian": "Sloveeni",
+    "slovak": "Slovakki",
     "swedish": "Ruotsi",
     "title": "Profiilin asetukset",
     "appearance": "Ulkoasu",
@@ -1594,6 +1595,7 @@
     "system": "Järjestelmä",
     "customize": "Mukauta",
     "addTag": "Lisää tunniste",
+    "new": "Uusi tunniste",
     "loadingTags": "Ladataan tunnisteita...",
     "errorLoadingTags": "Tunnisteiden lataaminen epäonnistui.",
     "toggleDropdownMenu": "Avaa tai sulje valikko",
@@ -2978,5 +2980,22 @@
     "missingBody": "Se on ehkä siirretty tai poistettu. Muut kirjoitukset ovat yhden klikkauksen päässä.",
     "allPosts": "Kaikki kirjoitukset",
     "morePosts": "Lisää blogista"
+  },
+  "focus": {
+    "chip": "Fokus",
+    "title": "Keskity",
+    "activeTitle": "Fokus: {{label}}",
+    "area": "Alue",
+    "anyArea": "Mikä tahansa alue",
+    "project": "Projekti",
+    "anyProject": "Mikä tahansa projekti",
+    "tags": "Tunnisteet",
+    "hint": "Tänään, Tulossa, Tehtävät, Projektit, Muistiinpanot ja haku näyttävät vain tämän. Uudet tehtävät saavat projektin ja tunnisteet.",
+    "apply": "Käytä",
+    "clear": "Tyhjennä",
+    "clearFocus": "Poista fokus",
+    "locked": "Fokuksesi asettama. Poista se yläpalkin merkistä.",
+    "emptyHint": "Näytetään vain {{label}}",
+    "saveError": "Fokusta ei voitu tallentaa."
   }
 }

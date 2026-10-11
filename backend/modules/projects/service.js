@@ -7,7 +7,9 @@ const { validateUid, validateName, formatDate } = require('./validation');
 const { NotFoundError, ValidationError } = require('../../shared/errors');
 const { validateTagName } = require('../tags/tagsService');
 const permissionsService = require('../../services/permissionsService');
+const scopeService = require('../../services/scopeService');
 const { sortTags } = require('../tasks/core/serializers');
+const { getBlockedCountMap } = require('../tasks/relations/service');
 const {
     getSafeTimezone,
     processDueDateForResponse,
@@ -94,10 +96,13 @@ class ProjectsService {
             active,
             pin_to_sidebar,
             area_id,
-            area,
             grouped,
+            project_uid,
+            tags,
         } = query;
         const statusFilter = status || state;
+        // area_uid is the Focus scope's spelling of the area filter
+        const area = query.area || query.area_uid;
 
         // Resolve area filter target ID (used after applying per-user overrides)
         let areaFilterId = null;
@@ -117,6 +122,18 @@ class ProjectsService {
             'project',
             userId
         );
+
+        // A Focus scope narrows the list to one project and/or projects
+        // carrying every given tag. The area part keeps the override-aware
+        // in-memory filter below.
+        const scope = await scopeService.resolveScope(
+            { project_uid, tags },
+            userId
+        );
+        const scopeWhere = await scopeService.projectScopeWhere(scope);
+        if (scopeWhere) {
+            whereClause = scopeService.withScope(whereClause, scopeWhere);
+        }
 
         if (statusFilter && statusFilter !== 'all') {
             // status is an ENUM column: PostgreSQL rejects unknown labels
@@ -284,10 +301,19 @@ class ProjectsService {
         const safeTimezone = getSafeTimezone(userTimezone);
         const projectJson = project.toJSON();
 
+        // Same blocked flags the task serializer adds, so the "Blocked" badge
+        // on the project page comes from the server and survives a reload.
+        const blockedCountMap = await getBlockedCountMap(
+            (projectJson.Tasks || []).map((task) => task.id)
+        );
+
         const normalizedTasks = projectJson.Tasks
             ? projectJson.Tasks.map((task) => {
+                  const blockedByCount = blockedCountMap[task.id] || 0;
                   const normalizedTask = {
                       ...task,
+                      blocked_by_count: blockedByCount,
+                      is_blocked: blockedByCount > 0,
                       tags: sortTags(task.Tags),
                       subtasks: (task.Subtasks || []).map((subtask) => ({
                           ...subtask,

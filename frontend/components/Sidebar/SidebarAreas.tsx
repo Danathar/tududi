@@ -78,7 +78,6 @@ const SidebarAreas: React.FC<SidebarAreasProps> = ({
                     }`}
                     onClick={(e) => {
                         e.stopPropagation();
-                        setIsExpanded(true);
                         handleNavClick(
                             '/areas',
                             'Areas',

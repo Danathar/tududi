@@ -342,6 +342,7 @@
     "norwegian": "Norwegian",
     "polish": "Polish",
     "slovenian": "Slovenian",
+    "slovak": "Slovak",
     "swedish": "Swedish",
     "title": "Profile Settings",
     "appearance": "Appearance",
@@ -685,7 +686,7 @@
       "suggestedLeftOutDay": "Deferred tasks, someday tasks and tasks due more than a day out are left out.",
       "suggestedLeftOutDays": "Deferred tasks, someday tasks and tasks due more than {{count}} days out are left out.",
       "suggestedStale": "So are tasks nobody changed in {{months}} months.",
-      "suggestedCap": "Up to {{count}} are shown.",
+      "suggestedCap": "{{count}} load at first; Show more brings the rest.",
       "suggestionsSaveError": "Could not save your suggestion settings",
       "ruleDueRecent": "The earlier due date first, then the task changed most recently.",
       "ruleDueNewest": "The earlier due date first, then the newest task.",
@@ -709,7 +710,7 @@
       "horizonTitle": "Look ahead",
       "horizonDescription": "Suggest tasks due up to this far ahead.",
       "maxTitle": "Show up to",
-      "maxDescription": "The most tasks to suggest under Everything else.",
+      "maxDescription": "How many Everything else tasks load at first. Show more brings the rest.",
       "maxOption": "{{count}} tasks",
       "intro": "How Plan my day lays out your day and which tasks it offers you.",
       "suggestedTitle": "What gets suggested",
@@ -938,7 +939,7 @@
     },
     "deleteProject": {
       "title": "Delete Project",
-      "message": "Deleting this project will remove the project only. All items inside will be retained but will no longer belong to any project. Continue?"
+      "message": "Deleting the project \"{{projectName}}\" will remove the project only. All items inside will be retained but will no longer belong to any project. Continue?"
     },
     "deleteGoal": {
       "title": "Delete Goal",
@@ -1123,7 +1124,61 @@
     "createdAndAssigned": "Project created and assigned",
     "createError": "Failed to create project",
     "viewProject": "Go to project",
-    "attachments": "Attachments"
+    "attachments": "Attachments",
+    "overview": "Overview",
+    "people": "People",
+    "info": "Project info",
+    "clickToEdit": "Click to edit",
+    "addDescription": "Add a description",
+    "changeArea": "Change area",
+    "setArea": "Set area",
+    "changeGoal": "Change goal",
+    "setGoal": "Set goal",
+    "changePriority": "Change priority",
+    "setPriority": "Set priority",
+    "changeDue": "Change due date",
+    "changeTags": "Change tags",
+    "addTags": "Add tags",
+    "changeColor": "Change color",
+    "setColor": "Set color",
+    "moreOptions": "More options",
+    "pin": "Pin",
+    "pinned": "Pinned",
+    "started": "Started",
+    "startedOn": "Started {{date}}",
+    "daysToDue_one": "{{count}} day to due date",
+    "daysToDue_other": "{{count}} days to due date",
+    "daysOverdue_one": "{{count}} day overdue",
+    "daysOverdue_other": "{{count}} days overdue",
+    "progressSummary": "Project progress · {{done}} of {{total}} tasks done",
+    "timeUsed": "{{percent}}% of time used",
+    "progressHint": "Bar: tasks done. Line: time passed between start and due date.",
+    "openTasks": "Open tasks",
+    "overdueTasks": "Overdue",
+    "doneThisWeek": "Done this week",
+    "untilDate": "Until {{date}}",
+    "pastDate": "Past {{date}}",
+    "memberCount_one": "{{count}} member",
+    "memberCount_other": "{{count}} members",
+    "noteCount_one": "{{count}} note",
+    "noteCount_other": "{{count}} notes",
+    "roleOwner": "Owner",
+    "rolePending": "Invited",
+    "roleEdit": "Can edit",
+    "roleView": "Can view",
+    "notShared": "Only you can see this project.",
+    "addNote": "Add note",
+    "noNotesYet": "No notes yet.",
+    "allNotes": "All notes",
+    "fewerNotes": "Show fewer",
+    "fileCount_one": "{{count}} file",
+    "fileCount_other": "{{count}} files",
+    "addFile": "Add file",
+    "uploading": "Uploading...",
+    "noFilesYet": "No files yet. Drop files here or use +.",
+    "allFiles": "All files",
+    "dropToUpload": "Drop to upload",
+    "fewerFiles": "Show fewer"
   },
   "errors": {
     "required": "This field is required",
@@ -1417,6 +1472,14 @@
     "placeholder": "Add a subtask..."
   },
   "projects": {
+    "table": {
+      "name": "Name",
+      "status": "Status",
+      "summary": "Summary",
+      "members": "Members",
+      "due": "Due",
+      "progress": "Progress"
+    },
     "addProject": "Add Project",
     "loading": "Loading projects...",
     "error": "Error loading projects",
@@ -1547,7 +1610,12 @@
     "deleteGoal": "Delete goal",
     "moveBackToUnlinked": "Move back to unlinked",
     "horizonSeason": "Season",
-    "horizonYear": "Year"
+    "horizonYear": "Year",
+    "presetsLabel": "Most people start with",
+    "presetHome": "Home",
+    "presetWork": "Work",
+    "presetHealth": "Health",
+    "presetFamily": "Family"
   },
   "notes": {
     "addNote": "Add Note",
@@ -1608,10 +1676,12 @@
     },
     "deleteNote": "Delete Note",
     "deleteNoteConfirm": "Are you sure you want to delete the note \"{{title}}\"?",
-    "untitled": "Untitled Note"
+    "untitled": "Untitled Note",
+    "openInNotes": "Open in Notes"
   },
   "tags": {
     "addTag": "Add Tag",
+    "new": "New Tag",
     "loading": "Loading tags...",
     "searchPlaceholder": "Search tags...",
     "title": "Tags",
@@ -1789,7 +1859,11 @@
     "perDay": "a day",
     "weekdays": "Weekdays",
     "weekends": "Weekends",
-    "quitTarget": "Avoid"
+    "quitTarget": "Avoid",
+    "presetsLabel": "Or start with",
+    "presetWalk": "Morning walk",
+    "presetRead": "Read 20 minutes",
+    "presetReview": "Weekly review"
   },
   "recurrence": {
     "none": "None",
@@ -2078,6 +2152,8 @@
       "subtitle": "tududi {{version}} · {{env}}",
       "users": "Users",
       "usersHint": "{{verified}} verified · {{admins}} admin · {{new}} today",
+      "emptyAccounts": "Nothing created",
+      "emptyAccountsHint": "accounts that never created anything ({{pct}}% of users)",
       "paying": "Paying",
       "selfHosted": "self-hosted",
       "waitlist": "Waitlist",
@@ -2265,7 +2341,24 @@
       "paidByOwner": "Yes, by owner",
       "paidYes": "Yes",
       "paidBefore": "Not now, paid before",
-      "paidNo": "No"
+      "paidNo": "No",
+      "items": "Items",
+      "itemsCreated_one": "{{count}} item",
+      "itemsCreated_other": "{{count}} items",
+      "lastCreated": "Last on {{date}}",
+      "nothingCreated": "Nothing yet",
+      "kinds": {
+        "tasks": "Tasks",
+        "habits": "Habits",
+        "projects": "Projects",
+        "notes": "Notes",
+        "areas": "Areas",
+        "goals": "Goals",
+        "tags": "Tags",
+        "people": "People",
+        "views": "Views",
+        "inbox": "Inbox"
+      }
     },
     "userFilter": {
       "filter": "Filter",
@@ -2279,12 +2372,34 @@
       "verification": "Email",
       "verified": "Verified",
       "unverified": "Not verified",
+      "activity": "Activity",
+      "created": "Created something",
+      "nothingCreated": "Nothing created yet",
       "plan": "Plan",
       "trial": "On trial",
       "trialEnded": "Trial ended",
       "paid": "Paying",
       "paidBefore": "Paid before",
       "neverPaid": "Never paid"
+    },
+    "trends": {
+      "title": "Last 7 days",
+      "signups": "signups",
+      "vsLastWeek": "{{diff}} vs last week",
+      "chartLabel": "Signups per day",
+      "barTitle": "{{date}}: {{n}} signups ({{prev}} a week before)",
+      "activation": "Activated",
+      "activationHint": "{{n}} of {{total}} new users created something",
+      "active": "Active users",
+      "activeHint": "created something this week",
+      "waitlist": "Waitlist joins",
+      "trialsStarted": "Trials started",
+      "trialsEnding": "Trials ending in 7 days",
+      "churn": "Canceled · failed payments",
+      "firstPlan": "Planned a first day",
+      "firstPlanHint": "{{n}} of {{total}} new users planned 3+ tasks",
+      "threeDays": "Kept planning",
+      "threeDaysHint": "{{n}} of {{total}} of last week's signups planned 3 days"
     }
   },
   "billing": {
@@ -2898,7 +3013,8 @@
     "movedOffPlan": "'{{name}}' is no longer due today, so it left today's plan.",
     "tips": {
       "title": "Planning tips",
-      "missed": "{{count}} planned blocks already passed",
+      "missed_one": "{{count}} planned block already passed",
+      "missed_other": "{{count}} planned blocks already passed",
       "moveMissed": "Move to next free slots",
       "overbooked": "Planned {{planned}}, only {{free}} free: {{over}} over",
       "gapFit": "{{gap}} free at {{time}} fits {{name}} ({{duration}})",
@@ -3017,7 +3133,15 @@
     "filesAttached_other": "{{count}} files attached."
   },
   "attachments": {
-    "limitReached": "Maximum 20 attachments allowed"
+    "limitReached": "Maximum 20 attachments allowed",
+    "addTitle": "Add a title",
+    "title": "Title",
+    "download": "Download",
+    "noPreview": "No preview for this file type.",
+    "previous": "Previous file",
+    "next": "Next file",
+    "renameError": "Could not save the title",
+    "confirmDelete": "Delete file?"
   },
   "area": {
     "loadError": "Failed to load areas"
@@ -3152,5 +3276,31 @@
     "missingBody": "It may have moved or been taken down. The other posts are one click away.",
     "allPosts": "All posts",
     "morePosts": "More from the blog"
+  },
+  "focus": {
+    "chip": "Focus",
+    "title": "Focus on",
+    "activeTitle": "Focus: {{label}}",
+    "area": "Area",
+    "anyArea": "Any area",
+    "project": "Project",
+    "anyProject": "Any project",
+    "tags": "Tags",
+    "hint": "Today, Upcoming, Tasks, Projects, Notes and search show only this. New tasks get the project and tags.",
+    "apply": "Apply",
+    "clear": "Clear",
+    "clearFocus": "Clear focus",
+    "locked": "Set by your Focus. Clear it from the chip in the top bar.",
+    "emptyHint": "Showing {{label}} only",
+    "saveError": "Could not save the focus."
+  },
+  "onboarding": {
+    "starter": {
+      "kicker": "Welcome to tududi",
+      "welcomeTitle": "Take a look at what you can do with tududi in a minute",
+      "videoTitle": "A one minute tour of tududi",
+      "letsStart": "I'm done, let's start",
+      "settingUp": "Setting up..."
+    }
   }
 }

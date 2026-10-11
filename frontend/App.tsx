@@ -61,8 +61,10 @@ import PersonDetails from './components/People/PersonDetails';
 import EveryoneDashboard from './components/Everyone/EveryoneDashboard';
 import Templates from './components/Templates/Templates';
 import { setCurrentUser as setUserInStorage } from './utils/userUtils';
+import type { StarterResult } from './utils/onboardingService';
 import { getApiPath, getLocalesPath } from './config/paths';
 import { useStore } from './store/useStore';
+import { sanitizeFocus } from './utils/focus';
 import { invalidateProfileCache } from './utils/profileService';
 import { notifySwSession, notifySwClearCache } from './utils/swUtils';
 import { resyncPush } from './utils/pushService';
@@ -76,6 +78,7 @@ const PublicNotePage = lazy(
 );
 const BlogApp = lazy(() => import('./components/Blog/BlogApp'));
 const PlanMyDay = lazy(() => import('./components/DailyPlan/PlanMyDay'));
+const Welcome = lazy(() => import('./components/Onboarding/Welcome'));
 // Lazy load Tasks component to prevent issues with tags loading
 const Tasks = lazy(() => import('./components/Tasks'));
 // Declared at module scope: the users page switches tabs through the query
@@ -178,6 +181,11 @@ const App: React.FC = () => {
                     .userSettingsStore.setSidebarWidthPercent(
                         data.user.sidebar_settings?.widthPercent
                     );
+                useStore
+                    .getState()
+                    .userSettingsStore.setFocus(
+                        sanitizeFocus(data.user.ui_settings?.focus)
+                    );
             } else {
                 setCurrentUser(null);
                 setUserInStorage(null);
@@ -238,6 +246,20 @@ const App: React.FC = () => {
 
         navigate('/inbox', { replace: true });
     }, [currentUser, location.pathname, navigate]);
+
+    // The welcome page is done with: Today opens.
+    const finishWelcome = (result: StarterResult) => {
+        const user = currentUser
+            ? {
+                  ...currentUser,
+                  onboarded_at: result.onboarded_at,
+                  onboarding_starter: result.onboarding_starter,
+              }
+            : null;
+        if (user) setUserInStorage(user);
+        setCurrentUser(user);
+        navigate('/today', { replace: true });
+    };
 
     // The Inbox keeps offering a claimed share while the user stays on it (the
     // page remounts whenever Layout shows its first-load spinner), so the claim
@@ -391,7 +413,13 @@ const App: React.FC = () => {
                                         isDarkMode={isDarkMode}
                                         toggleDarkMode={toggleDarkMode}
                                     >
-                                        <Outlet />
+                                        {currentUser.onboarding_starter ===
+                                            null &&
+                                        location.pathname !== '/welcome' ? (
+                                            <Navigate to="/welcome" replace />
+                                        ) : (
+                                            <Outlet />
+                                        )}
                                     </Layout>
                                 </SubscriptionGate>
                             }
@@ -401,6 +429,18 @@ const App: React.FC = () => {
                                 element={<Navigate to="/today" replace />}
                             />
                             <Route path="/today" element={<TodayPage />} />
+                            <Route
+                                path="/welcome"
+                                element={
+                                    currentUser.onboarding_starter === null ? (
+                                        <Suspense fallback={<LoadingScreen />}>
+                                            <Welcome onDone={finishWelcome} />
+                                        </Suspense>
+                                    ) : (
+                                        <Navigate to="/today" replace />
+                                    )
+                                }
+                            />
                             <Route
                                 path="/today_legacy"
                                 element={<Navigate to="/today" replace />}
@@ -495,6 +535,10 @@ const App: React.FC = () => {
                             <Route path="/inbox" element={<InboxItems />} />
                             <Route path="/habits" element={<Habits />} />
                             <Route
+                                path="/habit/new"
+                                element={<Navigate to="/habits" replace />}
+                            />
+                            <Route
                                 path="/habit/:uid"
                                 element={<HabitDetails />}
                             />
@@ -515,6 +559,10 @@ const App: React.FC = () => {
                                 element={<TagDetails />}
                             />
                             <Route path="/goals" element={<Goals />} />
+                            <Route
+                                path="/goal/new"
+                                element={<Navigate to="/goals" replace />}
+                            />
                             <Route
                                 path="/goal/:uidSlug"
                                 element={<GoalDetails />}
