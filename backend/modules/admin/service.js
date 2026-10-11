@@ -27,6 +27,7 @@ const { isAdmin } = rolesService;
 const { sequelize } = require('../../models');
 const { destroyUserSessions } = require('../../services/sessionService');
 const { getConfig } = require('../../config/config');
+const { getBuildInfo } = require('../../services/buildInfo');
 
 class AdminService {
     /**
@@ -755,6 +756,7 @@ class AdminService {
                     ? registrationSetting.value === 'true'
                     : false,
                 version: require('../../../package.json').version,
+                build: getBuildInfo(),
                 environment: config.environment,
             },
         };

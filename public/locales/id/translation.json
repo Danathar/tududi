@@ -1811,6 +1811,7 @@
   "about": {
     "title": "Tentang",
     "version": "Versi",
+    "build": "Build",
     "description": "Manajemen tugas yang dihosting sendiri dengan organisasi hierarkis, dukungan multi-bahasa, dan integrasi Telegram. Dibangun dengan cinta untuk para penggemar produktivitas.",
     "madeWithLove": "Dibuat dengan cinta",
     "appreciation": "Terima kasih telah menggunakan tududi! Dukungan Anda membantu menjaga proyek ini tetap hidup dan berkembang. Jika Anda merasa ini berguna, pertimbangkan untuk mendukung pengembangannya.",

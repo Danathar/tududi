@@ -21,6 +21,7 @@ const {
 const { MIN_LENGTH_POLICY_MESSAGE } = require('../users/userService');
 const peopleService = require('../people/service');
 const packageJson = require('../../../package.json');
+const { getBuildInfo } = require('../../services/buildInfo');
 const { getRoleInfo } = require('../../services/rolesService');
 const {
     ValidationError,
@@ -32,7 +33,7 @@ const {
 
 class AuthService {
     getVersion() {
-        return { version: packageJson.version };
+        return { version: packageJson.version, build: getBuildInfo() };
     }
 
     async getRegistrationStatus() {

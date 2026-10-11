@@ -70,6 +70,14 @@ CalVer, or add a suffix. Backups embed that version, and
 be newer than the running app. A fork-only version would block restores in one
 direction or the other.
 
+Instead, the build is identified by its commit. `docker-publish.yml` passes
+`TUDUDI_BUILD_COMMIT` and `TUDUDI_BUILD_DATE` (the commit date, so both
+platforms agree) as build args, the image exposes them as env,
+`GET /api/version` returns them as `build` (`backend/services/buildInfo.js`),
+and the About page and sidebar footer show `build.tag`, which equals the
+image's `:v<version>-<short commit>` tag. `build` is `null` outside such an
+image.
+
 ## Agent tooling
 
 These files steer AI tools in this repository. All of them inherit the fork

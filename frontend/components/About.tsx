@@ -5,6 +5,12 @@ import { Navigate } from 'react-router-dom';
 import { getApiPath } from '../config/paths';
 import { getFeatureFlags } from '../utils/featureFlags';
 
+interface BuildInfo {
+    tag: string;
+    url: string;
+    date: string | null;
+}
+
 interface AboutProps {
     isDarkMode?: boolean;
 }
@@ -12,6 +18,7 @@ interface AboutProps {
 const About: React.FC<AboutProps> = ({ isDarkMode = false }) => {
     const { t } = useTranslation();
     const [version, setVersion] = useState<string>('0.3');
+    const [build, setBuild] = useState<BuildInfo | null>(null);
     // The page is about the open source project and its donations, which
     // is not what a hosted account is paying for, so hosted sends it home.
     const [hosted, setHosted] = useState(false);
@@ -27,6 +34,9 @@ const About: React.FC<AboutProps> = ({ isDarkMode = false }) => {
             .then((data) => {
                 if (data.version) {
                     setVersion(data.version);
+                }
+                if (data.build && data.build.tag && data.build.url) {
+                    setBuild(data.build);
                 }
             })
             .catch((error) => {
@@ -63,6 +73,20 @@ const About: React.FC<AboutProps> = ({ isDarkMode = false }) => {
                         <p className="text-lg text-gray-600 dark:text-gray-400">
                             {t('about.version', 'Version')} {version}
                         </p>
+                        {build && (
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {t('about.build', 'Build')}{' '}
+                                <a
+                                    href={build.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                                >
+                                    {build.tag}
+                                </a>
+                                {build.date && ` · ${build.date.slice(0, 10)}`}
+                            </p>
+                        )}
                     </div>
 
                     {/* Description */}

@@ -1811,6 +1811,7 @@
   "about": {
     "title": "Informazioni",
     "version": "Versione",
+    "build": "Build",
     "description": "Gestione delle attività self-hosted con organizzazione gerarchica, supporto multilingue e integrazione con Telegram. Costruito con amore per gli appassionati di produttività.",
     "madeWithLove": "Fatto con amore",
     "appreciation": "Grazie per utilizzare tududi! Il tuo supporto aiuta a mantenere vivo e in crescita questo progetto. Se lo trovi utile, considera di supportare lo sviluppo.",

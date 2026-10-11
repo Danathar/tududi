@@ -1811,6 +1811,7 @@
   "about": {
     "title": "Om",
     "version": "Version",
+    "build": "Bygge",
     "description": "Självhostad uppgiftshantering med hierarkisk organisering, flerspråkigt stöd och Telegram-integration. Utvecklat med kärlek för produktivitetsentusiaster.",
     "madeWithLove": "Utvecklat med kärlek",
     "appreciation": "Tack för att du använder tududi! Ditt stöd hjälper till att hålla projektet växande och vid liv. Om du tycker att det är användbart, överväg gärna att stödja utvecklingen.",

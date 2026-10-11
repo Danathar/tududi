@@ -1811,6 +1811,7 @@
   "about": {
     "title": "Over",
     "version": "Versie",
+    "build": "Build",
     "description": "Zelf-gehoste taakbeheer met hiërarchische organisatie, meertalige ondersteuning en Telegram-integratie. Gebouwd met liefde voor productiviteitsliefhebbers.",
     "madeWithLove": "Gemaakt met liefde",
     "appreciation": "Bedankt voor het gebruik van tududi! Jouw steun helpt dit project levend en groeiend te houden. Als je het nuttig vindt, overweeg dan om de ontwikkeling te steunen.",
