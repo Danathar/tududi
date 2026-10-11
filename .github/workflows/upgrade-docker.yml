@@ -23,6 +23,7 @@ permissions:
 jobs:
   upgrade:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     env:
       OLD_IMAGE: ${{ github.event.inputs.old_image || 'chrisvel/tududi:1.4.2' }}
