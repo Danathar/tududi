@@ -44,6 +44,7 @@ jobs:
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
 
     permissions:
       contents: read
@@ -110,6 +111,7 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     permissions:
       contents: read
