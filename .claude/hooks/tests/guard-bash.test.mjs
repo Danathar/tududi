@@ -306,6 +306,10 @@ const blockedLocal = [
     ["echo --import=data:text/javascript,0 | xargs -n9 node --test", 'xargs node'],
     ["echo --node-options=--import=data:text/javascript,0 | xargs npm test", 'xargs npm'],
     ['find . -name x | xargs -I{} timeout 5 git diff {}', 'xargs git'],
+    // A wrapper in front of xargs does not hide it.
+    ["printf '%s\\n' --output=/home/u/.bashrc | nice xargs git log -1", 'xargs git'],
+    ["printf '%s\\n' /dev/null .env | timeout 5 xargs git diff", 'xargs git'],
+    ["echo --import=data:text/javascript,0 | nohup xargs node --test", 'xargs node'],
 ];
 
 for (const command of allowed) {
