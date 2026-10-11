@@ -55,7 +55,9 @@ getting around those rules: it blocks code-loading flags and variables
 `npm_config_*`), test-runner options that load modules or write files, git
 options that read or write arbitrary files (`--output`, `--no-index`, `-O`,
 `format-patch -o`), and git pagers, external diffs and config keys that run
-programs. If a task needs one of those, the owner runs it.
+programs. It also refuses git, node, npm or a shell run through `xargs`, which
+appends arguments read at run time that none of those checks can see. If a task
+needs one of those, the owner runs it.
 
 If a secret reaches a commit, issue, log or prompt, stop and tell the owner so
 it can be rotated. Deleting the commit does not undo the exposure. Add new

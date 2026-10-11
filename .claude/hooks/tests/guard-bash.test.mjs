@@ -104,6 +104,7 @@ const allowed = [
     'GIT_AUTHOR_NAME=x GIT_AUTHOR_EMAIL=y git commit -m msg',
     'git -c color.ui=always diff',
     'env FOO=1 npm test',
+    "git ls-files '*.js' | xargs grep -l TODO",
 ];
 
 const blocked = [
@@ -298,6 +299,13 @@ const blockedLocal = [
     ['git config core.fsmonitor ./evil.sh', 'core.fsmonitor'],
     ['git config alias.st "!sh evil"', 'alias.st'],
     ['git --exec-path=/tmp/evil log', 'exec-path'],
+    // xargs appends run-time words no argument check sees.
+    ["printf '%s\\n' --output=/home/u/.bashrc | xargs git log -1 --format=format:x", 'xargs git'],
+    ["printf '%s\\n' /dev/null .env | xargs git diff", 'xargs git'],
+    ['xargs -a args.txt git show', 'xargs git'],
+    ["echo --import=data:text/javascript,0 | xargs -n9 node --test", 'xargs node'],
+    ["echo --node-options=--import=data:text/javascript,0 | xargs npm test", 'xargs npm'],
+    ['find . -name x | xargs -I{} timeout 5 git diff {}', 'xargs git'],
 ];
 
 for (const command of allowed) {

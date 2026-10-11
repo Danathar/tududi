@@ -36,7 +36,6 @@ const KNOWN_GAPS = new Set([
     'tilde-operand',
     'command-substitution',
     'backtick-substitution',
-    'xargs-operands',
     'wrapper-timeout',
     'later-line',
     'later-separator',
