@@ -491,9 +491,7 @@ const GroupedTaskList: React.FC<GroupedTaskListProps> = ({
     return (
         <div
             className={`task-list-container ${
-                groupBy === 'project' && groupedByProject
-                    ? 'space-y-1.5'
-                    : TASK_SHEET_CLASS
+                groupedByKey ? 'space-y-1.5' : TASK_SHEET_CLASS
             }`}
         >
             {/* Standalone tasks */}
