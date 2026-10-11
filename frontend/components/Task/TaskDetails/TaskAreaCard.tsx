@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRightIcon, RectangleStackIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { Area } from '../../../entities/Area';
 import { Task } from '../../../entities/Task';
+import { getEffectiveArea } from '../taskArea';
 
 interface TaskAreaCardProps {
     task: Task;
@@ -25,7 +26,7 @@ const TaskAreaCard: React.FC<TaskAreaCardProps> = ({
     const [searchQuery, setSearchQuery] = useState('');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    const effectiveArea = task.Area || (task.Project as any)?.Area || null;
+    const effectiveArea = getEffectiveArea(task);
     const isInherited = !task.Area && !!task.Project?.area_id;
 
     useEffect(() => {

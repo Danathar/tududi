@@ -24,6 +24,7 @@ import { Task } from '../../entities/Task';
 import { GroupedTasks } from '../../utils/tasksService';
 import { isTaskActive } from '../../constants/taskStatus';
 import { TASK_SHEET_CLASS } from './taskSheet';
+import { getEffectiveArea } from './taskArea';
 
 interface GroupedTaskListProps {
     tasks: Task[];
@@ -290,8 +291,7 @@ const GroupedTaskList: React.FC<GroupedTaskListProps> = ({
         const byProject = new Map<string, ProjectGroup>();
         filteredBySearch.forEach((task) => {
             if (groupBy === 'area') {
-                // A task's own area wins over the area of its project.
-                const area = task.Area || task.Project?.Area;
+                const area = getEffectiveArea(task);
                 const areaKey =
                     area?.id != null ? `area-${area.id}` : 'no_area';
                 if (!byProject.has(areaKey)) {
