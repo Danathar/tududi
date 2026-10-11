@@ -34,6 +34,9 @@ const { logError } = require('../../services/logService');
 const { logEvent } = require('./taskEventService');
 
 const { serializeTask, serializeTasks } = require('./core/serializers');
+const {
+    applyViewerProjectAreas,
+} = require('../../services/projectAreaOverrides');
 const { updateTaskTags } = require('./operations/tags');
 const { filterTasksByParams } = require('./queries/query-builders');
 const {
@@ -379,6 +382,16 @@ router.get('/tasks', async (req, res) => {
             await scopeService.taskScopeWhere(scope)
         );
 
+        // A shared project shows in the area the viewer placed it in.
+        await applyViewerProjectAreas(
+            [
+                ...response.tasks,
+                ...Object.values(response.groupedTasks || {}).flat(),
+                ...Object.values(response.dashboard_lists || {}).flat(),
+            ],
+            userId
+        );
+
         if (hasPagination) {
             response.pagination = {
                 total: totalCount,
@@ -566,6 +579,7 @@ router.post(
                 req.currentUser.timezone,
                 { skipDisplayNameTransform: true }
             );
+            await applyViewerProjectAreas([serializedTask], req.currentUser.id);
 
             res.set({
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -605,6 +619,7 @@ router.get('/task/:uid', requireTaskReadAccess, async (req, res) => {
             req.currentUser.timezone,
             { skipDisplayNameTransform: true }
         );
+        await applyViewerProjectAreas([serializedTask], req.currentUser.id);
 
         res.json(serializedTask);
     } catch (error) {
@@ -1001,6 +1016,7 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
             req.currentUser.timezone,
             { skipDisplayNameTransform: true }
         );
+        await applyViewerProjectAreas([serializedTask], req.currentUser.id);
 
         res.json(serializedTask);
     } catch (error) {

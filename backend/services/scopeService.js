@@ -10,6 +10,7 @@ const { Op } = require('sequelize');
 const { Area, Project, UserProjectArea } = require('../models');
 const permissionsService = require('./permissionsService');
 const searchRepository = require('../modules/search/repository');
+const { isAreaOverridden } = require('./projectAreaOverrides');
 
 function splitTags(value) {
     const raw = Array.isArray(value) ? value : String(value).split(',');
@@ -66,8 +67,7 @@ async function projectIdsInArea(areaId, userId) {
     projects.forEach((project) => {
         const override = overrideByProject.get(project.id);
         const movedElsewhere =
-            project.user_id !== userId &&
-            override !== undefined &&
+            isAreaOverridden(project.user_id, userId, override) &&
             override !== areaId;
         if (!movedElsewhere) ids.add(project.id);
     });
