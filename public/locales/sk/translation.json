@@ -1982,6 +1982,7 @@
     "about": {
         "title": "O aplikácii",
         "version": "Verzia",
+        "build": "Zostavenie",
         "description": "Správa úloh na vlastnom serveri s hierarchickou organizáciou, podporou viacerých jazykov a integráciou s Telegramom. Vytvorené s láskou pre nadšencov produktivity.",
         "madeWithLove": "Vytvorené s láskou",
         "appreciation": "Ďakujeme, že používate tududi! Vaša podpora pomáha udržať tento projekt nažive a rozvíjať ho. Ak vám je užitočný, zvážte podporu jeho vývoja.",

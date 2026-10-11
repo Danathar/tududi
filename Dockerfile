@@ -50,6 +50,13 @@ FROM node:22-alpine AS production
 LABEL service="tududi" \
       org.opencontainers.image.source="https://github.com/chrisvel/tududi"
 
+# The fork build, passed in by docker-publish.yml and read by GET /api/version.
+# Empty defaults keep a plain local `docker build` working.
+ARG TUDUDI_BUILD_COMMIT=""
+ARG TUDUDI_BUILD_DATE=""
+ENV TUDUDI_BUILD_COMMIT=$TUDUDI_BUILD_COMMIT \
+    TUDUDI_BUILD_DATE=$TUDUDI_BUILD_DATE
+
 ENV APP_UID=1001
 ENV APP_GID=1001
 

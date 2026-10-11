@@ -1798,6 +1798,7 @@
   "about": {
     "title": "Acerca de",
     "version": "Versión",
+    "build": "Compilación",
     "description": "Gestión de tareas autohospedada con organización jerárquica, soporte multilingüe e integración con Telegram. Construido con amor para los entusiastas de la productividad.",
     "madeWithLove": "Hecho con amor",
     "appreciation": "¡Gracias por usar tududi! Su apoyo ayuda a mantener este proyecto vivo y en crecimiento. Si lo encuentra útil, considere apoyar el desarrollo.",

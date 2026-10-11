@@ -1811,6 +1811,7 @@
   "about": {
     "title": "O",
     "version": "Različica",
+    "build": "Gradnja",
     "description": "Samostojno upravljanje nalog z hierarhično organizacijo, podporo za več jezikov in integracijo s Telegramom. Zgrajeno z ljubeznijo do navdušencev nad produktivnostjo.",
     "madeWithLove": "Zgrajeno z ljubeznijo",
     "appreciation": "Hvala, da uporabljate tududi! Vaša podpora pomaga ohranjati ta projekt živ in rastoč. Če ga najdete koristnega, razmislite o podpori razvoju.",

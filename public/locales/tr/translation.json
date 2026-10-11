@@ -1811,6 +1811,7 @@
   "about": {
     "title": "Hakkında",
     "version": "Sürüm",
+    "build": "Derleme",
     "description": "Hiyerarşik organizasyon, çok dilli destek ve Telegram entegrasyonu ile kendi sunucunuzda barındırılan görev yönetimi. Üretkenlik tutkunları için sevgiyle inşa edildi.",
     "madeWithLove": "Sevgiyle yapıldı",
     "appreciation": "tududi'yi kullandığınız için teşekkür ederiz! Desteğiniz bu projenin yaşamasına ve büyümesine yardımcı oluyor. Eğer faydalı buluyorsanız, geliştirmeyi desteklemeyi düşünün.",

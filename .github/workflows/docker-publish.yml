@@ -70,12 +70,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
+      - name: Resolve build info
+        id: buildinfo
+        run: |
+          echo "commit=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo "date=$(git show -s --format=%cI HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Build and push by digest
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           platforms: ${{ matrix.platform }}
+          build-args: |
+            TUDUDI_BUILD_COMMIT=${{ steps.buildinfo.outputs.commit }}
+            TUDUDI_BUILD_DATE=${{ steps.buildinfo.outputs.date }}
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           labels: |
             org.opencontainers.image.source=https://github.com/Danathar/tududi
@@ -90,6 +99,8 @@ jobs:
         run: |
           docker run --rm --entrypoint sh "$IMAGE@$DIGEST" -c \
             "cd /app/backend && node -e \"require('sequelize'); require('sqlite3'); require('express')\""
+          docker run --rm --entrypoint sh "$IMAGE@$DIGEST" -c \
+            "test \"\$TUDUDI_BUILD_COMMIT\" = \"$GITHUB_SHA\""
 
       - name: Export digest
         env:

@@ -2071,6 +2071,7 @@
   "about": {
     "title": "About",
     "version": "Version",
+    "build": "Build",
     "description": "Self-hosted task management with hierarchical organization, multi-language support, and Telegram integration. Built with love for productivity enthusiasts.",
     "madeWithLove": "Made with love",
     "appreciation": "Thank you for using tududi! Your support helps keep this project alive and growing. If you find it useful, consider supporting the development.",

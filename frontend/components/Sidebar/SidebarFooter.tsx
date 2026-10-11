@@ -108,7 +108,9 @@ const SidebarFooter: React.FC<SidebarFooterProps> = ({
         fetch(getApiPath('version'))
             .then((response) => response.json())
             .then((data) => {
-                if (data.version) {
+                if (data.build && data.build.tag) {
+                    setVersion(data.build.tag);
+                } else if (data.version) {
                     setVersion(data.version);
                 }
             })

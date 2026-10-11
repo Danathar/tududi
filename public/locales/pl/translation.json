@@ -1811,6 +1811,7 @@
   "about": {
     "title": "O aplikacji",
     "version": "Wersja",
+    "build": "Kompilacja",
     "description": "Samodzielnie hostowane zarządzanie zadaniami z hierarchiczną organizacją, wsparciem dla wielu języków i integracją z Telegramem. Stworzone z miłością dla entuzjastów produktywności.",
     "madeWithLove": "Stworzone z miłością",
     "appreciation": "Dziękujemy za korzystanie z tududi! Twoje wsparcie pomaga utrzymać ten projekt przy życiu i rozwijać go. Jeśli uważasz, że jest przydatny, rozważ wsparcie rozwoju.",
