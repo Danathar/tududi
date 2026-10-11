@@ -42,6 +42,7 @@ const {
     getUpcomingRangeInUTC,
 } = require('../../utils/timezone-utils');
 const permissionsService = require('../../services/permissionsService');
+const habitService = require('../habits/habitService');
 
 const {
     isValidTaskUid,
@@ -82,6 +83,7 @@ const {
 } = require('./operations/recurring');
 
 const { getTaskMetrics } = require('./queries/metrics-computation');
+const scopeService = require('../../services/scopeService');
 
 const { getSubtasks } = require('./operations/subtasks');
 
@@ -98,7 +100,8 @@ function expandRecurringTasks(
     tasks,
     maxDays = 7,
     statusFilter = null,
-    userTimezone = 'UTC'
+    userTimezone = 'UTC',
+    habitDays = new Map()
 ) {
     const expandedTasks = [];
     const moment = require('moment-timezone');
@@ -109,6 +112,20 @@ function expandRecurringTasks(
             task.recurrence_type &&
             task.recurrence_type !== 'none' &&
             !task.recurring_parent_id;
+
+        // Habits follow their own schedule and progress, not the recurrence.
+        if (task.habit_mode && !task.recurring_parent_id) {
+            (habitDays.get(task.id) || []).forEach((day, index) => {
+                expandedTasks.push({
+                    ...(task.toJSON ? task.toJSON() : task),
+                    due_date: day,
+                    is_virtual_occurrence: true,
+                    occurrence_index: index,
+                    virtual_id: `${task.id}_occurrence_${index}`,
+                });
+            });
+            return;
+        }
 
         if (!isRecurring) {
             expandedTasks.push(task);
@@ -185,6 +202,10 @@ router.get('/tasks', async (req, res) => {
 
         await handleRecurringTasks(userId, type);
 
+        // One resolved scope (area_uid / project_uid / tags) serves the
+        // list, the upcoming projects and the Today lists alike.
+        const scope = await scopeService.resolveScope(req.query, userId);
+
         const hasPagination =
             limitParam !== undefined || offsetParam !== undefined;
         const limit = parseInt(limitParam, 10) || 20;
@@ -204,12 +225,20 @@ router.get('/tasks', async (req, res) => {
                 userId,
                 timezone,
                 null,
-                { limit, offset }
+                { limit, offset },
+                scope
             );
             tasks = paged.rows;
             totalCount = paged.count;
         } else {
-            tasks = await filterTasksByParams(req.query, userId, timezone);
+            tasks = await filterTasksByParams(
+                req.query,
+                userId,
+                timezone,
+                null,
+                null,
+                scope
+            );
         }
 
         // Fetch projects with upcoming due dates for the upcoming view
@@ -227,15 +256,21 @@ router.get('/tasks', async (req, res) => {
                 );
 
             upcomingProjects = await Project.findAll({
-                where: {
-                    ...ownedOrShared,
-                    due_date_at: {
-                        [Op.between]: [upcomingRange.start, upcomingRange.end],
+                where: scopeService.withScope(
+                    {
+                        ...ownedOrShared,
+                        due_date_at: {
+                            [Op.between]: [
+                                upcomingRange.start,
+                                upcomingRange.end,
+                            ],
+                        },
+                        status: {
+                            [Op.notIn]: ['done', 'cancelled'],
+                        },
                     },
-                    status: {
-                        [Op.notIn]: ['done', 'cancelled'],
-                    },
-                },
+                    await scopeService.projectScopeWhere(scope)
+                ),
                 order: [['due_date_at', 'ASC NULLS FIRST']],
             });
         }
@@ -243,11 +278,17 @@ router.get('/tasks', async (req, res) => {
         if (type === 'upcoming' && groupBy === 'day') {
             const days = maxDays ? parseInt(maxDays, 10) : 7;
             const safeTimezone = getSafeTimezone(timezone);
+            const habitDays = await habitService.dueDays(
+                tasks,
+                await habitService.getUserContext(userId),
+                days
+            );
             tasks = expandRecurringTasks(
                 tasks,
                 days,
                 req.query.status,
-                safeTimezone
+                safeTimezone,
+                habitDays
             );
         }
 
@@ -334,7 +375,8 @@ router.get('/tasks', async (req, res) => {
             timezone,
             type,
             include_lists,
-            serializationOptions
+            serializationOptions,
+            await scopeService.taskScopeWhere(scope)
         );
 
         if (hasPagination) {
@@ -861,6 +903,10 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
             status: taskAttributes.status,
             completed_at: taskAttributes.completed_at,
         });
+
+        // An example from the welcome screen becomes the user's own task
+        // the first time they change anything about it.
+        if (task.example_of) taskAttributes.example_of = null;
 
         await task.update(taskAttributes);
 

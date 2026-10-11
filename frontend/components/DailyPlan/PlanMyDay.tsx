@@ -35,6 +35,7 @@ import {
     draftDayWithAi,
     estimateWithAi,
 } from '../../utils/dailyPlanService';
+import { focusKey, focusScopeParams, useFocus } from '../../utils/focus';
 import {
     CalendarEvent,
     fetchCalendarEvents,
@@ -77,6 +78,16 @@ import {
 type Mode = 'timeline' | 'list';
 const MODE_KEY = 'dailyPlanMode';
 const SAVE_DELAY_MS = 500;
+// How many more suggestions each "Show more" past the loaded ones asks for.
+const SUGGESTIONS_PAGE = 20;
+
+// The server's count of suggestions, moved by a local add or removal so
+// "Show more" still knows whether anything is left to fetch.
+const countSuggested = (list: PlanCandidates, delta: number) =>
+    Math.max(
+        list.suggested.length + delta,
+        (list.suggested_total ?? list.suggested.length) + delta
+    );
 
 const readMode = (): Mode => {
     try {
@@ -151,6 +162,8 @@ const collisionDetection: CollisionDetection = (args) => {
 
 const PlanMyDay: React.FC = () => {
     const { t, i18n } = useTranslation();
+    const focus = useFocus();
+    const focusId = focusKey(focus);
     const navigate = useNavigate();
     const { showErrorToast, showSuccessToast } = useToast();
     const narrow = useIsNarrow();
@@ -160,6 +173,11 @@ const PlanMyDay: React.FC = () => {
     const [started, setStarted] = useState(false);
     const [items, setItems] = useState<DailyPlanItem[]>([]);
     const [candidates, setCandidates] = useState<PlanCandidates | null>(null);
+    // How many suggestions the server was last asked for; null is the
+    // Planning setting. "Show more" raises it and the whole list reloads,
+    // so the first entries keep their order and refreshes never shrink it.
+    const suggestedLimit = useRef<number | null>(null);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [events, setEvents] = useState<CalendarEvent[]>([]);
     const [refreshingEvents, setRefreshingEvents] = useState(false);
     const [durations, setDurations] = useState<Record<string, number>>({});
@@ -218,9 +236,10 @@ const PlanMyDay: React.FC = () => {
         let cancelled = false;
         (async () => {
             try {
+                const scope = focusScopeParams(focus);
                 const [planResponse, candidateList] = await Promise.all([
-                    fetchDailyPlan(),
-                    fetchPlanCandidates(),
+                    fetchDailyPlan(undefined, scope),
+                    fetchPlanCandidates(undefined, scope),
                 ]);
                 if (cancelled) return;
                 setDate(planResponse.date);
@@ -241,7 +260,7 @@ const PlanMyDay: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, [t]);
+    }, [t, focusId]);
 
     // Calendar feeds belong to the Calendar feature; with it off the day
     // is planned without events.
@@ -266,13 +285,13 @@ const PlanMyDay: React.FC = () => {
     useEffect(() => {
         const refresh = () => {
             if (document.visibilityState !== 'visible') return;
-            fetchPlanCandidates()
+            fetchPlanCandidates(suggestedLimit.current, focusScopeParams(focus))
                 .then(setCandidates)
                 .catch(() => undefined);
         };
         document.addEventListener('visibilitychange', refresh);
         return () => document.removeEventListener('visibilitychange', refresh);
-    }, []);
+    }, [focusId]);
 
     // The server keeps each feed for a while; this asks it to fetch again.
     const refreshEvents = useCallback(async () => {
@@ -502,9 +521,44 @@ const PlanMyDay: React.FC = () => {
                       suggested: current.suggested.filter(
                           (x) => x.uid !== taskUid
                       ),
+                      suggested_total: countSuggested(
+                          current,
+                          current.suggested.some((x) => x.uid === taskUid)
+                              ? -1
+                              : 0
+                      ),
                   }
                 : current
         );
+
+    // The next page of suggestions: everything loaded so far plus one more
+    // page, until the server has nothing left.
+    const loadMoreCandidates = useCallback(async () => {
+        if (!candidates || loadingMore) return;
+        const total = candidates.suggested_total ?? candidates.suggested.length;
+        if (candidates.suggested.length >= total) return;
+        const next = Math.min(
+            total,
+            candidates.suggested.length + SUGGESTIONS_PAGE
+        );
+        setLoadingMore(true);
+        try {
+            const list = await fetchPlanCandidates(
+                next,
+                focusScopeParams(focus)
+            );
+            suggestedLimit.current = next;
+            setCandidates(list);
+        } catch (err) {
+            showErrorToast(
+                err instanceof Error
+                    ? err.message
+                    : t('errors.generic', 'Something went wrong')
+            );
+        } finally {
+            setLoadingMore(false);
+        }
+    }, [candidates, loadingMore, t]);
 
     const handleReschedule = async (
         task: Task,
@@ -559,6 +613,7 @@ const PlanMyDay: React.FC = () => {
                           ),
                           inbox_count: Math.max(0, current.inbox_count - 1),
                           suggested: [task, ...current.suggested],
+                          suggested_total: countSuggested(current, 1),
                       }
                     : current
             );
@@ -597,6 +652,12 @@ const PlanMyDay: React.FC = () => {
                                   suggested: list.suggested.filter(
                                       (task) => !uids.includes(task.uid ?? '')
                                   ),
+                                  suggested_total: countSuggested(
+                                      list,
+                                      -list.suggested.filter((task) =>
+                                          uids.includes(task.uid ?? '')
+                                      ).length
+                                  ),
                               }
                             : list
                     );
@@ -609,6 +670,10 @@ const PlanMyDay: React.FC = () => {
                                 ? {
                                       ...list,
                                       suggested: [...tasks, ...list.suggested],
+                                      suggested_total: countSuggested(
+                                          list,
+                                          tasks.length
+                                      ),
                                   }
                                 : list
                         );
@@ -1104,10 +1169,12 @@ const PlanMyDay: React.FC = () => {
                                 onReschedule={handleReschedule}
                                 onDrop={handleDrop}
                                 onAddInbox={handleAddInbox}
+                                onLoadMore={loadMoreCandidates}
+                                loadingMore={loadingMore}
                                 today={date ?? ''}
                             />
                         </aside>
-                        <section className="min-w-0 flex-1 rounded-xl bg-white px-4 py-5 sm:px-6 md:overflow-y-auto dark:bg-gray-900">
+                        <section className="isolate min-w-0 flex-1 rounded-xl bg-white px-4 py-5 sm:px-6 md:overflow-y-auto dark:bg-gray-900">
                             {aiDraft && (
                                 <section
                                     className="mb-3 flex flex-col gap-2.5 rounded-xl bg-violet-50/70 px-4 py-3 dark:bg-violet-900/15"
@@ -1179,6 +1246,9 @@ const PlanMyDay: React.FC = () => {
                             )}
 
                             {tips.length > 0 && (
+                                // Sticky above the timeline's own layers; the
+                                // section is isolated so this never rises
+                                // above the navbar and its menu.
                                 <div className="sticky -top-5 z-40 -mx-1 -mt-5 mb-3 bg-white px-1 pb-1 pt-5 dark:bg-gray-900">
                                     <PlanTips
                                         tips={tips}

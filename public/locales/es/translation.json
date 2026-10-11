@@ -339,6 +339,7 @@
     "norwegian": "Noruego",
     "polish": "Polaco",
     "slovenian": "Esloveno",
+    "slovak": "Eslovaco",
     "swedish": "Sueco",
     "firstDayOfWeek": "Primer día de la semana",
     "name": "Nombre",
@@ -1527,6 +1528,7 @@
     "system": "Sistema",
     "customize": "Personalizar",
     "addTag": "Agregar Etiqueta",
+    "new": "Nueva etiqueta",
     "loadingTags": "Cargando etiquetas...",
     "errorLoadingTags": "Error al cargar las etiquetas.",
     "toggleDropdownMenu": "Abrir o cerrar el menú",
@@ -2966,5 +2968,22 @@
     "missingBody": "Puede que se haya movido o retirado. Los demás artículos están a un clic.",
     "allPosts": "Todos los artículos",
     "morePosts": "Más del blog"
+  },
+  "focus": {
+    "chip": "Enfoque",
+    "title": "Enfocar en",
+    "activeTitle": "Enfoque: {{label}}",
+    "area": "Área",
+    "anyArea": "Cualquier área",
+    "project": "Proyecto",
+    "anyProject": "Cualquier proyecto",
+    "tags": "Etiquetas",
+    "hint": "Hoy, Próximas, Tareas, Proyectos, Notas y la búsqueda muestran solo esto. Las tareas nuevas reciben el proyecto y las etiquetas.",
+    "apply": "Aplicar",
+    "clear": "Quitar",
+    "clearFocus": "Quitar enfoque",
+    "locked": "Definido por tu enfoque. Quítalo desde el chip de la barra superior.",
+    "emptyHint": "Mostrando solo {{label}}",
+    "saveError": "No se pudo guardar el enfoque."
   }
 }

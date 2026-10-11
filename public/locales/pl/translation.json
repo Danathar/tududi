@@ -309,6 +309,7 @@
     "norwegian": "Norweski",
     "polish": "Polski",
     "slovenian": "Słoweński",
+    "slovak": "Słowacki",
     "swedish": "Szwedzki",
     "title": "Ustawienia profilu",
     "appearance": "Wygląd",
@@ -1594,6 +1595,7 @@
     "system": "System",
     "customize": "Dostosuj",
     "addTag": "Dodaj Tag",
+    "new": "Nowy tag",
     "loadingTags": "Wczytywanie tagów...",
     "errorLoadingTags": "Błąd podczas wczytywania tagów.",
     "toggleDropdownMenu": "Otwórz lub zamknij menu",
@@ -2984,5 +2986,22 @@
     "missingBody": "Mógł zostać przeniesiony lub usunięty. Pozostałe wpisy są o jedno kliknięcie.",
     "allPosts": "Wszystkie wpisy",
     "morePosts": "Więcej z bloga"
+  },
+  "focus": {
+    "chip": "Fokus",
+    "title": "Skup się na",
+    "activeTitle": "Fokus: {{label}}",
+    "area": "Obszar",
+    "anyArea": "Dowolny obszar",
+    "project": "Projekt",
+    "anyProject": "Dowolny projekt",
+    "tags": "Tagi",
+    "hint": "Dziś, Nadchodzące, Zadania, Projekty, Notatki i wyszukiwanie pokazują tylko to. Nowe zadania dostają ten projekt i tagi.",
+    "apply": "Zastosuj",
+    "clear": "Wyczyść",
+    "clearFocus": "Wyczyść fokus",
+    "locked": "Ustawione przez Twój fokus. Wyczyść go z chipa na górnym pasku.",
+    "emptyHint": "Pokazuje tylko {{label}}",
+    "saveError": "Nie udało się zapisać fokusu."
   }
 }

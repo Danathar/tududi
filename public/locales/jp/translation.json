@@ -428,6 +428,7 @@
     "norwegian": "ノルウェー語",
     "polish": "ポーランド語",
     "slovenian": "スロベニア語",
+    "slovak": "スロバキア語",
     "swedish": "スウェーデン語",
     "firstDayOfWeek": "週の最初の日",
     "name": "名前",
@@ -1328,6 +1329,7 @@
     "system": "システム",
     "customize": "カスタマイズ",
     "addTag": "タグを追加",
+    "new": "新しいタグ",
     "loadingTags": "タグを読み込み中...",
     "errorLoadingTags": "タグの読み込み中にエラーが発生しました。",
     "toggleDropdownMenu": "メニューを開閉",
@@ -2977,5 +2979,22 @@
     "missingBody": "移動または削除された可能性があります。ほかの記事はすぐそこです。",
     "allPosts": "すべての記事",
     "morePosts": "ブログのほかの記事"
+  },
+  "focus": {
+    "chip": "フォーカス",
+    "title": "フォーカス対象",
+    "activeTitle": "フォーカス: {{label}}",
+    "area": "エリア",
+    "anyArea": "すべてのエリア",
+    "project": "プロジェクト",
+    "anyProject": "すべてのプロジェクト",
+    "tags": "タグ",
+    "hint": "今日、今後、タスク、プロジェクト、ノート、検索にはこれだけが表示されます。新しいタスクにはこのプロジェクトとタグが付きます。",
+    "apply": "適用",
+    "clear": "解除",
+    "clearFocus": "フォーカスを解除",
+    "locked": "フォーカスで設定されています。上部バーのチップから解除してください。",
+    "emptyHint": "{{label}} のみ表示中",
+    "saveError": "フォーカスを保存できませんでした。"
   }
 }

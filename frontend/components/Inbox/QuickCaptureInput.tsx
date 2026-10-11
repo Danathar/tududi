@@ -34,6 +34,7 @@ import {
     splitCaptureText,
     splitFirstLine,
 } from '../../utils/captureText';
+import type { CaptureProject } from '../../utils/captureUi';
 import {
     isTouchDevice,
     updateCaptureSettings,
@@ -62,6 +63,7 @@ import {
     deleteProject,
     fetchProjects,
 } from '../../utils/projectsService';
+import { getFocus, mergeFocusTags } from '../../utils/focus';
 import {
     LinkIcon,
     PaperClipIcon,
@@ -114,6 +116,11 @@ interface QuickCaptureInputProps {
     scopeLabel?: string;
     // Changing this puts the box back on defaultTarget (a new open)
     resetKey?: number;
+    // Text a new open starts with, replacing any half-typed text
+    prefillText?: string;
+    // The project the box was opened from. A task or note with no +project,
+    // or with this project's name, is linked to it by uid.
+    defaultProject?: CaptureProject | null;
     compact?: boolean;
     onClose?: () => void;
     onCaptured?: (items: CapturedItem[]) => void;
@@ -197,6 +204,8 @@ const QuickCaptureInput = React.forwardRef<
             lockTarget = false,
             scopeLabel,
             resetKey,
+            prefillText,
+            defaultProject = null,
             compact = false,
             onClose,
             onCaptured,
@@ -301,7 +310,8 @@ const QuickCaptureInput = React.forwardRef<
 
         useEffect(() => {
             setTarget(defaultTarget);
-        }, [resetKey, defaultTarget]);
+            if (prefillText) setInputText(prefillText);
+        }, [resetKey, defaultTarget, prefillText]);
 
         useEffect(() => {
             if (isEditMode) {
@@ -1325,16 +1335,18 @@ const QuickCaptureInput = React.forwardRef<
 
                         const cleanedText = getCleanedContent(trimmedText);
 
-                        const taskTags = analysisResult.parsed_tags.map(
-                            (tagName) => {
-                                const existingTag = tags.find(
-                                    (tag) =>
-                                        tag.name.toLowerCase() ===
-                                        tagName.toLowerCase()
-                                );
-                                return existingTag || { name: tagName };
-                            }
-                        );
+                        const focus = getFocus();
+                        const taskTags = mergeFocusTags(
+                            analysisResult.parsed_tags,
+                            focus
+                        ).map((tagName) => {
+                            const existingTag = tags.find(
+                                (tag) =>
+                                    tag.name.toLowerCase() ===
+                                    tagName.toLowerCase()
+                            );
+                            return existingTag || { name: tagName };
+                        });
 
                         let projectUid: string | undefined = undefined;
                         if (analysisResult.parsed_projects.length > 0) {
@@ -1348,6 +1360,9 @@ const QuickCaptureInput = React.forwardRef<
                             if (matchingProject) {
                                 projectUid = matchingProject.uid;
                             }
+                        }
+                        if (!projectUid && focus?.project_uid) {
+                            projectUid = focus.project_uid;
                         }
 
                         const newTask: Task = applyAnalysisToTask(
@@ -1572,6 +1587,16 @@ const QuickCaptureInput = React.forwardRef<
             }
         };
 
+        // The Focus area's id, for projects created from the box
+        const focusAreaId = (): number | null => {
+            const areaUid = getFocus()?.area_uid;
+            if (!areaUid) return null;
+            const area = useStore
+                .getState()
+                .areasStore?.areas?.find((entry) => entry.uid === areaUid);
+            return area?.id ?? null;
+        };
+
         const resolveOrCreateProject = async (
             name: string | undefined
         ): Promise<string | undefined> => {
@@ -1584,7 +1609,12 @@ const QuickCaptureInput = React.forwardRef<
             if (existing) {
                 return existing.uid;
             }
-            const created = await createProject({ name, status: 'planned' });
+            const areaId = focusAreaId();
+            const created = await createProject({
+                name,
+                status: 'planned',
+                ...(areaId !== null ? { area_id: areaId } : {}),
+            });
             await refreshProjectsStore();
             return created.uid;
         };
@@ -1635,7 +1665,10 @@ const QuickCaptureInput = React.forwardRef<
             }
 
             const title = cleanFirstLine(first, analysis);
-            const tagNames = Array.from(
+            // The text's own #tags and +project win; a Focus fills the
+            // gaps for tasks (project and tags) and notes (project).
+            const focus = getFocus();
+            const textTagNames = Array.from(
                 new Map(
                     [
                         ...(analysis?.parsed_tags ?? []),
@@ -1643,6 +1676,10 @@ const QuickCaptureInput = React.forwardRef<
                     ].map((name) => [name.toLowerCase(), name])
                 ).values()
             );
+            const tagNames =
+                destination === 'task'
+                    ? mergeFocusTags(textTagNames, focus)
+                    : textTagNames;
             await createMissingTags(itemText);
             const tagObjects = buildTagObjects(tagNames);
 
@@ -1653,14 +1690,30 @@ const QuickCaptureInput = React.forwardRef<
                     status: 'planned',
                     tags: tagObjects,
                     due_date_at: analysis?.parsed_due_date ?? undefined,
+                    ...(focusAreaId() !== null
+                        ? { area_id: focusAreaId() }
+                        : {}),
                 });
                 await refreshProjectsStore();
                 return { target: destination, uid: created.uid, title };
             }
 
-            const projectUid = await resolveOrCreateProject(
-                analysis?.parsed_projects?.[0] ?? parseProjectRefs(itemText)[0]
-            );
+            const projectName =
+                analysis?.parsed_projects?.[0] ?? parseProjectRefs(itemText)[0];
+            // Matched by uid, not name: two projects can share a name, and a
+            // capture from a project page belongs to that page's project.
+            const pageProjectUid =
+                defaultProject &&
+                (!projectName ||
+                    projectName.toLowerCase() ===
+                        defaultProject.name.toLowerCase())
+                    ? defaultProject.uid
+                    : undefined;
+            const projectUid =
+                pageProjectUid ??
+                (await resolveOrCreateProject(projectName)) ??
+                focus?.project_uid ??
+                undefined;
 
             if (destination === 'task') {
                 const task = applyAnalysisToTask(
@@ -2576,7 +2629,9 @@ const QuickCaptureInput = React.forwardRef<
 
         return (
             <div
-                className={`relative w-full bg-white dark:bg-gray-900 rounded-2xl shadow-sm overflow-hidden ${cardClasses}`}
+                className={`relative w-full bg-white dark:bg-gray-900 rounded-2xl ${
+                    isEditMode ? '' : 'shadow-sm'
+                } overflow-hidden ${cardClasses}`}
             >
                 {!isEditMode && !compact && (
                     <svg

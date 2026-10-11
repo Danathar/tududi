@@ -14,12 +14,20 @@ import { getApiPath } from '../../config/paths';
 import { handleAuthResponse } from '../../utils/authUtils';
 import AdminBlogSettings from './AdminBlogSettings';
 import AdminUserStatusTable from './AdminUserStatusTable';
+import AdminTrends, { Trends } from './AdminTrends';
 
 interface Overview {
-    users: { total: number; admins: number; verified: number; last24h: number };
+    users: {
+        total: number;
+        admins: number;
+        verified: number;
+        last24h: number;
+        empty: number;
+    };
     content: { tasks: number; projects: number; notes: number };
     waitlist: { total: number; last7d: number };
     feedback: { open: number };
+    trends?: Trends;
     billing: {
         paying: number;
         hosted: boolean;
@@ -119,6 +127,25 @@ const AdminDashboardPage: React.FC = () => {
                     )}
                 />
                 <Stat
+                    label={t(
+                        'admin.dashboard.emptyAccounts',
+                        'Nothing created'
+                    )}
+                    value={data.users.empty}
+                    hint={t(
+                        'admin.dashboard.emptyAccountsHint',
+                        'accounts that never created anything ({{pct}}% of users)',
+                        {
+                            pct: data.users.total
+                                ? Math.round(
+                                      (data.users.empty / data.users.total) *
+                                          100
+                                  )
+                                : 0,
+                        }
+                    )}
+                />
+                <Stat
                     label={t('admin.dashboard.paying', 'Paying')}
                     value={data.billing.paying}
                     hint={
@@ -147,6 +174,8 @@ const AdminDashboardPage: React.FC = () => {
                     )}
                 />
             </div>
+
+            {data.trends && <AdminTrends trends={data.trends} />}
 
             <div className="flex flex-wrap gap-3 mb-8">
                 <Link

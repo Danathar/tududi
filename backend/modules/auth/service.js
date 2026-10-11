@@ -187,6 +187,8 @@ class AuthService {
                     'features',
                     'ui_settings',
                     'sidebar_settings',
+                    'onboarded_at',
+                    'onboarding_starter',
                 ],
             });
             if (user) {
@@ -233,6 +235,8 @@ class AuthService {
                         is_admin: admin,
                         ...(await getRoleInfo(user.uid)),
                         has_collaborators: hasCollaborators,
+                        onboarded_at: user.onboarded_at || null,
+                        onboarding_starter: user.onboarding_starter || null,
                     },
                 };
             }

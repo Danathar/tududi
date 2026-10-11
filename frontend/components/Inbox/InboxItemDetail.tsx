@@ -10,6 +10,7 @@ import { Note } from '../../entities/Note';
 import ConfirmDialog from '../Shared/ConfirmDialog';
 import InboxItemAttachments from './InboxItemAttachments';
 import { useStore } from '../../store/useStore';
+import { getFocus, mergeFocusTags } from '../../utils/focus';
 import QuickCaptureInput, {
     InboxComposerFooterContext,
     QuickCaptureInputHandle,
@@ -29,6 +30,7 @@ interface InboxItemDetailProps {
     openNoteModal: (note: Note | null, inboxItemUid?: string) => void;
     projects: Project[];
     isNew?: boolean;
+    onEditingChange?: (editing: boolean) => void;
 }
 
 const InboxItemDetail: React.FC<InboxItemDetailProps> = ({
@@ -40,6 +42,7 @@ const InboxItemDetail: React.FC<InboxItemDetailProps> = ({
     openNoteModal,
     projects,
     isNew = false,
+    onEditingChange,
 }) => {
     const { t } = useTranslation();
     const {
@@ -50,6 +53,17 @@ const InboxItemDetail: React.FC<InboxItemDetailProps> = ({
     const [isEditing, setIsEditing] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const composerRef = useRef<QuickCaptureInputHandle>(null);
+
+    useEffect(() => {
+        onEditingChange?.(isEditing);
+    }, [isEditing]);
+
+    // Tell the list in the same render that this item is opening, so its
+    // rounded corners and background change together with the card.
+    const startEditing = () => {
+        setIsEditing(true);
+        onEditingChange?.(true);
+    };
 
     useEffect(() => {
         if (!isEditing) return;
@@ -315,6 +329,10 @@ const InboxItemDetail: React.FC<InboxItemDetailProps> = ({
             );
             if (matchingProject) projectUid = matchingProject.uid;
         }
+        // The Focus project fills in when the text names none
+        if (!projectUid && getFocus()?.project_uid) {
+            projectUid = getFocus()?.project_uid ?? undefined;
+        }
 
         return { sourceText, cleanedContent: cleaned, tagObjects, projectUid, projectRefsList: sourceProjectRefs, hashtagsList: sourceHashtags };
     };
@@ -338,7 +356,16 @@ const InboxItemDetail: React.FC<InboxItemDetailProps> = ({
                 name: analysis?.cleaned_content || payload.cleanedContent || displayText,
                 status: 'not_started',
                 priority: null,
-                tags: payload.tagObjects,
+                tags: mergeFocusTags(
+                    payload.tagObjects.map((tag) => tag.name),
+                    getFocus()
+                ).map(
+                    (name) =>
+                        payload.tagObjects.find((tag) => tag.name === name) ??
+                        tags.find(
+                            (tag) => tag.name.toLowerCase() === name.toLowerCase()
+                        ) ?? { name }
+                ),
                 project_uid: payload.projectUid,
                 completed_at: null,
             },
@@ -472,17 +499,17 @@ const InboxItemDetail: React.FC<InboxItemDetailProps> = ({
                     openTaskModal={openTaskModal}
                     openProjectModal={openProjectModal}
                     openNoteModal={openNoteModal}
-                    cardClassName="mb-0"
+                    cardClassName="mb-0 !rounded-none !shadow-none"
                     multiline={true}
                 />
             ) : (
                 /* ── Flat row (no card, no shadow) ─────────────────────────── */
                 <div
                     className={`group flex items-start gap-2.5 px-4 py-2.5 rounded-lg cursor-pointer hover:bg-gray-100/60 dark:hover:bg-white/[0.04] transition-colors${isNew ? ' animate-inbox-row-in' : ''}`}
-                    onClick={() => setIsEditing(true)}
+                    onClick={startEditing}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsEditing(true); } }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEditing(); } }}
                 >
                     {/* Text content */}
                     <div className="flex-1 min-w-0">

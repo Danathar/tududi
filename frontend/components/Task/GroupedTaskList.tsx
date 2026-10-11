@@ -23,6 +23,7 @@ import { Project } from '../../entities/Project';
 import { Task } from '../../entities/Task';
 import { GroupedTasks } from '../../utils/tasksService';
 import { isTaskActive } from '../../constants/taskStatus';
+import { TASK_SHEET_CLASS } from './taskSheet';
 
 interface GroupedTaskListProps {
     tasks: Task[];
@@ -82,24 +83,29 @@ const SortableTaskGroup: React.FC<{
                 items={uids}
                 strategy={verticalListSortingStrategy}
             >
-                {tasks.map((task) => (
-                    <div
-                        key={task.id}
-                        className="task-item-wrapper transition-all duration-200 ease-in-out relative hover:z-[10000] focus-within:z-[10000]"
-                    >
-                        <SortableItem
-                            id={task.uid as string}
-                            label={task.name}
-                            roleDescription={t(
-                                'sortable.task',
-                                'sortable task'
-                            )}
-                            testIdPrefix="sortable-task"
+                {/* The sheet sits inside the drag context: dnd-kit adds hidden
+                    helper elements after its children, which would otherwise
+                    become the sheet's last row and square off its corners. */}
+                <div className={TASK_SHEET_CLASS}>
+                    {tasks.map((task) => (
+                        <div
+                            key={task.id}
+                            className="task-item-wrapper transition-all duration-200 ease-in-out relative hover:z-[10000] focus-within:z-[10000]"
                         >
-                            {renderTask(task)}
-                        </SortableItem>
-                    </div>
-                ))}
+                            <SortableItem
+                                id={task.uid as string}
+                                label={task.name}
+                                roleDescription={t(
+                                    'sortable.task',
+                                    'sortable task'
+                                )}
+                                testIdPrefix="sortable-task"
+                            >
+                                {renderTask(task)}
+                            </SortableItem>
+                        </div>
+                    ))}
+                </div>
             </SortableContext>
         </DndContext>
     );
@@ -418,7 +424,13 @@ const GroupedTaskList: React.FC<GroupedTaskListProps> = ({
                                             </div>
 
                                             {/* Day column tasks */}
-                                            <div className="space-y-1.5">
+                                            <div
+                                                className={
+                                                    dayTasks.length > 0
+                                                        ? TASK_SHEET_CLASS
+                                                        : ''
+                                                }
+                                            >
                                                 {dayTasks.map((task) => (
                                                     <div
                                                         key={
@@ -477,7 +489,13 @@ const GroupedTaskList: React.FC<GroupedTaskListProps> = ({
 
     // Legacy: Render recurring task grouping
     return (
-        <div className="task-list-container space-y-1.5">
+        <div
+            className={`task-list-container ${
+                groupBy === 'project' && groupedByProject
+                    ? 'space-y-1.5'
+                    : TASK_SHEET_CLASS
+            }`}
+        >
             {/* Standalone tasks */}
             {groupedByKey
                 ? groupedByKey.map(
@@ -553,26 +571,34 @@ const GroupedTaskList: React.FC<GroupedTaskListProps> = ({
                                           )}
                                       />
                                   ) : (
-                                      projectTasks.map((task) => (
-                                          <div
-                                              key={task.id}
-                                              className="task-item-wrapper transition-all duration-200 ease-in-out relative hover:z-[10000] focus-within:z-[10000]"
-                                          >
-                                              <TaskItem
-                                                  task={task}
-                                                  onTaskUpdate={onTaskUpdate}
-                                                  onTaskCompletionToggle={
-                                                      onTaskCompletionToggle
-                                                  }
-                                                  onTaskDelete={onTaskDelete}
-                                                  projects={projects}
-                                                  hideProjectName={
-                                                      hideProjectName
-                                                  }
-                                                  onToggleToday={onToggleToday}
-                                              />
-                                          </div>
-                                      ))
+                                      <div className={TASK_SHEET_CLASS}>
+                                          {projectTasks.map((task) => (
+                                              <div
+                                                  key={task.id}
+                                                  className="task-item-wrapper transition-all duration-200 ease-in-out relative hover:z-[10000] focus-within:z-[10000]"
+                                              >
+                                                  <TaskItem
+                                                      task={task}
+                                                      onTaskUpdate={
+                                                          onTaskUpdate
+                                                      }
+                                                      onTaskCompletionToggle={
+                                                          onTaskCompletionToggle
+                                                      }
+                                                      onTaskDelete={
+                                                          onTaskDelete
+                                                      }
+                                                      projects={projects}
+                                                      hideProjectName={
+                                                          hideProjectName
+                                                      }
+                                                      onToggleToday={
+                                                          onToggleToday
+                                                      }
+                                                  />
+                                              </div>
+                                          ))}
+                                      </div>
                                   )}
                               </div>
                           );
@@ -680,34 +706,40 @@ const GroupedTaskList: React.FC<GroupedTaskListProps> = ({
                                     )}{' '}
                                     instances
                                 </div>
-                                {group.instances
-                                    .sort(
-                                        (a, b) =>
-                                            new Date(
-                                                a.due_date || ''
-                                            ).getTime() -
-                                            new Date(b.due_date || '').getTime()
-                                    )
-                                    .map((instance) => (
-                                        <div
-                                            key={instance.id}
-                                            className="opacity-75 hover:opacity-100 focus-within:opacity-100 transition-opacity relative hover:z-[10000] focus-within:z-[10000]"
-                                        >
-                                            <TaskItem
-                                                task={instance}
-                                                onTaskUpdate={onTaskUpdate}
-                                                onTaskCompletionToggle={
-                                                    onTaskCompletionToggle
-                                                }
-                                                onTaskDelete={onTaskDelete}
-                                                projects={projects}
-                                                hideProjectName={
-                                                    hideProjectName
-                                                }
-                                                onToggleToday={onToggleToday}
-                                            />
-                                        </div>
-                                    ))}
+                                <div className={TASK_SHEET_CLASS}>
+                                    {group.instances
+                                        .sort(
+                                            (a, b) =>
+                                                new Date(
+                                                    a.due_date || ''
+                                                ).getTime() -
+                                                new Date(
+                                                    b.due_date || ''
+                                                ).getTime()
+                                        )
+                                        .map((instance) => (
+                                            <div
+                                                key={instance.id}
+                                                className="opacity-75 hover:opacity-100 focus-within:opacity-100 transition-opacity relative hover:z-[10000] focus-within:z-[10000]"
+                                            >
+                                                <TaskItem
+                                                    task={instance}
+                                                    onTaskUpdate={onTaskUpdate}
+                                                    onTaskCompletionToggle={
+                                                        onTaskCompletionToggle
+                                                    }
+                                                    onTaskDelete={onTaskDelete}
+                                                    projects={projects}
+                                                    hideProjectName={
+                                                        hideProjectName
+                                                    }
+                                                    onToggleToday={
+                                                        onToggleToday
+                                                    }
+                                                />
+                                            </div>
+                                        ))}
+                                </div>
                             </div>
                         )}
                     </div>
