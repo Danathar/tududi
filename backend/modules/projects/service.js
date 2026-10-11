@@ -8,6 +8,7 @@ const { NotFoundError, ValidationError } = require('../../shared/errors');
 const { validateTagName } = require('../tags/tagsService');
 const permissionsService = require('../../services/permissionsService');
 const scopeService = require('../../services/scopeService');
+const { isAreaOverridden } = require('../../services/projectAreaOverrides');
 const { sortTags } = require('../tasks/core/serializers');
 const { getBlockedCountMap } = require('../tasks/relations/service');
 const {
@@ -194,11 +195,9 @@ class ProjectsService {
                 const projectJson = project.toJSON();
                 const shareCount = shareCountMap[project.uid] || 0;
 
-                const isOwner = project.user_id === userId;
-
                 // Apply per-user area override for shared (non-owned) projects
-                if (!isOwner && areaOverrides[project.id] !== undefined) {
-                    const override = areaOverrides[project.id];
+                const override = areaOverrides[project.id];
+                if (isAreaOverridden(project.user_id, userId, override)) {
                     projectJson.area_id = override.area_id;
                     projectJson.Area = override.Area;
                 }
