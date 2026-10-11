@@ -48,6 +48,9 @@
 //     -o, ...), GIT_* environment other than identity/locking variables, pagers
 //     and editors other than cat/true, and `-c`/config writes of keys that run
 //     programs (core.pager, core.fsmonitor, diff.*, alias.*, include.*, ...).
+//   - git, node, npm or a shell run through xargs: xargs appends words read at
+//     run time (`printf '%s\n' --output=FILE | xargs git log`), so none of the
+//     argument checks here could see them.
 //
 // Read-only gh commands (view, list, status, diff, checks, api GET, ...) are
 // always allowed. The command is split into segments on && || ; | & newlines,
@@ -885,6 +888,9 @@ function checkNpm(args) {
 function checkSegment(words, state) {
     let w = words.slice();
     const inlineEnv = {};
+    // Set once the segment runs through xargs: xargs appends words it reads at
+    // run time, so no argument check below sees the real command line.
+    let xargsFed = false;
     for (;;) {
         while (w.length && (isAssignment(w[0]) || KEYWORDS.has(w[0]))) {
             if (isAssignment(w[0])) {
@@ -935,11 +941,21 @@ function checkSegment(words, state) {
             }
         }
         if (idx === -1) return checkCodeEnv(Object.keys(inlineEnv));
+        if (cmd === 'xargs') xargsFed = true;
         w = w.slice(idx);
     }
 
     const cmd = basename(w[0]);
     const args = w.slice(1);
+    // `printf '%s\n' --output=FILE | xargs git log` and
+    // `printf '%s\n' /dev/null .env | xargs git diff` reach git with options
+    // and operands this hook never sees, under the git allow rules.
+    if (xargsFed && (cmd === 'git' || NODE_CMDS.includes(cmd) || SHELLS.has(cmd))) {
+        return blockLocal(
+            `Blocked: \`xargs ${cmd}\`; xargs adds arguments read at run time, so this hook cannot check the ` +
+                `${cmd} command line the allow rules pre-approve. Write the ${cmd} command out in full instead.`
+        );
+    }
 
     if (cmd === 'export' || ((cmd === 'declare' || cmd === 'typeset') && args.some((a) => /^-[a-zA-Z]*x/.test(a)))) {
         for (const a of args) {
