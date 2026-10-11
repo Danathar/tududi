@@ -941,7 +941,9 @@ function checkSegment(words, state) {
             }
         }
         if (idx === -1) return checkCodeEnv(Object.keys(inlineEnv));
-        if (cmd === 'xargs') xargsFed = true;
+        // Any xargs between here and the real command counts, so an outer
+        // wrapper (`nice xargs git log`, `timeout 5 xargs git log`) does not hide it.
+        if (w.slice(0, idx).some((x) => basename(x) === 'xargs')) xargsFed = true;
         w = w.slice(idx);
     }
 
