@@ -5,6 +5,12 @@ Notable changes to tududi. Versions match the git tags and the
 
 ## Unreleased
 
+### Fixed
+
+- Skipping an occurrence of a recurring task in a shared project no longer
+  flips its Area card to the owner's area; the response uses the viewer's own
+  area, like the other task responses.
+
 ## 1.6.0
 
 ### Changed

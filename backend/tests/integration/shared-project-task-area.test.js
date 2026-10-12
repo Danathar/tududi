@@ -12,7 +12,7 @@ const {
 // Task responses must show that placement to them, and the owner's
 // placement to the owner.
 describe('Area of a shared project in task responses', () => {
-    let owner, ownerAgent, viewerAgent, ownerArea, viewerArea, task;
+    let owner, ownerAgent, viewerAgent, ownerArea, viewerArea, project, task;
 
     const login = async (email) => {
         const agent = request.agent(app);
@@ -36,7 +36,7 @@ describe('Area of a shared project in task responses', () => {
 
         ownerArea = await Area.create({ name: 'Work', user_id: owner.id });
         viewerArea = await Area.create({ name: 'My side', user_id: viewer.id });
-        const project = await Project.create({
+        project = await Project.create({
             name: 'Shared plan',
             user_id: owner.id,
             area_id: ownerArea.id,
@@ -88,5 +88,40 @@ describe('Area of a shared project in task responses', () => {
         const single = await ownerAgent.get(`/api/task/${task.uid}`);
         expect(single.status).toBe(200);
         expect(single.body.Project.Area.uid).toBe(ownerArea.uid);
+    });
+
+    describe('for a recurring task', () => {
+        let recurring;
+
+        beforeEach(async () => {
+            recurring = await Task.create({
+                name: 'Shared daily task',
+                user_id: owner.id,
+                project_id: project.id,
+                recurrence_type: 'daily',
+                recurrence_interval: 1,
+                due_date: new Date('2030-03-15T00:00:00Z'),
+            });
+        });
+
+        it('shows the viewer their own placement after skipping an occurrence', async () => {
+            const res = await viewerAgent.post(
+                `/api/task/${recurring.uid}/skip-occurrence`
+            );
+
+            expect(res.status).toBe(200);
+            expect(res.body.Project.area_id).toBe(viewerArea.id);
+            expect(res.body.Project.Area.uid).toBe(viewerArea.uid);
+        });
+
+        it('shows the viewer their own placement after updating the task', async () => {
+            const res = await viewerAgent
+                .patch(`/api/task/${recurring.uid}`)
+                .send({ name: 'Renamed shared daily task' });
+
+            expect(res.status).toBe(200);
+            expect(res.body.Project.area_id).toBe(viewerArea.id);
+            expect(res.body.Project.Area.uid).toBe(viewerArea.uid);
+        });
     });
 });
