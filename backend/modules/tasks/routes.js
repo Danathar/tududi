@@ -1224,13 +1224,14 @@ router.post(
                 { include: TASK_INCLUDES_WITH_SUBTASKS }
             );
 
-            res.json(
-                await serializeTask(
-                    taskWithAssociations,
-                    req.currentUser.timezone,
-                    { skipDisplayNameTransform: true }
-                )
+            const serializedTask = await serializeTask(
+                taskWithAssociations,
+                req.currentUser.timezone,
+                { skipDisplayNameTransform: true }
             );
+            await applyViewerProjectAreas([serializedTask], req.currentUser.id);
+
+            res.json(serializedTask);
         } catch (error) {
             logError('Error skipping recurring occurrence:', error);
             res.status(500).json({ error: 'Failed to skip occurrence' });
