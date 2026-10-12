@@ -10,7 +10,7 @@ import { Note } from '../../entities/Note';
 import ConfirmDialog from '../Shared/ConfirmDialog';
 import InboxItemAttachments from './InboxItemAttachments';
 import { useStore } from '../../store/useStore';
-import { getFocus, mergeFocusTags } from '../../utils/focus';
+import { focusAreaIdForTask, getFocus, mergeFocusTags } from '../../utils/focus';
 import QuickCaptureInput, {
     InboxComposerFooterContext,
     QuickCaptureInputHandle,
@@ -351,6 +351,12 @@ const InboxItemDetail: React.FC<InboxItemDetailProps> = ({
         } catch (error) {
             console.error('Failed to analyze inbox item:', error);
         }
+        // A ~area in the text means the task is not for the Focus, so the
+        // Focus project is dropped unless the text named a project itself.
+        const projectUid =
+            analysis?.parsed_area && payload.projectRefsList.length === 0
+                ? undefined
+                : payload.projectUid;
         const newTask: Task = applyAnalysisToTask(
             {
                 name: analysis?.cleaned_content || payload.cleanedContent || displayText,
@@ -366,7 +372,12 @@ const InboxItemDetail: React.FC<InboxItemDetailProps> = ({
                             (tag) => tag.name.toLowerCase() === name.toLowerCase()
                         ) ?? { name }
                 ),
-                project_uid: payload.projectUid,
+                project_uid: projectUid,
+                area_id: focusAreaIdForTask(
+                    getFocus(),
+                    projectUid,
+                    useStore.getState().areasStore?.areas ?? []
+                ),
                 completed_at: null,
             },
             analysis
@@ -505,7 +516,7 @@ const InboxItemDetail: React.FC<InboxItemDetailProps> = ({
             ) : (
                 /* ── Flat row (no card, no shadow) ─────────────────────────── */
                 <div
-                    className={`group flex items-start gap-2.5 px-4 py-2.5 rounded-lg cursor-pointer hover:bg-gray-100/60 dark:hover:bg-white/[0.04] transition-colors${isNew ? ' animate-inbox-row-in' : ''}`}
+                    className={`group flex items-start gap-2.5 px-4 py-3 cursor-pointer${isNew ? ' animate-inbox-row-in' : ''}`}
                     onClick={startEditing}
                     role="button"
                     tabIndex={0}
@@ -513,7 +524,7 @@ const InboxItemDetail: React.FC<InboxItemDetailProps> = ({
                 >
                     {/* Text content */}
                     <div className="flex-1 min-w-0">
-                        <p className="text-[13.5px] font-normal text-gray-700 dark:text-gray-300 leading-relaxed break-words">
+                        <p className="text-[15px] font-normal tracking-tight text-gray-900 dark:text-gray-100 leading-snug break-words">
                             {isBlank ? (
                                 <span className="italic text-gray-400 dark:text-gray-500">
                                     {t('inbox.emptyItem', '(Empty item)')}
