@@ -46,27 +46,8 @@ jobs:
       run: npm run build
 
   test-postgres:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
-
-    services:
-      postgres:
-        # The same official image, from Amazon ECR Public's mirror of Docker
-        # Hub's library images (identical index digest). Pulling from Docker
-        # Hub unauthenticated hit its rate limit on shared runners and failed
-        # this job at "Initialize containers" before any test ran.
-        image: public.ecr.aws/docker/library/postgres:16-alpine
-        env:
-          POSTGRES_USER: tududi
-          POSTGRES_PASSWORD: tududi
-          POSTGRES_DB: tududi_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U tududi"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
 
     env:
       DATABASE_URL: postgres://tududi:tududi@localhost:5432/tududi_test
@@ -74,6 +55,16 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v5
+
+    # The runner image ships PostgreSQL 16 (service disabled by default), so
+    # no registry image is pulled and there is no pull rate limit to hit.
+    - name: Start PostgreSQL
+      run: |
+        psql --version
+        sudo systemctl start postgresql.service
+        pg_isready --timeout=30
+        sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE ROLE tududi LOGIN SUPERUSER PASSWORD 'tududi'"
+        sudo -u postgres createdb -O tududi tududi_test
 
     - name: Setup Node.js
       uses: actions/setup-node@v5
