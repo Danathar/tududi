@@ -18,6 +18,9 @@ const SURFACES = ['landing', 'blog', 'app'];
 const RETENTION_DAYS = 90;
 const MAX_PATH = 128;
 const MAX_HOST = 255;
+// One visitor's page views recorded per day. A person reloading all day stays
+// well under it; a script sending the same request in a loop does not.
+const MAX_VIEWS_PER_VISITOR = 200;
 
 // Crawlers, uptime monitors, link-preview fetchers and scripts. A browser
 // engine in the string is not enough to be a person, so the names go first.
@@ -86,6 +89,33 @@ function isVisit(req, res) {
     return !!agent && !NOT_A_PERSON.test(agent);
 }
 
+// Views recorded today, in total and per visitor, so an anonymous sender
+// cannot grow the table without bound: per visitor for one address looping,
+// the daily total for one that changes its address or browser string on every
+// request. Per process and reset with the UTC day.
+const recorded = { day: null, total: 0, byVisitor: new Map() };
+
+function underCap(day, hash) {
+    if (recorded.day !== day) {
+        recorded.day = day;
+        recorded.total = 0;
+        recorded.byVisitor.clear();
+    }
+    const cap = getConfig().visits?.dailyCap || 100000;
+    if (recorded.total >= cap) return false;
+    const seen = recorded.byVisitor.get(hash) || 0;
+    if (seen >= MAX_VIEWS_PER_VISITOR) return false;
+    recorded.byVisitor.set(hash, seen + 1);
+    recorded.total += 1;
+    return true;
+}
+
+function resetCaps() {
+    recorded.day = null;
+    recorded.total = 0;
+    recorded.byVisitor.clear();
+}
+
 // Express middleware. Records after the response is sent, so it can see what
 // was answered and never delays or fails a page.
 function track() {
@@ -95,12 +125,14 @@ function track() {
             if (!isVisit(req, res)) return;
             const now = new Date();
             const day = dayOf(now);
+            const hash = visitorHash(req, day);
+            if (!underCap(day, hash)) return;
             const surface = surfaceOf(req);
             SiteVisit.create({
                 surface,
                 path: pathOf(req, surface),
                 referrer_host: referrerHostOf(req),
-                visitor_hash: visitorHash(req, day),
+                visitor_hash: hash,
                 day,
                 user_id: surface === 'app' ? req.session?.userId || null : null,
             }).catch((error) => logError('Failed to record a visit:', error));
@@ -260,6 +292,8 @@ module.exports = {
     isVisit,
     surfaceOf,
     pathOf,
+    resetCaps,
     SURFACES,
     RETENTION_DAYS,
+    MAX_VIEWS_PER_VISITOR,
 };

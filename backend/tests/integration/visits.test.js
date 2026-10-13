@@ -36,6 +36,7 @@ describe('Visit tracking', () => {
 
     beforeEach(async () => {
         await SiteVisit.destroy({ where: {} });
+        visitService.resetCaps();
     });
 
     const page = (path, headers = {}) =>
@@ -89,6 +90,29 @@ describe('Visit tracking', () => {
         await settle(1);
 
         expect(await SiteVisit.count()).toBe(0);
+    });
+
+    it('stops recording one visitor past the per-day cap', async () => {
+        const cap = visitService.MAX_VIEWS_PER_VISITOR;
+        for (let i = 0; i < cap + 5; i++) await page('/cloud');
+        await page('/cloud', { 'User-Agent': SAFARI });
+        await settle(cap + 1);
+
+        expect(await SiteVisit.count()).toBe(cap + 1);
+    });
+
+    it('stops recording anyone past the daily total cap', async () => {
+        const saved = config.visits.dailyCap;
+        config.visits.dailyCap = 3;
+        try {
+            for (let i = 0; i < 6; i++) {
+                await page('/', { 'User-Agent': `${FIREFOX} n${i}` });
+            }
+            await settle(3);
+            expect(await SiteVisit.count()).toBe(3);
+        } finally {
+            config.visits.dailyCap = saved;
+        }
     });
 
     it('records nothing when tracking is turned off', async () => {
