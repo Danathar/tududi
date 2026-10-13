@@ -115,6 +115,65 @@ describe('Visit tracking', () => {
         }
     });
 
+    it('starts counting again on the next UTC day', async () => {
+        const saved = config.visits.dailyCap;
+        config.visits.dailyCap = 2;
+        // Only Date is faked: supertest and settle() need real timers.
+        jest.useFakeTimers({
+            now: new Date('2026-03-01T23:59:00Z'),
+            doNotFake: [
+                'hrtime',
+                'nextTick',
+                'performance',
+                'queueMicrotask',
+                'setImmediate',
+                'clearImmediate',
+                'setInterval',
+                'clearInterval',
+                'setTimeout',
+                'clearTimeout',
+            ],
+        });
+        try {
+            for (let i = 0; i < 3; i++) {
+                await page('/', { 'User-Agent': `${FIREFOX} n${i}` });
+            }
+            await settle(2);
+            expect(await SiteVisit.count()).toBe(2);
+
+            jest.setSystemTime(new Date('2026-03-02T00:01:00Z'));
+            for (let i = 0; i < 3; i++) {
+                await page('/', { 'User-Agent': `${FIREFOX} n${i}` });
+            }
+            await settle(4);
+
+            const rows = await SiteVisit.findAll({ order: ['id'], raw: true });
+            expect(rows.map((r) => r.day)).toEqual([
+                '2026-03-01',
+                '2026-03-01',
+                '2026-03-02',
+                '2026-03-02',
+            ]);
+        } finally {
+            jest.useRealTimers();
+            config.visits.dailyCap = saved;
+        }
+    });
+
+    it('falls back to the default total cap when none is configured', async () => {
+        const saved = config.visits.dailyCap;
+        delete config.visits.dailyCap;
+        try {
+            for (let i = 0; i < 4; i++) {
+                await page('/', { 'User-Agent': `${FIREFOX} n${i}` });
+            }
+            await settle(4);
+            expect(await SiteVisit.count()).toBe(4);
+        } finally {
+            config.visits.dailyCap = saved;
+        }
+    });
+
     it('records nothing when tracking is turned off', async () => {
         config.visits.enabled = false;
         try {
