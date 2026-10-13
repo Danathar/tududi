@@ -60,7 +60,6 @@ jobs:
     # no registry image is pulled and there is no pull rate limit to hit.
     - name: Start PostgreSQL
       run: |
-        pg_config --version
         psql --version
         sudo systemctl start postgresql.service
         pg_isready --timeout=30
