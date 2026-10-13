@@ -259,6 +259,13 @@ const config = {
     // turns it off, and the dashboard then shows no visit numbers.
     visits: {
         enabled: process.env.TUDUDI_VISIT_TRACKING !== 'false',
+        // Most rows recorded per UTC day. Anyone can open a page, so this
+        // bounds how fast the table can grow; past it pages are served as
+        // usual and not counted.
+        dailyCap:
+            parseInt(process.env.TUDUDI_VISIT_DAILY_CAP, 10) > 0
+                ? parseInt(process.env.TUDUDI_VISIT_DAILY_CAP, 10)
+                : 100000,
     },
 
     // Same object the marketing page uses, so /api/billing can quote the

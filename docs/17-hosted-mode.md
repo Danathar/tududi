@@ -400,6 +400,11 @@ account's rows go with it when it is erased.
 | Variable | Meaning |
 |---|---|
 | `TUDUDI_VISIT_TRACKING` | `false` stops recording visits and hides the Visits panel. Default on |
+| `TUDUDI_VISIT_DAILY_CAP` | Most visits recorded per UTC day, per server process. Default 100000 |
+
+Opening a page needs no account, so recording is capped: one visitor's views
+stop counting after 200 in a day, and all views stop counting once the daily
+cap is reached. Pages are still served; only the row is skipped.
 
 ## Deploying on one machine
 
