@@ -77,3 +77,36 @@ describe('config frontendUrl', () => {
         expect(getConfig().frontendUrl).toBe('http://localhost:8080');
     });
 });
+
+describe('config visits.dailyCap', () => {
+    const ORIGINAL_ENV = process.env;
+
+    beforeEach(() => {
+        jest.resetModules();
+        process.env = { ...ORIGINAL_ENV };
+    });
+
+    afterAll(() => {
+        process.env = ORIGINAL_ENV;
+    });
+
+    it('uses TUDUDI_VISIT_DAILY_CAP when it is a positive number', () => {
+        process.env.TUDUDI_VISIT_DAILY_CAP = '250';
+
+        const { getConfig } = require('../../../config/config');
+
+        expect(getConfig().visits.dailyCap).toBe(250);
+    });
+
+    it.each([undefined, '', '0', '-5', 'lots'])(
+        'falls back to 100000 when TUDUDI_VISIT_DAILY_CAP is %p',
+        (value) => {
+            if (value === undefined) delete process.env.TUDUDI_VISIT_DAILY_CAP;
+            else process.env.TUDUDI_VISIT_DAILY_CAP = value;
+
+            const { getConfig } = require('../../../config/config');
+
+            expect(getConfig().visits.dailyCap).toBe(100000);
+        }
+    );
+});
