@@ -24,7 +24,14 @@ function captureOldValues(task) {
     };
 }
 
-async function logTaskChanges(task, oldValues, reqBody, tagsData, userId) {
+async function logTaskChanges(
+    task,
+    oldValues,
+    reqBody,
+    tagsData,
+    userId,
+    source = 'web'
+) {
     try {
         const changes = {};
         const fields = [
@@ -83,7 +90,7 @@ async function logTaskChanges(task, oldValues, reqBody, tagsData, userId) {
         }
 
         if (Object.keys(changes).length > 0) {
-            await logTaskUpdate(task.id, userId, changes, { source: 'web' });
+            await logTaskUpdate(task.id, userId, changes, { source });
         }
 
         if (tagsData) {
@@ -102,7 +109,7 @@ async function logTaskChanges(task, oldValues, reqBody, tagsData, userId) {
                     fieldName: 'tags',
                     oldValue: oldValues.tags,
                     newValue: newTags,
-                    metadata: { source: 'web', action: 'tags_update' },
+                    metadata: { source, action: 'tags_update' },
                 });
             }
         }

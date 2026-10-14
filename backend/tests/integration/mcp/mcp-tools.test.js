@@ -16,6 +16,7 @@ const {
     Person,
     Notification,
     RecurringCompletion,
+    TaskEvent,
 } = require('../../../models');
 const { createTestUser } = require('../../helpers/testUtils');
 const peopleService = require('../../../modules/people/service');
@@ -1887,6 +1888,144 @@ describe('MCP Tools Integration', () => {
                     where: { task_id: task.id },
                 });
                 expect(completions).toBe(1);
+            });
+        });
+
+        describe('status side effects', () => {
+            async function createParentWithSubtasks(parentStatus, subStatuses) {
+                const parent = await Task.create({
+                    user_id: user.id,
+                    name: 'Parent',
+                    status: parentStatus,
+                });
+                const subtasks = [];
+                for (const [i, status] of subStatuses.entries()) {
+                    subtasks.push(
+                        await Task.create({
+                            user_id: user.id,
+                            name: `Subtask ${i + 1}`,
+                            status,
+                            parent_task_id: parent.id,
+                        })
+                    );
+                }
+                return { parent, subtasks };
+            }
+
+            function statusEvents(taskId) {
+                return TaskEvent.findAll({
+                    where: { task_id: taskId, field_name: 'status' },
+                });
+            }
+
+            it('complete_task completes subtasks and records the change', async () => {
+                const { parent, subtasks } = await createParentWithSubtasks(
+                    Task.STATUS.NOT_STARTED,
+                    [Task.STATUS.NOT_STARTED]
+                );
+
+                const response = await callMcpTool(
+                    apiTokenValue,
+                    'complete_task',
+                    { id: parent.id }
+                );
+                expect(response.status).toBe(200);
+
+                await parent.reload();
+                await subtasks[0].reload();
+                expect(parent.status).toBe(Task.STATUS.DONE);
+                expect(subtasks[0].status).toBe(Task.STATUS.DONE);
+                expect(subtasks[0].completed_at).not.toBeNull();
+
+                const events = await statusEvents(parent.id);
+                expect(events).toHaveLength(1);
+                expect(events[0].event_type).toBe('completed');
+                expect(events[0].metadata.source).toBe('mcp');
+            });
+
+            it('complete_task reopening a parent reopens its done subtasks', async () => {
+                const { parent, subtasks } = await createParentWithSubtasks(
+                    Task.STATUS.DONE,
+                    [Task.STATUS.DONE]
+                );
+
+                await callMcpTool(apiTokenValue, 'complete_task', {
+                    id: parent.id,
+                });
+
+                await parent.reload();
+                await subtasks[0].reload();
+                expect(parent.status).toBe(Task.STATUS.NOT_STARTED);
+                expect(subtasks[0].status).toBe(Task.STATUS.NOT_STARTED);
+                expect(subtasks[0].completed_at).toBeNull();
+
+                const events = await statusEvents(parent.id);
+                expect(events).toHaveLength(1);
+                expect(events[0].event_type).toBe('status_changed');
+            });
+
+            it('update_task to done completes subtasks and records the change', async () => {
+                const { parent, subtasks } = await createParentWithSubtasks(
+                    Task.STATUS.NOT_STARTED,
+                    [Task.STATUS.NOT_STARTED]
+                );
+
+                const response = await callMcpTool(
+                    apiTokenValue,
+                    'update_task',
+                    { id: parent.id, status: 'done' }
+                );
+                expect(response.status).toBe(200);
+
+                await parent.reload();
+                await subtasks[0].reload();
+                expect(parent.status).toBe(Task.STATUS.DONE);
+                expect(subtasks[0].status).toBe(Task.STATUS.DONE);
+
+                const events = await statusEvents(parent.id);
+                expect(events).toHaveLength(1);
+                expect(events[0].event_type).toBe('completed');
+                expect(events[0].metadata.source).toBe('mcp');
+            });
+
+            it('update_task to cancelled cancels open subtasks only', async () => {
+                const { parent, subtasks } = await createParentWithSubtasks(
+                    Task.STATUS.NOT_STARTED,
+                    [Task.STATUS.NOT_STARTED, Task.STATUS.DONE]
+                );
+
+                await callMcpTool(apiTokenValue, 'update_task', {
+                    id: parent.id,
+                    status: 'cancelled',
+                });
+
+                await subtasks[0].reload();
+                await subtasks[1].reload();
+                expect(subtasks[0].status).toBe(Task.STATUS.CANCELLED);
+                expect(subtasks[1].status).toBe(Task.STATUS.DONE);
+
+                const events = await statusEvents(parent.id);
+                expect(events).toHaveLength(1);
+                expect(events[0].event_type).toBe('status_changed');
+            });
+
+            it('update_task records other field changes in the history', async () => {
+                const task = await Task.create({
+                    user_id: user.id,
+                    name: 'Old name',
+                    status: Task.STATUS.NOT_STARTED,
+                });
+
+                await callMcpTool(apiTokenValue, 'update_task', {
+                    id: task.id,
+                    name: 'New name',
+                });
+
+                const events = await TaskEvent.findAll({
+                    where: { task_id: task.id, field_name: 'name' },
+                });
+                expect(events).toHaveLength(1);
+                expect(events[0].event_type).toBe('name_changed');
             });
         });
 

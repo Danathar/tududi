@@ -133,7 +133,8 @@ This document explains how tasks work in tududi from a user behavior perspective
 19. **Subtasks have their own lifecycle:**
     - Each subtask has independent status, priority, due date
     - Completing all subtasks doesn't auto-complete the parent
-    - Completing the parent doesn't auto-complete subtasks
+    - Completing the parent completes its subtasks; cancelling it cancels the
+      open ones, and reopening or un-cancelling it restores them (see 33)
     - Deleting the parent deletes all subtasks (cascade)
 
 20. **Subtask visibility rules:**
@@ -289,7 +290,13 @@ Task responses include `is_blocked` and `blocked_by_count`. Names of blockers co
 33. **Completion behavior for subtasks:**
     - Parent can be completed even if subtasks are not done
     - Subtasks can be completed independently
-    - Completing the parent doesn't complete subtasks
+    - Completing the parent completes all its subtasks
+    - Cancelling the parent cancels subtasks that are not done, archived or
+      already cancelled
+    - Reopening a done parent reopens its done subtasks; un-cancelling a
+      cancelled parent restores its cancelled subtasks
+    - The same applies whether the status is changed in the web app or
+      through the MCP server (`update_task`, `complete_task`)
     - Progress indicator shows "X of Y completed" for subtasks
 
 34. **Un-completing a task:**

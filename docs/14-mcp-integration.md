@@ -316,11 +316,13 @@ Any parameter not in the table above is rejected with an error rather than silen
 
 Changing recurrence fields on a task that already has future recurring instances regenerates those instances, the same way `PATCH /api/task/:uid` does.
 
+Changing `status` has the same side effects as in the web app: completing a task completes its subtasks, cancelling it cancels them, and reopening or un-cancelling it restores them. Changes are recorded in the task's history, so they show in the task timeline and the productivity metrics.
+
 ---
 
 #### `complete_task`
 
-Toggle a task between completed and pending.
+Toggle a task between completed and pending. Subtasks follow the task (completing it completes them, reopening it reopens them), and the change is recorded in the task's history, the same as in the web app.
 
 **Parameters:**
 | Parameter | Type | Required | Description |
