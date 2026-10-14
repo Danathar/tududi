@@ -27,6 +27,13 @@ const {
 } = require('../../tasks/utils/validation');
 const { notifyAssignee } = require('../../tasks/operations/assignment');
 const {
+    handleParentChildOnStatusChange,
+} = require('../../tasks/operations/parent-child');
+const {
+    captureOldValues,
+    logTaskChanges,
+} = require('../../tasks/utils/logging');
+const {
     processDueDateForStorage,
     processDeferUntilForStorage,
 } = require('../../../utils/timezone-utils');
@@ -677,6 +684,7 @@ function registerTaskTools(server, context, tools) {
                 throw new Error('Access denied');
             }
 
+            const oldValues = captureOldValues(task);
             const previousAssignedTo = task.assigned_to;
             const updates = {};
             if (params.name !== undefined) updates.name = params.name;
@@ -834,6 +842,10 @@ function registerTaskTools(server, context, tools) {
             // future recurring instances get regenerated, matching PATCH /api/task/:uid
             await handleRecurrenceUpdate(task, RECURRENCE_FIELDS, params);
 
+            // History records the status asked for, before a recurring task
+            // is moved back to not started, same as PATCH /api/task/:uid
+            const requestedStatus = updates.status;
+
             // recurring tasks advance in place, same as PATCH /api/task/:uid
             const recurringOccurrence =
                 updates.status === Task.STATUS.DONE
@@ -848,10 +860,11 @@ function registerTaskTools(server, context, tools) {
                 updates.due_date = recurringOccurrence.nextDueDate;
             }
 
+            let tagInstances;
             await sequelize.transaction(async (transaction) => {
                 await task.update(updates, { transaction });
 
-                const tagInstances = await resolveTagsForTransaction(
+                tagInstances = await resolveTagsForTransaction(
                     params.tags,
                     context.userId,
                     transaction
@@ -861,6 +874,16 @@ function registerTaskTools(server, context, tools) {
                 }
             });
 
+            // Subtasks follow the parent's status, same as PATCH /api/task/:uid
+            if (updates.status !== undefined) {
+                await handleParentChildOnStatusChange(
+                    task,
+                    oldValues.status,
+                    updates.status,
+                    context.userId
+                );
+            }
+
             if (recurringOccurrence) {
                 await recordOccurrence(
                     task,
@@ -868,6 +891,21 @@ function registerTaskTools(server, context, tools) {
                     context.userId
                 );
             }
+
+            await logTaskChanges(
+                task,
+                oldValues,
+                {
+                    ...updates,
+                    status: requestedStatus,
+                    // the date strings as sent, as PATCH logs its request body
+                    due_date: params.due_date,
+                    defer_until: params.defer_until,
+                },
+                tagInstances,
+                context.userId,
+                'mcp'
+            );
 
             const reloadedTask = await taskRepository.findById(task.id, {
                 include: [
@@ -946,6 +984,7 @@ function registerTaskTools(server, context, tools) {
                 throw new Error('Access denied');
             }
 
+            const oldValues = captureOldValues(task);
             const newStatus = task.status === 2 ? 0 : 2;
             // Completing a blocked task is allowed; the caller is told.
             const openBlockers =
@@ -970,6 +1009,23 @@ function registerTaskTools(server, context, tools) {
                     completed_at: newStatus === 2 ? new Date() : null,
                 });
             }
+
+            // Subtasks follow the parent's status and the change goes into
+            // the task's history, same as PATCH /api/task/:uid
+            await handleParentChildOnStatusChange(
+                task,
+                oldValues.status,
+                task.status,
+                context.userId
+            );
+            await logTaskChanges(
+                task,
+                oldValues,
+                { status: newStatus },
+                null,
+                context.userId,
+                'mcp'
+            );
 
             const reloadedTask = await taskRepository.findById(task.id, {
                 include: [

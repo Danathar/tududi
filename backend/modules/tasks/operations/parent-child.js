@@ -3,71 +3,6 @@ const { Op } = require('sequelize');
 const taskRepository = require('../repository');
 const { logError } = require('../../../services/logService');
 
-async function checkAndUpdateParentTaskCompletion(parentTaskId, userId) {
-    try {
-        const subtasks = await taskRepository.findChildren(
-            parentTaskId,
-            userId
-        );
-
-        const allSubtasksDone =
-            subtasks.length > 0 &&
-            subtasks.every(
-                (subtask) =>
-                    subtask.status === Task.STATUS.DONE ||
-                    subtask.status === 'done'
-            );
-
-        if (allSubtasksDone) {
-            const parentTask = await taskRepository.findByIdAndUser(
-                parentTaskId,
-                userId
-            );
-
-            if (
-                parentTask &&
-                parentTask.status !== Task.STATUS.DONE &&
-                parentTask.status !== 'done'
-            ) {
-                await taskRepository.update(parentTaskId, userId, {
-                    status: Task.STATUS.DONE,
-                    completed_at: new Date(),
-                });
-                return true;
-            }
-        }
-        return false;
-    } catch (error) {
-        logError('Error checking parent task completion:', error);
-        return false;
-    }
-}
-
-async function undoneParentTaskIfNeeded(parentTaskId, userId) {
-    try {
-        const parentTask = await taskRepository.findByIdAndUser(
-            parentTaskId,
-            userId
-        );
-
-        if (
-            parentTask &&
-            (parentTask.status === Task.STATUS.DONE ||
-                parentTask.status === 'done')
-        ) {
-            await taskRepository.update(parentTaskId, userId, {
-                status: Task.STATUS.NOT_STARTED,
-                completed_at: null,
-            });
-            return true;
-        }
-        return false;
-    } catch (error) {
-        logError('Error undoing parent task:', error);
-        return false;
-    }
-}
-
 async function completeAllSubtasks(parentTaskId, userId) {
     try {
         const result = await taskRepository.updateChildren(
@@ -205,8 +140,6 @@ async function handleParentChildOnStatusChange(
 }
 
 module.exports = {
-    checkAndUpdateParentTaskCompletion,
-    undoneParentTaskIfNeeded,
     completeAllSubtasks,
     undoneAllSubtasks,
     cancelAllSubtasks,

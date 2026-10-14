@@ -14,6 +14,10 @@ Notable changes to tududi. Versions match the git tags and the
   with status done) now moves it to its next due date and records the
   completion, the same as completing it in the web UI. Previously it was just
   marked done and the series stopped.
+- Changing a task's status over MCP (`complete_task`, or `update_task`) now
+  carries its subtasks along and records the change in the task's history,
+  the same as in the web UI. Previously subtasks stayed open and the change
+  was missing from the timeline and productivity metrics.
 
 ## 1.6.0
 
