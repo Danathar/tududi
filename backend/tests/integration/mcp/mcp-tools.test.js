@@ -2027,6 +2027,170 @@ describe('MCP Tools Integration', () => {
                 expect(events).toHaveLength(1);
                 expect(events[0].event_type).toBe('name_changed');
             });
+
+            it('update_task records the old and new status', async () => {
+                const task = await Task.create({
+                    user_id: user.id,
+                    name: 'Task',
+                    status: Task.STATUS.IN_PROGRESS,
+                });
+
+                await callMcpTool(apiTokenValue, 'update_task', {
+                    id: task.id,
+                    status: 'done',
+                });
+
+                const events = await statusEvents(task.id);
+                expect(events).toHaveLength(1);
+                expect(events[0].old_value).toEqual({
+                    status: Task.STATUS.IN_PROGRESS,
+                });
+                expect(events[0].new_value).toEqual({
+                    status: Task.STATUS.DONE,
+                });
+            });
+
+            it('update_task records a recurring task as completed, not as reset', async () => {
+                const task = await Task.create({
+                    user_id: user.id,
+                    name: 'Water plants',
+                    status: Task.STATUS.NOT_STARTED,
+                    recurrence_type: 'daily',
+                    recurrence_interval: 1,
+                    due_date: new Date('2030-01-10T00:00:00Z'),
+                });
+
+                await callMcpTool(apiTokenValue, 'update_task', {
+                    id: task.id,
+                    status: 'done',
+                });
+
+                await task.reload();
+                expect(task.status).toBe(Task.STATUS.NOT_STARTED);
+                const events = await statusEvents(task.id);
+                expect(events).toHaveLength(1);
+                expect(events[0].event_type).toBe('completed');
+                expect(events[0].metadata.source).toBe('mcp');
+            });
+
+            it('complete_task records a recurring task as completed, not as reset', async () => {
+                const task = await Task.create({
+                    user_id: user.id,
+                    name: 'Water plants',
+                    status: Task.STATUS.NOT_STARTED,
+                    recurrence_type: 'daily',
+                    recurrence_interval: 1,
+                    due_date: new Date('2030-01-10T00:00:00Z'),
+                });
+
+                await callMcpTool(apiTokenValue, 'complete_task', {
+                    id: task.id,
+                });
+
+                await task.reload();
+                expect(task.status).toBe(Task.STATUS.NOT_STARTED);
+                const events = await statusEvents(task.id);
+                expect(events).toHaveLength(1);
+                expect(events[0].event_type).toBe('completed');
+                expect(events[0].metadata.source).toBe('mcp');
+            });
+
+            it('update_task records due and defer dates as sent', async () => {
+                const task = await Task.create({
+                    user_id: user.id,
+                    name: 'Task',
+                    status: Task.STATUS.NOT_STARTED,
+                });
+
+                await callMcpTool(apiTokenValue, 'update_task', {
+                    id: task.id,
+                    due_date: '2030-02-01',
+                    defer_until: '2030-01-20T09:00',
+                });
+
+                const due = await TaskEvent.findAll({
+                    where: { task_id: task.id, field_name: 'due_date' },
+                });
+                expect(due).toHaveLength(1);
+                expect(due[0].new_value).toEqual({ due_date: '2030-02-01' });
+                expect(due[0].metadata.source).toBe('mcp');
+
+                const defer = await TaskEvent.findAll({
+                    where: { task_id: task.id, field_name: 'defer_until' },
+                });
+                expect(defer).toHaveLength(1);
+                expect(defer[0].new_value).toEqual({
+                    defer_until: '2030-01-20T09:00',
+                });
+            });
+
+            it('update_task does not record unchanged due and defer dates', async () => {
+                const task = await Task.create({
+                    user_id: user.id,
+                    name: 'Task',
+                    status: Task.STATUS.NOT_STARTED,
+                });
+                const dates = {
+                    due_date: '2030-02-01',
+                    defer_until: '2030-01-20T09:00:00.000Z',
+                };
+                await callMcpTool(apiTokenValue, 'update_task', {
+                    id: task.id,
+                    ...dates,
+                });
+                await TaskEvent.destroy({ where: { task_id: task.id } });
+
+                await callMcpTool(apiTokenValue, 'update_task', {
+                    id: task.id,
+                    ...dates,
+                });
+
+                const events = await TaskEvent.findAll({
+                    where: { task_id: task.id },
+                });
+                expect(events).toHaveLength(0);
+            });
+
+            it('update_task records tag changes as coming from MCP', async () => {
+                const task = await Task.create({
+                    user_id: user.id,
+                    name: 'Task',
+                    status: Task.STATUS.NOT_STARTED,
+                });
+
+                await callMcpTool(apiTokenValue, 'update_task', {
+                    id: task.id,
+                    tags: ['errands'],
+                });
+
+                const events = await TaskEvent.findAll({
+                    where: { task_id: task.id, field_name: 'tags' },
+                });
+                expect(events).toHaveLength(1);
+                expect(events[0].event_type).toBe('tags_changed');
+                expect(events[0].new_value).toEqual({
+                    tags: [expect.objectContaining({ name: 'errands' })],
+                });
+                expect(events[0].metadata.source).toBe('mcp');
+            });
+
+            it('a status change through the REST API is still recorded as web', async () => {
+                const task = await Task.create({
+                    user_id: user.id,
+                    name: 'Task',
+                    status: Task.STATUS.NOT_STARTED,
+                });
+
+                const response = await request(app)
+                    .patch(`/api/task/${task.uid}`)
+                    .set('Authorization', `Bearer ${apiTokenValue}`)
+                    .send({ status: Task.STATUS.DONE });
+                expect(response.status).toBe(200);
+
+                const events = await statusEvents(task.id);
+                expect(events).toHaveLength(1);
+                expect(events[0].metadata.source).toBe('web');
+            });
         });
 
         describe('skip_task_occurrence', () => {
