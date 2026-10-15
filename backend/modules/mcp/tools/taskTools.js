@@ -1009,9 +1009,7 @@ function registerTaskTools(server, context, tools) {
 
             // Completing or reopening an example makes it the user's own task,
             // same as PATCH /api/task/:uid
-            const clearExample = task.example_of
-                ? { example_of: null }
-                : {};
+            const clearExample = task.example_of ? { example_of: null } : {};
 
             if (!recurringOccurrence) {
                 await task.update({
