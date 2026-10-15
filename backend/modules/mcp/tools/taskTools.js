@@ -860,6 +860,10 @@ function registerTaskTools(server, context, tools) {
                 updates.due_date = recurringOccurrence.nextDueDate;
             }
 
+            // An example from the welcome screen becomes the user's own task
+            // the first time anything changes, same as PATCH /api/task/:uid
+            if (task.example_of) updates.example_of = null;
+
             let tagInstances;
             await sequelize.transaction(async (transaction) => {
                 await task.update(updates, { transaction });
@@ -1003,11 +1007,18 @@ function registerTaskTools(server, context, tools) {
                       })
                     : null;
 
+            // Completing or reopening an example makes it the user's own task,
+            // same as PATCH /api/task/:uid
+            const clearExample = task.example_of ? { example_of: null } : {};
+
             if (!recurringOccurrence) {
                 await task.update({
                     status: newStatus,
                     completed_at: newStatus === 2 ? new Date() : null,
+                    ...clearExample,
                 });
+            } else if (task.example_of) {
+                await task.update(clearExample);
             }
 
             // Subtasks follow the parent's status and the change goes into
@@ -1261,6 +1272,12 @@ function registerTaskTools(server, context, tools) {
 
             await entitlements.assertCanCreate(context.userId, 'task');
             const subtask = await taskRepository.create(subtaskData);
+
+            // Adding a subtask edits the parent, so an example parent becomes
+            // the user's own task, same as PATCH /api/task/:uid with subtasks
+            if (parentTask.example_of) {
+                await parentTask.update({ example_of: null });
+            }
 
             const reloadedSubtask = await taskRepository.findByIdAndUser(
                 subtask.id,

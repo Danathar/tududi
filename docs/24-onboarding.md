@@ -23,7 +23,7 @@ Pages that are empty for a new account offer one-click starters under their usua
 
 - `users.onboarding_starter`: set when the welcome page's button is pressed (`empty`; the API also accepts `household`, `work-side`, `studying` and `simple`). Null until then, for existing accounts too, so everyone sees the page once.
 - `users.onboarded_at`: when the welcome page was done with. Set together with `onboarding_starter`.
-- `tasks.example_of`: the starter key while a task seeded through the API is an untouched example.
+- `tasks.example_of`: the starter key while a task seeded through the API is an untouched example. Any edit clears it, through `PATCH /api/task/:uid` or the MCP `update_task`, `complete_task` and `add_subtask` tools (as the parent).
 - `GET /api/current_user` and `GET /api/profile` include both user columns (`null` until set).
 - `POST /api/onboarding/starter` with `{ key: "empty" }` (what the welcome page sends) records the visit; with `{ key, areas, habits, note }` it seeds a starter in one transaction (areas with colour, goal and projects, tasks with relative due dates such as `today`, `tomorrow`, `+3d`, `sat`, `next-week`, habits, a note; same-name areas, projects and habits are reused), sets both columns and returns `{ onboarding_starter, onboarded_at, created: { areas, goals, projects, tasks, habits, notes } }`. Unknown keys and oversized payloads are 400. Hosted plan limits apply to projects, tasks and notes.
 - `GET /api/onboarding/examples` returns `{ count }` of untouched, unfinished examples; `DELETE /api/onboarding/examples` removes them and returns `{ removed }`.
