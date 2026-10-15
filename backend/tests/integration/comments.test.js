@@ -1,5 +1,6 @@
 const request = require('supertest');
 const path = require('path');
+const crypto = require('crypto');
 const fs = require('fs').promises;
 const app = require('../../app');
 const {
@@ -548,10 +549,16 @@ describe('Task comments and mentions', () => {
     describe('pasted images', () => {
         let readerUser, readerAgent;
 
+        // Every pasted image carries these bytes, so a stray file left
+        // behind by a paste can be told apart from other tests' files.
+        const imageBytes = Buffer.from(
+            `image bytes ${crypto.randomBytes(8).toString('hex')}`
+        );
+
         const pasteImage = (agent, contentType = 'image/png') =>
             agent
                 .post(`/api/task/${task.uid}/comments/images`)
-                .attach('file', Buffer.from('image bytes'), {
+                .attach('file', imageBytes, {
                     filename: 'image.png',
                     contentType,
                 });
@@ -560,9 +567,19 @@ describe('Task comments and mentions', () => {
         const listTaskFiles = async () =>
             fs.readdir(tasksDir()).catch(() => []);
         // Other test files share the uploads folder and add or remove
-        // their own files while this runs, so only look for new files.
-        const newTaskFiles = async (before) =>
-            (await listTaskFiles()).filter((name) => !before.includes(name));
+        // their own files in parallel while this runs, so only count new
+        // files that hold the bytes this describe block pastes.
+        const newTaskFiles = async (before) => {
+            const found = [];
+            for (const name of await listTaskFiles()) {
+                if (before.includes(name)) continue;
+                const content = await fs
+                    .readFile(path.join(tasksDir(), name))
+                    .catch(() => null);
+                if (content && content.equals(imageBytes)) found.push(name);
+            }
+            return found;
+        };
 
         beforeEach(async () => {
             readerUser = await createTestUser({
