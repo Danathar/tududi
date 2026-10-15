@@ -20,6 +20,7 @@ const {
 } = require('../../../models');
 const { createTestUser } = require('../../helpers/testUtils');
 const peopleService = require('../../../modules/people/service');
+const onboardingService = require('../../../modules/onboarding/service');
 const {
     createApiToken: createApiTokenFromService,
 } = require('../../../modules/users/apiTokenService');
@@ -2331,6 +2332,85 @@ describe('MCP Tools Integration', () => {
                 // Verify task is gone
                 const deletedTask = await Task.findByPk(task.id);
                 expect(deletedTask).toBeNull();
+            });
+        });
+
+        describe('example tasks from the welcome screen', () => {
+            async function createExample(overrides = {}) {
+                return Task.create({
+                    user_id: user.id,
+                    name: 'Call the dentist',
+                    example_of: 'household',
+                    ...overrides,
+                });
+            }
+
+            async function expectKept(task) {
+                await task.reload();
+                expect(task.example_of).toBeNull();
+                const { removed } =
+                    await onboardingService.removeExamples(user);
+                expect(removed).toBe(0);
+                expect(await Task.findByPk(task.id)).not.toBeNull();
+            }
+
+            it('update_task turns an example into their own task', async () => {
+                const example = await createExample();
+
+                const response = await callMcpTool(
+                    apiTokenValue,
+                    'update_task',
+                    {
+                        id: example.id,
+                        name: 'Call the dentist about the crown',
+                    }
+                );
+                expect(response.status).toBe(200);
+                expect(getToolContent(response).isError).toBe(false);
+
+                await expectKept(example);
+            });
+
+            it('complete_task turns an example into their own task, so reopening it keeps it', async () => {
+                const example = await createExample();
+
+                await callMcpTool(apiTokenValue, 'complete_task', {
+                    id: example.id,
+                });
+                await callMcpTool(apiTokenValue, 'complete_task', {
+                    id: example.id,
+                });
+
+                await example.reload();
+                expect(example.status).toBe(Task.STATUS.NOT_STARTED);
+                await expectKept(example);
+            });
+
+            it('complete_task on a recurring example clears the mark', async () => {
+                const example = await createExample({
+                    recurrence_type: 'daily',
+                    recurrence_interval: 1,
+                    due_date: new Date(),
+                });
+
+                await callMcpTool(apiTokenValue, 'complete_task', {
+                    id: example.id,
+                });
+
+                await expectKept(example);
+            });
+
+            it('add_subtask turns an example parent into their own task', async () => {
+                const example = await createExample();
+
+                const response = await callMcpTool(
+                    apiTokenValue,
+                    'add_subtask',
+                    { parent_id: example.id, name: 'Find the number' }
+                );
+                expect(response.status).toBe(200);
+
+                await expectKept(example);
             });
         });
 

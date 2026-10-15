@@ -7,6 +7,10 @@ Notable changes to tududi. Versions match the git tags and the
 
 ### Fixed
 
+- Editing, completing or reopening an example task over MCP (`update_task`,
+  `complete_task`), or adding a subtask to one (`add_subtask`), now makes it
+  the user's own task, the same as editing it in the web UI. Previously the
+  task stayed marked as an example, so "remove examples" deleted it.
 - Skipping an occurrence of a recurring task in a shared project no longer
   flips its Area card to the owner's area; the response uses the viewer's own
   area, like the other task responses.
