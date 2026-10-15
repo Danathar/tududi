@@ -559,6 +559,10 @@ describe('Task comments and mentions', () => {
         const tasksDir = () => path.join(getConfig().uploadPath, 'tasks');
         const listTaskFiles = async () =>
             fs.readdir(tasksDir()).catch(() => []);
+        // Other test files share the uploads folder and add or remove
+        // their own files while this runs, so only look for new files.
+        const newTaskFiles = async (before) =>
+            (await listTaskFiles()).filter((name) => !before.includes(name));
 
         beforeEach(async () => {
             readerUser = await createTestUser({
@@ -629,7 +633,7 @@ describe('Task comments and mentions', () => {
             const response = await pasteImage(outsiderAgent);
             expect(response.status).toBe(404);
             expect(await TaskAttachment.count()).toBe(0);
-            expect(await listTaskFiles()).toEqual(before);
+            expect(await newTaskFiles(before)).toEqual([]);
         });
 
         test('only images can be pasted, and a refused file is removed', async () => {
@@ -637,7 +641,7 @@ describe('Task comments and mentions', () => {
             const response = await pasteImage(ownerAgent, 'application/pdf');
             expect(response.status).toBe(400);
             expect(await TaskAttachment.count()).toBe(0);
-            expect(await listTaskFiles()).toEqual(before);
+            expect(await newTaskFiles(before)).toEqual([]);
         });
 
         test('notifications show [image] instead of the image markdown', async () => {
