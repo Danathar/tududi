@@ -90,6 +90,73 @@ describe('Area of a shared project in task responses', () => {
         expect(single.body.Project.Area.uid).toBe(ownerArea.uid);
     });
 
+    it('shows the viewer their own placement on a task they add to the project', async () => {
+        const res = await viewerAgent
+            .post('/api/task')
+            .send({ name: 'Viewer added task', project_uid: project.uid });
+
+        expect(res.status).toBe(201);
+        expect(res.body.Project.area_id).toBe(viewerArea.id);
+        expect(res.body.Project.Area.uid).toBe(viewerArea.uid);
+    });
+
+    // A viewer can take the project out of their areas (area_id ''), which
+    // stores a placement with no area. For them that is "no area", not the
+    // owner's area.
+    it('shows no area to a viewer who took the project out of their areas', async () => {
+        const moved = await viewerAgent
+            .patch(`/api/project/${project.uid}`)
+            .send({ area_id: '' });
+        expect(moved.status).toBe(200);
+
+        const list = await viewerAgent.get('/api/tasks').query({ type: 'all' });
+        expect(list.status).toBe(200);
+        const listed = findTask(list.body).Project;
+        expect(listed.area_id).toBeNull();
+        expect(listed.Area).toBeNull();
+
+        const single = await viewerAgent.get(`/api/task/${task.uid}`);
+        expect(single.status).toBe(200);
+        expect(single.body.Project.area_id).toBeNull();
+        expect(single.body.Project.Area).toBeNull();
+
+        const forOwner = await ownerAgent.get(`/api/task/${task.uid}`);
+        expect(forOwner.status).toBe(200);
+        expect(forOwner.body.Project.Area.uid).toBe(ownerArea.uid);
+    });
+
+    it("shows each viewer their own placement, not another viewer's", async () => {
+        const second = await createTestUser({
+            email: 'area-viewer-2@example.com',
+            timezone: 'UTC',
+        });
+        const secondAgent = await login('area-viewer-2@example.com');
+        const secondArea = await Area.create({
+            name: 'Second side',
+            user_id: second.id,
+        });
+        await ownerAgent.post('/api/shares').send({
+            resource_type: 'project',
+            resource_uid: project.uid,
+            target_user_email: second.email,
+            access_level: 'rw',
+        });
+        await acceptAllInvitations(secondAgent);
+        await UserProjectArea.create({
+            user_id: second.id,
+            project_id: project.id,
+            area_id: secondArea.id,
+        });
+
+        const forViewer = await viewerAgent.get(`/api/task/${task.uid}`);
+        expect(forViewer.status).toBe(200);
+        expect(forViewer.body.Project.Area.uid).toBe(viewerArea.uid);
+
+        const forSecond = await secondAgent.get(`/api/task/${task.uid}`);
+        expect(forSecond.status).toBe(200);
+        expect(forSecond.body.Project.Area.uid).toBe(secondArea.uid);
+    });
+
     describe('for a recurring task', () => {
         let recurring;
 
