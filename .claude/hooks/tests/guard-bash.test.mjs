@@ -151,6 +151,9 @@ const blocked = [
     ['gh repo deploy-key add key.pub --title Danathar/tududi', 'without an explicit Danathar/tududi target'],
     // A bare new name is not a repo target.
     ['gh repo rename tududi', 'without an explicit Danathar/tududi target'],
+    // A fork name that is a flag value is not the repo gh will act on.
+    ['gh repo edit --description Danathar/tududi', 'without an explicit Danathar/tududi target'],
+    ['gh repo edit -d Danathar/tududi --visibility public', 'without an explicit Danathar/tududi target'],
     ['gh api -X POST repos/chrisvel/tududi/issues -f title=x', 'repos/Danathar/tududi'],
     ['gh api repos/chrisvel/tududi/issues -f title=x', 'repos/Danathar/tududi'],
     ['gh api --method=DELETE repos/chrisvel/tududi/issues/1', 'repos/Danathar/tududi'],
