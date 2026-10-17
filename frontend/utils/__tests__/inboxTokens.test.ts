@@ -36,6 +36,19 @@ describe('splitInboxTokens', () => {
         ]);
     });
 
+    it('colours a token that starts a new line', () => {
+        expect(splitInboxTokens('Call Ann\n#urgent')).toEqual([
+            { text: 'Call Ann\n' },
+            { text: '#urgent', kind: 'tag' },
+        ]);
+    });
+
+    it('leaves a name with an unclosed quote as plain text', () => {
+        expect(splitInboxTokens('x +"Birthday party')).toEqual([
+            { text: 'x +"Birthday party' },
+        ]);
+    });
+
     it('keeps line breaks in the plain runs', () => {
         expect(splitInboxTokens('#a\nb')).toEqual([
             { text: '#a', kind: 'tag' },
