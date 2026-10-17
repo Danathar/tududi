@@ -450,9 +450,12 @@ function checkGh(args, envRepo) {
     }
 
     if (group === 'repo') {
-        // Repo-scoped writes take the repo as a positional argument.
-        const positional = plain.slice(2);
-        if (isFork(flagRepo ?? '') || (positional.length && isFork(positional[0])) || isFork(envRepo ?? '')) return null;
+        // Repo-scoped writes take the repo as the word right after the action
+        // (`gh repo edit Danathar/tududi ...`). A later plain word may be a flag
+        // value (`gh repo edit -d Danathar/tududi` edits gh's default repo).
+        const words = args.flatMap((a, n) => (!a.startsWith('-') && !['--repo', '-R'].includes(args[n - 1]) ? [n] : []));
+        const repoArg = args[words[1] + 1];
+        if (isFork(flagRepo ?? '') || (repoArg !== undefined && isFork(repoArg)) || isFork(envRepo ?? '')) return null;
         return block(`Blocked: \`gh repo ${action}\` without an explicit Danathar/tududi target.`);
     }
 
