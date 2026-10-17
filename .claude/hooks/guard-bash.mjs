@@ -601,7 +601,9 @@ function checkGit(args, inlineEnv = {}, exported = {}) {
 
 /** Writes to push-redirecting config keys (`git config remote.origin.url ...`). */
 function checkGitConfig(rest) {
-    const readOnly = ['--get', '--get-all', '--get-regexp', '--get-urlmatch', '--list', '-l', '--show-origin', '--show-scope'];
+    // Only flags that pick a read mode. --show-origin/--show-scope are display
+    // modifiers: `git config --show-scope remote.origin.url URL` still writes.
+    const readOnly = ['--get', '--get-all', '--get-regexp', '--get-urlmatch', '--list', '-l'];
     if (rest.some((a) => readOnly.includes(a))) return null;
 
     // Collect positionals, skipping the values of options that take one
