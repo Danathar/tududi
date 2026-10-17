@@ -59,6 +59,9 @@ const allowed = [
     'git config --get remote.origin.url',
     'git config remote.origin.url',
     'git config user.name x',
+    'git config --show-origin --list',
+    'git config --show-scope --get remote.origin.url',
+    'git config get --show-origin remote.origin.url',
     'env FOO=1 git status',
     'env -u FOO git status',
     'gh alias list',
@@ -210,6 +213,12 @@ const blocked = [
     ['git config --rename-section foo remote.origin', 'rename-section'],
     ['git config rename-section remote.origin foo', 'could redirect'],
     ['git config rename-section foo core', 'rename-section'],
+    // --show-origin/--show-scope only change how a read is printed; git 2.47
+    // still writes `key value` with --show-scope, so they do not make it a read.
+    ['git config --show-scope remote.origin.url https://github.com/someone/other.git', 'could redirect'],
+    ['git config --show-origin remote.origin.url https://github.com/someone/other.git', 'could redirect'],
+    ['git config --show-scope url.https://github.com/someone/.insteadOf https://github.com/Danathar/', 'could redirect'],
+    ['git config set --show-scope remote.origin.pushurl https://github.com/someone/other.git', 'could redirect'],
     // Compound commands, subshells, wrappers.
     ['git status && gh pr create --title t', 'no --repo'],
     ['git status; gh issue create --title t', 'no --repo'],
