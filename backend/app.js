@@ -563,10 +563,15 @@ routeBases.forEach(registerApiRoutes);
 
 // SPA fallback
 app.get('*', (req, res) => {
-    if (
-        !req.path.startsWith('/api/') &&
-        !req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg)$/)
-    ) {
+    // A missing API route, locale file, or any path ending in a file extension
+    // (.json, .map, .woff2, ...) is a 404. Only extensionless paths are
+    // client-side routes that get index.html.
+    const isMissingAsset =
+        req.path.startsWith('/api/') ||
+        req.path === '/locales' ||
+        req.path.startsWith('/locales/') ||
+        /\.[A-Za-z0-9]+$/.test(req.path);
+    if (!isMissingAsset) {
         if (serveFromDist) {
             res.setHeader('Cache-Control', 'no-cache');
             res.sendFile(path.join(__dirname, 'dist', 'index.html'));
