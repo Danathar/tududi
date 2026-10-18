@@ -21,6 +21,8 @@ const {
     calculateVirtualOccurrences,
 } = require('./recurringTaskService');
 const { logError } = require('../../services/logService');
+const { ValidationError } = require('../../shared/errors');
+const { parseIntegerParam } = require('../../utils/list-params');
 
 const { serializeTask, serializeTasks } = require('./core/serializers');
 const {
@@ -38,6 +40,9 @@ const {
     revokeProjectSharesForItem,
 } = require('../../services/containerShareSync');
 const habitService = require('../habits/habitService');
+
+// The board and matrix views ask for up to 10000 tasks in one request.
+const MAX_TASK_LIST_LIMIT = 10000;
 
 const {
     isValidTaskUid,
@@ -211,8 +216,16 @@ router.get('/tasks', async (req, res) => {
 
         const hasPagination =
             limitParam !== undefined || offsetParam !== undefined;
-        const limit = parseInt(limitParam, 10) || 20;
-        const offset = parseInt(offsetParam, 10) || 0;
+        const limit = parseIntegerParam(limitParam, 'limit', {
+            min: 1,
+            max: MAX_TASK_LIST_LIMIT,
+            fallback: 20,
+        });
+        const offset = parseIntegerParam(offsetParam, 'offset', {
+            min: 0,
+            max: Number.MAX_SAFE_INTEGER,
+            fallback: 0,
+        });
         // Today and upcoming-by-day expand or filter the list in memory, so
         // they page after that; everything else pages in the database.
         const sqlPagination =
@@ -405,7 +418,7 @@ router.get('/tasks', async (req, res) => {
         res.json(response);
     } catch (error) {
         logError('Error fetching tasks:', error);
-        if (error.message === 'Invalid order column specified.') {
+        if (error instanceof ValidationError) {
             return res.status(400).json({ error: error.message });
         }
         res.status(500).json({ error: 'Internal server error' });

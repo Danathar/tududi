@@ -11,6 +11,7 @@ const permissionsService = require('../../../services/permissionsService');
 const scopeService = require('../../../services/scopeService');
 const { blockedCondition } = require('../relations/service');
 const { customOrderClause } = require('../order/service');
+const { parseOrderBy } = require('../../../utils/list-params');
 const {
     getSafeTimezone,
     getUpcomingRangeInUTC,
@@ -329,22 +330,17 @@ async function filterTasksByParams(
     }
 
     if (params.order_by) {
-        const [orderColumn, orderDirection = 'asc'] =
-            params.order_by.split(':');
-        const allowedColumns = [
-            'custom',
-            'created_at',
-            'updated_at',
-            'name',
-            'priority',
-            'status',
-            'due_date',
-            'completed_at',
-        ];
-
-        if (!allowedColumns.includes(orderColumn)) {
-            throw new Error('Invalid order column specified.');
-        }
+        const { column: orderColumn, direction: orderDirection } =
+            parseOrderBy(params.order_by, [
+                'custom',
+                'created_at',
+                'updated_at',
+                'name',
+                'priority',
+                'status',
+                'due_date',
+                'completed_at',
+            ]);
 
         if (orderColumn === 'custom') {
             orderClause = customOrderClause(userId);

@@ -19,6 +19,9 @@ const { noteAttachments } = require('../../services/entityAttachments');
 const {
     revokeProjectSharesForItem,
 } = require('../../services/containerShareSync');
+const { parseOrderBy } = require('../../utils/list-params');
+
+const NOTE_ORDER_COLUMNS = ['title', 'created_at', 'updated_at'];
 
 /**
  * Serialize a note with sorted tags.
@@ -132,8 +135,9 @@ class NotesService {
      * Get all notes for a user with optional filtering.
      */
     async getAll(userId, options = {}) {
-        const { orderBy = 'title:asc', tagFilter, scopeQuery } = options;
-        const [orderColumn, orderDirection] = orderBy.split(':');
+        const { orderBy, tagFilter, scopeQuery } = options;
+        const { column: orderColumn, direction: orderDirection } =
+            parseOrderBy(orderBy || 'title:asc', NOTE_ORDER_COLUMNS);
 
         // area_uid / project_uid / tags narrow the list to a Focus scope
         const scope = scopeQuery
