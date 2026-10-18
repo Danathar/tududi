@@ -151,13 +151,11 @@ describe('Push notifications', () => {
             dns.promises.lookup.mockResolvedValueOnce([
                 { address: '192.168.1.10', family: 4 },
             ]);
-            const res = await agent
-                .post('/api/push/subscriptions')
-                .send(
-                    subscriptionBody({
-                        endpoint: 'https://internal.example.com/push',
-                    })
-                );
+            const res = await agent.post('/api/push/subscriptions').send(
+                subscriptionBody({
+                    endpoint: 'https://internal.example.com/push',
+                })
+            );
             expect(res.status).toBe(400);
             expect(await PushSubscription.count()).toBe(0);
         });
