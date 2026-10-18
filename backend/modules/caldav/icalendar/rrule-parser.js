@@ -1,6 +1,33 @@
 const { WEEKDAY_REVERSE_MAP } = require('./field-mappings');
+const { processDueDateForStorage } = require('../../../utils/timezone-utils');
 
-function parseRRULE(rruleString) {
+// UNTIL is a DATE-TIME (20251231T000000Z) or, when DTSTART is a DATE, a DATE
+// (20251231, RFC 5545 3.3.10). A DATE means the recurrence runs through that
+// whole day, so it is stored as the end of the day in the user's timezone,
+// the same way a DATE due date is. Anything else is unreadable: return null
+// rather than an Invalid Date, which would be stored as the text
+// 'Invalid date' and drop the RRULE from every later GET.
+function parseUntil(until, userTimezone) {
+    const dateOnly = /^(\d{4})(\d{2})(\d{2})$/.exec(until);
+    if (dateOnly) {
+        const [, year, month, day] = dateOnly;
+        const end = processDueDateForStorage(
+            `${year}-${month}-${day}`,
+            userTimezone || 'UTC'
+        );
+        return end && !Number.isNaN(end.getTime()) ? end : null;
+    }
+
+    const date = new Date(
+        until.replace(
+            /(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?/,
+            '$1-$2-$3T$4:$5:$6Z'
+        )
+    );
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function parseRRULE(rruleString, userTimezone) {
     if (!rruleString) {
         return null;
     }
@@ -39,12 +66,9 @@ function parseRRULE(rruleString) {
 
         if (rruleData.UNTIL) {
             try {
-                const until = rruleData.UNTIL;
-                result.recurrence_end_date = new Date(
-                    until.replace(
-                        /(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?/,
-                        '$1-$2-$3T$4:$5:$6Z'
-                    )
+                result.recurrence_end_date = parseUntil(
+                    rruleData.UNTIL,
+                    userTimezone
                 );
             } catch (error) {
                 console.error('Error parsing UNTIL:', error);
