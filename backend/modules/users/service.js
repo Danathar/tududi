@@ -380,8 +380,8 @@ class UsersService {
 
         if (user.avatar_image) {
             const oldAvatarPath = path.join(
-                __dirname,
-                '../../uploads/avatars',
+                config.uploadPath,
+                'avatars',
                 path.basename(user.avatar_image)
             );
             await safeDeleteFile(oldAvatarPath);
@@ -408,8 +408,8 @@ class UsersService {
 
         if (user.avatar_image) {
             const avatarPath = path.join(
-                __dirname,
-                '../../uploads/avatars',
+                config.uploadPath,
+                'avatars',
                 path.basename(user.avatar_image)
             );
             await safeDeleteFile(avatarPath);
