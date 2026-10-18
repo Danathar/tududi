@@ -79,6 +79,11 @@ class AuthService {
             throw new ValidationError('Email and password are required');
         }
 
+        // A JSON body can carry a number, boolean or object here.
+        if (typeof email !== 'string' || typeof password !== 'string') {
+            throw new ValidationError('Email and password must be text');
+        }
+
         // Before the transaction opens: the domain check may wait on DNS,
         // and nothing should hold a database connection while it does.
         const rejection = await checkSignupEmailDomain(email);

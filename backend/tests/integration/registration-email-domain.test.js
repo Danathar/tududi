@@ -48,6 +48,19 @@ describe('Registration email domain checks', () => {
         expect(res.body.error).toMatch(/permanent email address/);
     });
 
+    it.each([
+        ['a number email', { email: 123, password: 'password123' }],
+        ['an object email', { email: {}, password: 'password123' }],
+        ['a boolean email', { email: true, password: 'password123' }],
+        ['a number password', { email: 'a@example.com', password: 12345678 }],
+        ['an array password', { email: 'a@example.com', password: ['x'] }],
+    ])('answers 400, not 500, for %s', async (_label, body) => {
+        const res = await request(app).post('/api/register').send(body);
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe('Email and password must be text');
+    });
+
     it.each(['a@a.a', 'a@a', 'a@.aa'])(
         'rejects the malformed address %s',
         async (email) => {
