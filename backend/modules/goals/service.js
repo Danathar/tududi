@@ -9,6 +9,12 @@ const {
     ForbiddenError,
 } = require('../../shared/errors');
 
+const {
+    validateTitle,
+    validateHorizon,
+    validateStatus,
+} = require('./validation');
+
 const { ACCESS } = permissionsService;
 
 const MAX_REORDER_GOALS = 5000;
@@ -112,14 +118,14 @@ class GoalsService {
     async create(userId, data) {
         const { title, area_id, why, horizon, target_date, status, color } =
             data;
-        if (!title || !title.trim()) {
-            throw new ValidationError('Goal title is required');
-        }
+        const validatedTitle = validateTitle(title);
+        if (horizon) validateHorizon(horizon);
+        if (status) validateStatus(status);
         const resolvedAreaId = await this.resolveAreaId(userId, area_id);
         return goalsRepository.create({
             user_id: userId,
             area_id: resolvedAreaId,
-            title: title.trim(),
+            title: validatedTitle,
             why: why || null,
             horizon: horizon || 'season',
             target_date: target_date || null,
@@ -137,15 +143,15 @@ class GoalsService {
         const { title, area_id, why, horizon, target_date, status, color } =
             data;
         const updates = {};
-        if (title !== undefined) updates.title = title.trim();
+        if (title !== undefined) updates.title = validateTitle(title);
         if (area_id !== undefined) {
             updates.area_id = await this.resolveAreaId(userId, area_id);
         }
         if (why !== undefined) updates.why = why;
-        if (horizon !== undefined) updates.horizon = horizon;
+        if (horizon !== undefined) updates.horizon = validateHorizon(horizon);
         if (target_date !== undefined)
             updates.target_date = target_date || null;
-        if (status !== undefined) updates.status = status;
+        if (status !== undefined) updates.status = validateStatus(status);
         if (color !== undefined) updates.color = color || null;
 
         return goalsRepository.update(goal, updates);
