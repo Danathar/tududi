@@ -100,8 +100,8 @@ const tokenizeText = (text) => {
             // End of quoted string
             inQuotes = false;
             currentToken += char;
-        } else if (char === ' ' && !inQuotes) {
-            // Space outside quotes - end current token
+        } else if (/\s/.test(char) && !inQuotes) {
+            // Whitespace (space, newline, tab) outside quotes - end current token
             if (currentToken) {
                 tokens.push(currentToken);
                 currentToken = '';
@@ -120,6 +120,17 @@ const tokenizeText = (text) => {
 
     return tokens;
 };
+
+// A #tag name: letters (any script), digits, underscore and hyphen.
+const TAG_NAME_PATTERN = /^[\p{L}\p{N}_-]+$/u;
+
+// True for a token that becomes a tag. A #word that cannot be a tag
+// (like #urgent,home) is not one, so it stays in the title.
+const isTagToken = (token) =>
+    token.startsWith('#') && TAG_NAME_PATTERN.test(token.substring(1));
+
+// True for a token that is cut from the title: a valid #tag or a +project.
+const isRemovableToken = (token) => isTagToken(token) || token.startsWith('+');
 
 /**
  * Parse hashtags from text (consecutive groups anywhere)
@@ -155,7 +166,7 @@ const parseHashtags = (text) => {
                     const tagName = words[j].substring(1);
                     if (
                         tagName &&
-                        /^[a-zA-Z0-9_-]+$/.test(tagName) &&
+                        TAG_NAME_PATTERN.test(tagName) &&
                         !matches.includes(tagName)
                     ) {
                         matches.push(tagName);
@@ -242,12 +253,9 @@ const cleanTextFromTagsAndProjects = (text) => {
     let i = 0;
     while (i < tokens.length) {
         // Check if current token starts a tag/project group
-        if (tokens[i].startsWith('#') || tokens[i].startsWith('+')) {
+        if (isRemovableToken(tokens[i])) {
             // Skip this entire consecutive group
-            while (
-                i < tokens.length &&
-                (tokens[i].startsWith('#') || tokens[i].startsWith('+'))
-            ) {
+            while (i < tokens.length && isRemovableToken(tokens[i])) {
                 i++;
             }
         } else {

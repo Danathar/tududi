@@ -70,6 +70,37 @@ describe('inboxProcessingService', () => {
         });
     });
 
+    describe('multi-line and non-ASCII tokens', () => {
+        it('cuts a #tag on a new line from the title', () => {
+            const result = processInboxItem('buy milk\n#groceries');
+
+            expect(result.parsed_tags).toEqual(['groceries']);
+            expect(result.cleaned_content).toBe('buy milk');
+        });
+
+        it('detects a +Project on a new line', () => {
+            const result = processInboxItem('buy milk\n+Home');
+
+            expect(result.parsed_projects).toEqual(['Home']);
+            expect(result.cleaned_content).toBe('buy milk');
+        });
+
+        it('accepts letters from any script in a #tag', () => {
+            const result = processInboxItem('call #café +Écoles');
+
+            expect(result.parsed_tags).toEqual(['café']);
+            expect(result.parsed_projects).toEqual(['Écoles']);
+            expect(result.cleaned_content).toBe('call');
+        });
+
+        it('keeps a #word that cannot be a tag in the title', () => {
+            const result = processInboxItem('call #urgent,home today');
+
+            expect(result.parsed_tags).toEqual([]);
+            expect(result.cleaned_content).toBe('call #urgent,home today');
+        });
+    });
+
     describe('containsUrl', () => {
         it('should detect URLs in text with hashtags', () => {
             expect(containsUrl('https://example.com/page #tag1')).toBe(true);
