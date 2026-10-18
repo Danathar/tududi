@@ -520,6 +520,38 @@ END:VCALENDAR`;
             expect(deleted).toBeNull();
         });
 
+        test('DELETE should clean up like the REST delete (#240)', async () => {
+            const parent = await Task.create({
+                uid: 'rp1',
+                user_id: testUser.id,
+                name: 'Recurring parent',
+                recurrence_type: 'daily',
+                status: 0,
+            });
+            const future = await Task.create({
+                user_id: testUser.id,
+                name: 'Future instance',
+                recurring_parent_id: parent.id,
+                due_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+                status: 0,
+            });
+            const subtask = await Task.create({
+                user_id: testUser.id,
+                name: 'Subtask',
+                parent_task_id: parent.id,
+                status: 0,
+            });
+
+            await request(app)
+                .delete('/caldav/caldav@test.com/tasks/rp1.ics')
+                .set('Authorization', authHeader)
+                .expect(204);
+
+            expect(await Task.findByPk(parent.id)).toBeNull();
+            expect(await Task.findByPk(future.id)).toBeNull();
+            expect(await Task.findByPk(subtask.id)).toBeNull();
+        });
+
         // eslint-disable-next-line jest/expect-expect
         test('DELETE should return 404 for non-existent task', async () => {
             await request(app)

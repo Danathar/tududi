@@ -3,14 +3,26 @@ const { Op } = require('sequelize');
 const taskRepository = require('../repository');
 const { logError } = require('../../../services/logService');
 
+// Cancelled and archived subtasks keep their status, and subtasks already
+// done keep their completed_at. Otherwise reopening the parent would later
+// reset them to not started and the cancelled state would be lost.
 async function completeAllSubtasks(parentTaskId, userId) {
     try {
-        const result = await taskRepository.updateChildren(
+        const result = await taskRepository.updateChildrenWithConditions(
             parentTaskId,
             userId,
             {
                 status: Task.STATUS.DONE,
                 completed_at: new Date(),
+            },
+            {
+                status: {
+                    [Op.notIn]: [
+                        Task.STATUS.DONE,
+                        Task.STATUS.ARCHIVED,
+                        Task.STATUS.CANCELLED,
+                    ],
+                },
             }
         );
         return result[0] > 0;

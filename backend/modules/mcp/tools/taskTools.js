@@ -44,6 +44,7 @@ const {
 const permissionsService = require('../../../services/permissionsService');
 const { resolveTagsForTransaction } = require('./tagResolver');
 const relationsService = require('../../tasks/relations/service');
+const { deleteTask } = require('../../tasks/operations/deletion');
 const {
     computeTaskMetrics,
 } = require('../../tasks/queries/metrics-computation');
@@ -1227,7 +1228,7 @@ function registerTaskTools(server, context, tools) {
                 throw new Error('Access denied');
             }
 
-            await task.destroy();
+            await deleteTask(task);
 
             return {
                 content: [

@@ -8,19 +8,37 @@ const {
 } = require('../../utils/notificationPreferences');
 const telegramPoller = require('../telegram/telegramPoller');
 
+function sameInstant(a, b) {
+    if (!a || !b) return false;
+    return new Date(a).getTime() === new Date(b).getTime();
+}
+
 async function checkDeferredTasks() {
     try {
         const now = new Date();
         const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
 
+        // A defer crossing is notified once, within a day of it. Older
+        // crossings were already notified (or the server was down long enough
+        // that the news is stale), and without the lower bound every run
+        // recreated their notification. The notification lookup below covers
+        // the same window, so it always finds the one already sent.
+        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
         const deferredTasks = await Task.findAll({
             where: {
                 defer_until: {
                     [Op.not]: null,
+                    [Op.gte]: oneDayAgo,
                     [Op.lte]: fiveMinutesFromNow,
                 },
+                // Done, archived and cancelled tasks never become active.
                 status: {
-                    [Op.ne]: 2,
+                    [Op.notIn]: [
+                        Task.STATUS.DONE,
+                        Task.STATUS.ARCHIVED,
+                        Task.STATUS.CANCELLED,
+                    ],
                 },
             },
             include: [
@@ -47,7 +65,8 @@ async function checkDeferredTasks() {
         }
 
         let notificationsCreated = 0;
-        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        // Notifications are created up to five minutes before the crossing.
+        const lookbackStart = new Date(oneDayAgo.getTime() - 5 * 60 * 1000);
 
         // Batch-fetch all relevant notifications in one query to avoid N+1
         const userIds = [...new Set(deferredTasks.map((t) => t.user_id))];
@@ -55,7 +74,7 @@ async function checkDeferredTasks() {
             where: {
                 user_id: { [Op.in]: userIds },
                 type: 'task_due_soon',
-                created_at: { [Op.gte]: oneDayAgo },
+                created_at: { [Op.gte]: lookbackStart },
             },
         });
         const notificationsByUser = {};
@@ -102,6 +121,18 @@ async function checkDeferredTasks() {
                     let alreadySentViaTelegram = false;
 
                     if (existingNotification) {
+                        // Already notified for this defer date: keep it as
+                        // it is instead of deleting and recreating it on
+                        // every run.
+                        if (
+                            sameInstant(
+                                existingNotification.data?.deferUntil,
+                                task.defer_until
+                            )
+                        ) {
+                            continue;
+                        }
+
                         if (existingNotification.dismissed_at) {
                             continue;
                         }
