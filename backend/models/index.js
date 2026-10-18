@@ -621,6 +621,10 @@ Person.addHook('afterUpdate', async (person, options) => {
             });
             if (!linkedUser) return;
 
+            // The User hook just copied this name from the user. Writing it
+            // back would split a first name like "Mary Ann" at the space.
+            if (person.name.trim() === selfPersonName(linkedUser)) return;
+
             const [firstName, ...rest] = person.name.trim().split(' ');
             const surname = rest.length > 0 ? rest.join(' ') : null;
 
