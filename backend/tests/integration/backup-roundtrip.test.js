@@ -16,6 +16,7 @@ const {
     ProjectAttachment,
     NoteAttachment,
     User,
+    View,
 } = require('../../models');
 const { getConfig } = require('../../config/config');
 const {
@@ -528,5 +529,108 @@ describe('Backup export and import round trip (format 2)', () => {
             'utf8'
         );
         expect(content).toBe('note bytes');
+    });
+
+    it('carries due times, note backgrounds and view status filters through', async () => {
+        const due = new Date('2030-05-01T14:30:00.000Z');
+        const reminderSent = new Date('2030-05-01T14:00:00.000Z');
+        const task = await Task.create({
+            name: 'Timed',
+            user_id: source.id,
+            due_date: due,
+            due_has_time: true,
+            reminder_at: reminderSent,
+            reminder_sent_at: reminderSent,
+        });
+        const note = await Note.create({
+            title: 'Styled',
+            content: 'x',
+            user_id: source.id,
+            background: 'aurora',
+        });
+        const view = await View.create({
+            name: 'Open only',
+            user_id: source.id,
+            task_status: 'in_progress',
+        });
+        const template = await Project.create({
+            name: 'Template',
+            user_id: source.id,
+            clone_count: 3,
+        });
+
+        const backup = await exportUserData(source.id);
+        await importUserData(target.id, backup);
+
+        const importedTask = await Task.findOne({
+            where: { user_id: target.id, name: task.name },
+        });
+        expect(importedTask.due_has_time).toBe(true);
+        expect(importedTask.due_date.toISOString()).toBe(due.toISOString());
+        expect(importedTask.reminder_sent_at.toISOString()).toBe(
+            reminderSent.toISOString()
+        );
+        const importedNote = await Note.findOne({
+            where: { user_id: target.id, title: note.title },
+        });
+        expect(importedNote.background).toBe('aurora');
+        const importedView = await View.findOne({
+            where: { user_id: target.id, name: view.name },
+        });
+        expect(importedView.task_status).toBe('in_progress');
+        const importedTemplate = await Project.findOne({
+            where: { user_id: target.id, name: template.name },
+        });
+        expect(importedTemplate.clone_count).toBe(3);
+    });
+
+    it('exports the inline flag and leaves comment images out of the restored task files', async () => {
+        const dir = path.join(config.uploadPath, 'tasks');
+        await fs.mkdir(dir, { recursive: true });
+        await fs.writeFile(path.join(dir, 'inline-rt.png'), 'inline bytes');
+        await fs.writeFile(path.join(dir, 'listed-rt.png'), 'listed bytes');
+        const task = await Task.create({
+            name: 'With files',
+            user_id: source.id,
+        });
+        const base = {
+            task_id: task.id,
+            user_id: source.id,
+            file_size: 12,
+            mime_type: 'image/png',
+        };
+        await TaskAttachment.create({
+            ...base,
+            original_filename: 'inline.png',
+            stored_filename: 'inline-rt.png',
+            file_path: 'tasks/inline-rt.png',
+            inline: true,
+        });
+        await TaskAttachment.create({
+            ...base,
+            original_filename: 'listed.png',
+            stored_filename: 'listed-rt.png',
+            file_path: 'tasks/listed-rt.png',
+        });
+
+        const backup = await exportUserData(source.id);
+        const exported = backup.data.tasks.find((t) => t.uid === task.uid);
+        expect(
+            exported.attachments.map((a) => [a.original_filename, a.inline])
+        ).toEqual(
+            expect.arrayContaining([
+                ['inline.png', true],
+                ['listed.png', false],
+            ])
+        );
+
+        await importUserData(target.id, backup);
+
+        const restored = await TaskAttachment.findAll({
+            where: { user_id: target.id },
+        });
+        const names = restored.map((a) => a.original_filename);
+        expect(names).toContain('listed.png');
+        expect(names).not.toContain('inline.png');
     });
 });

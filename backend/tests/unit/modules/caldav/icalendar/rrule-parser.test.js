@@ -113,6 +113,33 @@ describe('RRULE Parser', () => {
             expect(result.recurrence_weekdays).toEqual([1, 5]);
             expect(result.recurrence_end_date).toBeInstanceOf(Date);
         });
+
+        // #229: RFC 5545 makes UNTIL a DATE when DTSTART is one. It runs
+        // through that whole day, like a DATE due date.
+        it('should parse a date-only UNTIL as the end of that day', () => {
+            const result = parseRRULE('FREQ=DAILY;UNTIL=20251231');
+            expect(result.recurrence_type).toBe('daily');
+            expect(result.recurrence_end_date).toBeInstanceOf(Date);
+            expect(result.recurrence_end_date.toISOString()).toBe(
+                '2025-12-31T23:59:59.999Z'
+            );
+        });
+
+        it('should read a date-only UNTIL in the given timezone', () => {
+            const result = parseRRULE(
+                'FREQ=DAILY;UNTIL=20250630',
+                'America/New_York'
+            );
+            expect(result.recurrence_end_date.toISOString()).toBe(
+                '2025-07-01T03:59:59.999Z'
+            );
+        });
+
+        it('should drop an unreadable UNTIL instead of storing an Invalid Date', () => {
+            const result = parseRRULE('FREQ=DAILY;UNTIL=garbage');
+            expect(result.recurrence_type).toBe('daily');
+            expect(result.recurrence_end_date).toBeNull();
+        });
     });
 
     describe('Round-trip compatibility', () => {

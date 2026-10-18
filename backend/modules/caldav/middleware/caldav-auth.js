@@ -3,6 +3,7 @@ const { User } = require('../../../models');
 const { findValidTokenByValue } = require('../../users/apiTokenService');
 const { caldavAuthLimiter } = require('../../../middleware/rateLimiter');
 const { hasFeature } = require('../../../services/entitlementsService');
+const { isPasswordAuthEnabled } = require('../../../config/authConfig');
 
 // CalDAV is a plan feature on hosted instances. Checked once the account
 // is known, whichever way it authenticated.
@@ -61,6 +62,14 @@ async function caldavAuth(req, res, next) {
                 .json({ error: 'Invalid credentials format' });
         }
 
+        // Basic auth is a password login, so it follows the same rules as
+        // /api/login: none at all on SSO-only instances.
+        if (!isPasswordAuthEnabled()) {
+            return res.status(403).json({
+                error: 'Password login is disabled. Please use SSO to sign in.',
+            });
+        }
+
         const username = credentials.substring(0, colonIndex);
         const password = credentials.substring(colonIndex + 1);
 
@@ -86,6 +95,14 @@ async function caldavAuth(req, res, next) {
                 .status(401)
                 .set('WWW-Authenticate', 'Basic realm="Tududi CalDAV"')
                 .json({ error: 'Invalid credentials' });
+        }
+
+        // Same as /api/login: an account whose email is not verified yet
+        // cannot sign in with its password.
+        if (!user.email_verified) {
+            return res.status(403).json({
+                error: 'Please verify your email address before logging in.',
+            });
         }
 
         if (!(await planAllows(user, res))) return;

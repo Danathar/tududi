@@ -291,6 +291,36 @@ describe('Billing with Lemon Squeezy', () => {
             expect(status.body.portal_available).toBe(true);
         });
 
+        it('applies a redelivery of an event whose first attempt failed', async () => {
+            const data = subscriptionResource(3, user);
+            const eventId = `ls:subscription_created:3:${data.attributes.updated_at}`;
+            await BillingEvent.create({
+                provider_event_id: eventId,
+                type: 'subscription_created',
+                status: 'failed',
+                error: 'SQLITE_BUSY',
+            });
+
+            const res = await postEvent('subscription_created', data, {
+                custom: { user_uid: user.uid },
+            });
+
+            expect(res.status).toBe(200);
+            expect(res.body.duplicate).toBeUndefined();
+            expect(res.body.handled).toBe(true);
+            expect(await BillingEvent.count()).toBe(1);
+            const event = await BillingEvent.findOne({
+                where: { provider_event_id: eventId },
+            });
+            expect(event.status).toBe('processed');
+            expect(event.error).toBeNull();
+            const account = await BillingAccount.findOne({
+                where: { user_id: user.id },
+            });
+            expect(account.plan).toBe('pro');
+            expect(account.provider_subscription_id).toBe('3');
+        });
+
         it('records the seat line and brings it up to the members already added', async () => {
             await createTestUser({
                 email: `member_${Date.now()}@example.com`,
