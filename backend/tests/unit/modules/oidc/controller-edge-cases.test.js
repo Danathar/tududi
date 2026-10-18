@@ -164,7 +164,10 @@ describe('OIDC controller edge cases', () => {
 
             await controller.handleCallback(
                 callbackReq({
-                    session: { save: (cb) => cb(new Error('store down')) },
+                    session: {
+                        regenerate: (cb) => cb(),
+                        save: (cb) => cb(new Error('store down')),
+                    },
                 }),
                 res
             );
@@ -172,6 +175,33 @@ describe('OIDC controller edge cases', () => {
             expect(res.redirect).toHaveBeenCalledWith(
                 expect.stringMatching(/Failed%20to%20establish%20session/)
             );
+        });
+
+        it('signs in on a fresh session id, not the one the browser brought', async () => {
+            oidcService.handleCallback.mockResolvedValue({
+                linkMode: false,
+                claims: {},
+            });
+            provisioningService.provisionUser.mockResolvedValue({
+                user: { id: 3 },
+                isNewUser: false,
+            });
+            const req = callbackReq();
+            const planted = { save: jest.fn() };
+            const fresh = { save: (cb) => cb() };
+            planted.regenerate = jest.fn((cb) => {
+                req.session = fresh;
+                cb();
+            });
+            req.session = planted;
+            const res = response();
+
+            await controller.handleCallback(req, res);
+
+            expect(planted.regenerate).toHaveBeenCalled();
+            expect(planted.userId).toBeUndefined();
+            expect(fresh.userId).toBe(3);
+            expect(res.redirect).toHaveBeenCalledWith('/today');
         });
     });
 

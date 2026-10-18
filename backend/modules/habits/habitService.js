@@ -33,6 +33,29 @@ function sameValue(a, b) {
     return a === b;
 }
 
+// Check-ins read the day's entries, decide whether another one is allowed
+// and then insert, with no row to lock and no unique index to lean on.
+// Running those steps one at a time per habit stops a double tap or a retry
+// from slipping a second check-in past the read.
+const habitLocks = new Map();
+
+async function withHabitLock(taskId, fn) {
+    const previous = habitLocks.get(taskId) || Promise.resolve();
+    let release;
+    const current = new Promise((resolve) => {
+        release = resolve;
+    });
+    const tail = previous.then(() => current);
+    habitLocks.set(taskId, tail);
+    await previous;
+    try {
+        return await fn();
+    } finally {
+        release();
+        if (habitLocks.get(taskId) === tail) habitLocks.delete(taskId);
+    }
+}
+
 class HabitService {
     async getUserContext(userId) {
         const user = await User.findByPk(userId, {
@@ -120,6 +143,12 @@ class HabitService {
     }
 
     async logCompletion(task, ctx, options = {}) {
+        return withHabitLock(task.id, () =>
+            this.recordCompletion(task, ctx, options)
+        );
+    }
+
+    async recordCompletion(task, ctx, options = {}) {
         if (!task.habit_mode) {
             throw new Error('Task is not a habit');
         }
@@ -180,6 +209,12 @@ class HabitService {
 
     // A skipped day keeps the streak alive without counting as done.
     async skipDay(task, ctx, options = {}) {
+        return withHabitLock(task.id, () =>
+            this.recordSkip(task, ctx, options)
+        );
+    }
+
+    async recordSkip(task, ctx, options = {}) {
         const cfg = engine.normalizeConfig(task, ctx);
         if (cfg.polarity === 'quit') {
             throw new ValidationError('Quit habits cannot skip a day');

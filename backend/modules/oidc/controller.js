@@ -155,6 +155,12 @@ async function handleCallback(req, res) {
             req
         );
 
+        // A fresh session id at sign-in, so a session id planted in the
+        // browser beforehand (session fixation) is never the one that ends
+        // up signed in.
+        await new Promise((resolve, reject) =>
+            req.session.regenerate((err) => (err ? reject(err) : resolve()))
+        );
         req.session.userId = user.id;
 
         await auditService.logOidcProvision(user.id, slug, req, isNewUser);

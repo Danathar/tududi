@@ -304,5 +304,6 @@ module.exports = {
     calculateGoalPerms,
     calculateTagPerms,
     collectProjectDescendants,
+    collectTaskSubtree,
     projectSubtreeChanges,
 };

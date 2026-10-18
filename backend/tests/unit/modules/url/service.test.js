@@ -109,4 +109,71 @@ describe('UrlService SSRF protections', () => {
         const result = await urlService.getTitle('https://example.com/');
         expect(result.title).toBe(null);
     });
+
+    it('treats a redirect with an unparseable Location as no metadata', async () => {
+        mockHttpResponse(https, {
+            statusCode: 302,
+            headers: { location: 'http://[' },
+        });
+
+        const result = await urlService.getTitle('https://example.com/');
+
+        expect(https.request).toHaveBeenCalledTimes(1);
+        expect(result.title).toBe(null);
+    });
+});
+
+describe('UrlService metadata extraction', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: false,
+            status: 404,
+            headers: { get: () => null },
+            text: async () => '',
+        });
+        jest.spyOn(dns.promises, 'lookup').mockResolvedValue([
+            { address: PUBLIC_IP, family: 4 },
+        ]);
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+        delete global.fetch;
+    });
+
+    function serveHtml(head) {
+        mockHttpResponse(https, {
+            statusCode: 200,
+            headers: { 'content-type': 'text/html' },
+            body: `<html><head>${head}</head></html>`,
+        });
+    }
+
+    it('keeps an apostrophe inside a double-quoted og:title', async () => {
+        serveHtml(
+            '<meta property="og:title" content="Bob\'s Burgers: the best"><title>x</title>'
+        );
+
+        const result = await urlService.getTitle('https://example.com/');
+        expect(result.title).toBe("Bob's Burgers: the best");
+    });
+
+    it('keeps a double quote inside a single-quoted twitter:title', async () => {
+        serveHtml(
+            `<meta name='twitter:title' content='The "best" burgers'><title>x</title>`
+        );
+
+        const result = await urlService.getTitle('https://example.com/');
+        expect(result.title).toBe('The "best" burgers');
+    });
+
+    it('decodes named, decimal and hex character references', async () => {
+        serveHtml(
+            '<meta property="og:title" content="Bob&#x27;s &amp; Al&apos;s &#39;diner&#39; &lt;3">'
+        );
+
+        const result = await urlService.getTitle('https://example.com/');
+        expect(result.title).toBe("Bob's & Al's 'diner' <3");
+    });
 });

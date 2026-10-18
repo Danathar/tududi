@@ -408,6 +408,7 @@ module.exports = (sequelize) => {
         MONTHLY: 'monthly',
         MONTHLY_WEEKDAY: 'monthly_weekday',
         MONTHLY_LAST_DAY: 'monthly_last_day',
+        YEARLY: 'yearly',
     };
 
     Task.HABIT_FREQUENCY_PERIOD = {

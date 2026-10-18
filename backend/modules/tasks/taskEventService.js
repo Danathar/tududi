@@ -1,8 +1,11 @@
 const { TaskEvent, sequelize } = require('../../models');
 
-// Helper function to create value object
+// Helper function to create value object. Keeps falsy values such as
+// status 0 (not started) and priority 0 (low); only a missing value is null.
 const createValueObject = (fieldName, value) =>
-    value ? { [fieldName || 'value']: value } : null;
+    value === null || value === undefined
+        ? null
+        : { [fieldName || 'value']: value };
 
 /**
  * Log a task event

@@ -238,6 +238,30 @@ describe('Account erasure', () => {
         expect(await exists(path.join(tasksDir, theirsName))).toBe(false);
     });
 
+    it('keeps a project cover another user’s project still shows', async () => {
+        const projectsDir = path.join(config.uploadPath, 'projects');
+        await fs.mkdir(projectsDir, { recursive: true });
+        const coverName = `project-kept-${Date.now()}.png`;
+        await fs.writeFile(path.join(projectsDir, coverName), 'cover');
+        const imageUrl = `/api/uploads/projects/${coverName}`;
+        await Project.create({
+            name: 'Their cover',
+            user_id: other.id,
+            image_url: imageUrl,
+        });
+        await Project.create({
+            name: 'Points at their cover',
+            user_id: user.id,
+            image_url: imageUrl,
+        });
+        const adminAgent = await login(admin);
+
+        const res = await adminAgent.delete(`/api/admin/users/${user.id}`);
+        expect(res.status).toBe(204);
+
+        expect(await exists(path.join(projectsDir, coverName))).toBe(true);
+    });
+
     it('self-service deletion requires the password and ends the session', async () => {
         const seeded = await seedEverything(user, other);
         const agent = await login(user);

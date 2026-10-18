@@ -135,4 +135,5 @@ export type RecurrenceType =
     | 'weekly'
     | 'monthly'
     | 'monthly_weekday'
-    | 'monthly_last_day';
+    | 'monthly_last_day'
+    | 'yearly';
