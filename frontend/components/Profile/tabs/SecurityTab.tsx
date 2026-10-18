@@ -11,6 +11,7 @@ import {
 import type { ProfileFormData } from '../types';
 import { deleteAccount } from '../../../utils/profileService';
 import { getCurrentUser } from '../../../utils/userUtils';
+import { getAssetPath } from '../../../config/paths';
 
 interface SecurityTabProps {
     isActive: boolean;
@@ -52,7 +53,7 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
                     ? { password: deleteSecret }
                     : { confirm_email: deleteSecret }
             );
-            window.location.href = '/login';
+            window.location.href = getAssetPath('login');
         } catch (err: any) {
             setDeleteError(err.message || 'Failed to delete account');
             setDeleting(false);

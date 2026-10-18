@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useToast } from '../Shared/ToastContext';
 import { useTranslation } from 'react-i18next';
 import ConfirmDialog from '../Shared/ConfirmDialog';
+import { getApiPath } from '../../config/paths';
 import {
     createBackup,
     listSavedBackups,
@@ -70,7 +71,7 @@ const BackupRestore: React.FC<BackupRestoreProps> = ({
 
     const fetchAppVersion = async () => {
         try {
-            const response = await fetch('/api/version', {
+            const response = await fetch(getApiPath('version'), {
                 credentials: 'include',
             });
             const data = await response.json();

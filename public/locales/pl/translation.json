@@ -1095,6 +1095,7 @@
     "orUploadOwn": "Lub prześlij własny:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "To pole jest wymagane",
     "invalidEmail": "Nieprawidłowy adres e-mail",
     "projectCreationFailed": "Nie udało się utworzyć projektu.",
@@ -1481,6 +1482,7 @@
     "unpinFromSidebar": "Odepnij od paska bocznego"
   },
   "areas": {
+    "toggleDropdownMenu": "Przełącz menu rozwijane",
     "title": "Obszary",
     "noAreasFound": "Nie znaleziono obszarów",
     "editAreaAriaLabel": "Edytuj obszar {{name}}",
@@ -1507,6 +1509,7 @@
     "blankSlateProjects": "Przejdź do projektów"
   },
   "notes": {
+    "toggleDropdownMenu": "Przełącz menu rozwijane",
     "loading": "Ładowanie notatek...",
     "error": "Błąd podczas ładowania notatek",
     "searchPlaceholder": "Szukaj notatek...",

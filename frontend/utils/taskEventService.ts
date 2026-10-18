@@ -5,8 +5,7 @@ import {
     CompletionAnalyticsResponse,
     TaskActivitySummary,
 } from '../entities/TaskEvent';
-
-const API_BASE = '/api';
+import { getApiPath } from '../config/paths';
 
 /**
  * Get task timeline (all events for a specific task)
@@ -14,7 +13,7 @@ const API_BASE = '/api';
 export const getTaskTimeline = async (
     taskUid: string
 ): Promise<TaskEvent[]> => {
-    const response = await fetch(`${API_BASE}/task/${taskUid}/timeline`, {
+    const response = await fetch(getApiPath(`task/${taskUid}/timeline`), {
         credentials: 'include',
     });
 
@@ -34,7 +33,7 @@ export const getTaskCompletionTime = async (
     taskUid: string
 ): Promise<TaskCompletionTime | null> => {
     const response = await fetch(
-        `${API_BASE}/task/${taskUid}/completion-time`,
+        getApiPath(`task/${taskUid}/completion-time`),
         {
             credentials: 'include',
         }
@@ -66,7 +65,7 @@ export const getUserProductivityMetrics = async (
     if (endDate) params.append('endDate', endDate);
 
     const response = await fetch(
-        `${API_BASE}/user/productivity-metrics?${params}`,
+        getApiPath(`user/productivity-metrics?${params}`),
         {
             credentials: 'include',
         }
@@ -94,7 +93,7 @@ export const getUserActivitySummary = async (
     });
 
     const response = await fetch(
-        `${API_BASE}/user/activity-summary?${params}`,
+        getApiPath(`user/activity-summary?${params}`),
         {
             credentials: 'include',
         }
@@ -126,7 +125,7 @@ export const getCompletionAnalytics = async (
     if (options.projectUid) params.append('projectUid', options.projectUid);
 
     const response = await fetch(
-        `${API_BASE}/tasks/completion-analytics?${params}`,
+        getApiPath(`tasks/completion-analytics?${params}`),
         {
             credentials: 'include',
         }

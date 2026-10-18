@@ -1125,6 +1125,7 @@
         "attachments": "Prílohy"
     },
     "errors": {
+        "failedToDeleteProject": "Failed to delete project.",
         "required": "Toto pole je povinné",
         "invalidEmail": "Neplatná e-mailová adresa",
         "projectCreationFailed": "Projekt sa nepodarilo vytvoriť.",
@@ -1520,6 +1521,7 @@
         "unpinFromSidebar": "Odopnúť z bočného panela"
     },
     "areas": {
+        "toggleDropdownMenu": "Prepnúť rozbaľovaciu ponuku",
         "title": "Oblasti",
         "noAreasFound": "Nenašli sa žiadne oblasti",
         "new": "Nová oblasť",
@@ -1546,6 +1548,7 @@
         "horizonYear": "Rok"
     },
     "notes": {
+        "toggleDropdownMenu": "Prepnúť rozbaľovaciu ponuku",
         "addNote": "Pridať poznámku",
         "loading": "Načítavajú sa poznámky...",
         "error": "Chyba pri načítaní poznámok",
