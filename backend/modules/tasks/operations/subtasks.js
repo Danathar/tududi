@@ -49,6 +49,26 @@ async function getSubtasks(parentTaskId, userId, timezone) {
     return { error: null, subtasks: serializedSubtasks };
 }
 
+// Checks the shape of a subtasks payload without touching the database, so a
+// bad payload is refused before the parent task is written (#245). A value
+// that is not an array is ignored, as createSubtasks and updateSubtasks do.
+function validateSubtasksInput(subtasks) {
+    if (!subtasks || !Array.isArray(subtasks)) return;
+
+    for (const subtask of subtasks) {
+        if (!subtask || typeof subtask !== 'object' || Array.isArray(subtask)) {
+            throw new Error('Each subtask must be an object.');
+        }
+        if (
+            subtask.name !== undefined &&
+            subtask.name !== null &&
+            typeof subtask.name !== 'string'
+        ) {
+            throw new Error('Subtask name must be a string.');
+        }
+    }
+}
+
 async function createSubtasks(parentTaskId, subtasks, userId) {
     if (!subtasks || !Array.isArray(subtasks)) return;
 
@@ -191,6 +211,7 @@ async function updateSubtasks(taskId, subtasks, userId) {
 }
 
 module.exports = {
+    validateSubtasksInput,
     getSubtasks,
     createSubtasks,
     updateSubtasks,

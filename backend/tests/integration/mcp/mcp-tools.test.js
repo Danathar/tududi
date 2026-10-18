@@ -2333,6 +2333,55 @@ describe('MCP Tools Integration', () => {
                 const deletedTask = await Task.findByPk(task.id);
                 expect(deletedTask).toBeNull();
             });
+
+            it('should do the same cleanup as the REST delete (#240)', async () => {
+                const parent = await Task.create({
+                    user_id: user.id,
+                    name: 'Recurring parent',
+                    recurrence_type: 'daily',
+                    status: 0,
+                });
+                const subtask = await Task.create({
+                    user_id: user.id,
+                    name: 'Subtask',
+                    parent_task_id: parent.id,
+                    status: 0,
+                });
+                const future = await Task.create({
+                    user_id: user.id,
+                    name: 'Future instance',
+                    recurring_parent_id: parent.id,
+                    due_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+                    status: 0,
+                });
+                const past = await Task.create({
+                    user_id: user.id,
+                    name: 'Past instance',
+                    recurring_parent_id: parent.id,
+                    due_date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+                    status: 2,
+                });
+
+                const response = await callMcpTool(
+                    apiTokenValue,
+                    'delete_task',
+                    { id: parent.id }
+                );
+
+                expect(response.status).toBe(200);
+                expect(getToolContent(response).content.message).toBe(
+                    'Task deleted successfully'
+                );
+
+                expect(await Task.findByPk(parent.id)).toBeNull();
+                expect(await Task.findByPk(subtask.id)).toBeNull();
+                expect(await Task.findByPk(future.id)).toBeNull();
+
+                const detached = await Task.findByPk(past.id);
+                expect(detached).not.toBeNull();
+                expect(detached.recurring_parent_id).toBeNull();
+                expect(detached.recurrence_type).toBe('none');
+            });
         });
 
         describe('example tasks from the welcome screen', () => {
