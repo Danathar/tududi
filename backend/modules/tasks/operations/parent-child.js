@@ -5,7 +5,8 @@ const { logError } = require('../../../services/logService');
 
 // Cancelled and archived subtasks keep their status, and subtasks already
 // done keep their completed_at. Otherwise reopening the parent would later
-// reset them to not started and the cancelled state would be lost.
+// reset them to not started and the cancelled state would be lost. A done
+// subtask with no completed_at gets one, so every completed subtask is dated.
 async function completeAllSubtasks(parentTaskId, userId) {
     try {
         const result = await taskRepository.updateChildrenWithConditions(
@@ -16,13 +17,18 @@ async function completeAllSubtasks(parentTaskId, userId) {
                 completed_at: new Date(),
             },
             {
-                status: {
-                    [Op.notIn]: [
-                        Task.STATUS.DONE,
-                        Task.STATUS.ARCHIVED,
-                        Task.STATUS.CANCELLED,
-                    ],
-                },
+                [Op.or]: [
+                    {
+                        status: {
+                            [Op.notIn]: [
+                                Task.STATUS.DONE,
+                                Task.STATUS.ARCHIVED,
+                                Task.STATUS.CANCELLED,
+                            ],
+                        },
+                    },
+                    { status: Task.STATUS.DONE, completed_at: null },
+                ],
             }
         );
         return result[0] > 0;

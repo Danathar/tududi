@@ -56,11 +56,7 @@ function validateSubtasksInput(subtasks) {
     if (!subtasks || !Array.isArray(subtasks)) return;
 
     for (const subtask of subtasks) {
-        if (
-            !subtask ||
-            typeof subtask !== 'object' ||
-            Array.isArray(subtask)
-        ) {
+        if (!subtask || typeof subtask !== 'object' || Array.isArray(subtask)) {
             throw new Error('Each subtask must be an object.');
         }
         if (

@@ -60,9 +60,9 @@ describe('Tasks Routes', () => {
                 .send({ name: 'partial-create', tags: 'abc' });
 
             expect(response.status).toBe(400);
-            expect(await Task.count({ where: { name: 'partial-create' } })).toBe(
-                0
-            );
+            expect(
+                await Task.count({ where: { name: 'partial-create' } })
+            ).toBe(0);
         });
 
         it('should save nothing when a subtask entry is invalid (#245)', async () => {

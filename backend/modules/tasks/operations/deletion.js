@@ -1,4 +1,9 @@
-const { Task, TaskEvent, TaskAttachment, sequelize } = require('../../../models');
+const {
+    Task,
+    TaskEvent,
+    TaskAttachment,
+    sequelize,
+} = require('../../../models');
 const taskRepository = require('../repository');
 const { deleteAttachmentFiles } = require('../../../utils/attachment-utils');
 const { withForeignKeyChecksDisabled } = require('../../../utils/db-dialect');
