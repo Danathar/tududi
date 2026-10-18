@@ -21,7 +21,7 @@ const {
     calculateVirtualOccurrences,
 } = require('./recurringTaskService');
 const { logError } = require('../../services/logService');
-const { ValidationError } = require('../../shared/errors');
+const { AppError, ValidationError } = require('../../shared/errors');
 const { parseIntegerParam } = require('../../utils/list-params');
 
 const { serializeTask, serializeTasks } = require('./core/serializers');
@@ -440,6 +440,34 @@ router.get('/tasks/metrics', async (req, res) => {
     }
 });
 
+// Task validators throw an AppError subclass (ValidationError,
+// ForbiddenError, ...) for a client mistake, answered here with its status.
+// Anything else is a server fault: rethrow it so the handler's outer catch
+// hands it to errorHandler, which logs it and answers 500 without the
+// internal message.
+function respondToClientError(res, error) {
+    if (!(error instanceof AppError)) throw error;
+    return res.status(error.statusCode).json({ error: error.message });
+}
+
+// The task form shows `details` in its error toast, so client mistakes keep
+// the { error, details } body. Model validation failures (a value outside a
+// column's allowed range) are client mistakes too.
+function respondToTaskWriteError(res, next, error, summary) {
+    if (error instanceof AppError) {
+        return res
+            .status(error.statusCode)
+            .json({ error: summary, details: [error.message] });
+    }
+    if (error.name === 'SequelizeValidationError') {
+        return res.status(400).json({
+            error: summary,
+            details: error.errors.map((e) => e.message),
+        });
+    }
+    return next(error);
+}
+
 router.post(
     '/task',
     requireQuota(
@@ -448,7 +476,7 @@ router.post(
             1 +
             (Array.isArray(req.body?.subtasks) ? req.body.subtasks.length : 0)
     ),
-    async (req, res) => {
+    async (req, res, next) => {
         try {
             const {
                 name,
@@ -464,7 +492,7 @@ router.post(
             } = req.body;
             const tagsData = tags || Tags;
 
-            if (!name || name.trim() === '') {
+            if (typeof name !== 'string' || name.trim() === '') {
                 return res
                     .status(400)
                     .json({ error: 'Task name is required.' });
@@ -476,7 +504,7 @@ router.post(
                 validateTagsInput(tagsData);
                 validateSubtasksInput(subtasks);
             } catch (error) {
-                return res.status(400).json({ error: error.message });
+                return respondToClientError(res, error);
             }
 
             const timezone = getSafeTimezone(req.currentUser.timezone);
@@ -499,7 +527,7 @@ router.post(
                     recurringParentEndDate
                 );
             } catch (error) {
-                return res.status(400).json({ error: error.message });
+                return respondToClientError(res, error);
             }
 
             try {
@@ -509,9 +537,7 @@ router.post(
                 );
                 if (validProjectId) taskAttributes.project_id = validProjectId;
             } catch (error) {
-                return res
-                    .status(error.message === 'Forbidden' ? 403 : 400)
-                    .json({ error: error.message });
+                return respondToClientError(res, error);
             }
 
             try {
@@ -521,7 +547,7 @@ router.post(
                 );
                 if (validAreaId) taskAttributes.area_id = validAreaId;
             } catch (error) {
-                return res.status(400).json({ error: error.message });
+                return respondToClientError(res, error);
             }
 
             try {
@@ -532,7 +558,7 @@ router.post(
                 if (validParentId)
                     taskAttributes.parent_task_id = validParentId;
             } catch (error) {
-                return res.status(400).json({ error: error.message });
+                return respondToClientError(res, error);
             }
 
             try {
@@ -542,7 +568,7 @@ router.post(
                 );
                 if (validGoalId) taskAttributes.goal_id = validGoalId;
             } catch (error) {
-                return res.status(400).json({ error: error.message });
+                return respondToClientError(res, error);
             }
 
             try {
@@ -552,7 +578,7 @@ router.post(
                     { projectId: taskAttributes.project_id }
                 );
             } catch (error) {
-                return res.status(400).json({ error: error.message });
+                return respondToClientError(res, error);
             }
 
             const task = await taskRepository.create(taskAttributes);
@@ -611,15 +637,12 @@ router.post(
 
             res.status(201).json(serializedTask);
         } catch (error) {
-            logError('Error creating task:', error);
-            logError('Error stack:', error.stack);
-            logError('Error name:', error.name);
-            res.status(400).json({
-                error: 'There was a problem creating the task.',
-                details: error.errors
-                    ? error.errors.map((e) => e.message)
-                    : [error.message],
-            });
+            return respondToTaskWriteError(
+                res,
+                next,
+                error,
+                'There was a problem creating the task.'
+            );
         }
     }
 );
@@ -650,7 +673,7 @@ router.get('/task/:uid', requireTaskReadAccess, async (req, res) => {
     }
 });
 
-router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
+router.patch('/task/:uid', requireTaskWriteAccess, async (req, res, next) => {
     try {
         const {
             status,
@@ -690,7 +713,7 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
             validateTagsInput(tagsData);
             validateSubtasksInput(subtasks);
         } catch (error) {
-            return res.status(400).json({ error: error.message });
+            return respondToClientError(res, error);
         }
 
         const oldValues = captureOldValues(task);
@@ -701,7 +724,7 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
             try {
                 parseRecurrenceInterval(recurrence_interval);
             } catch (error) {
-                return res.status(400).json({ error: error.message });
+                return respondToClientError(res, error);
             }
         }
 
@@ -774,7 +797,7 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
                 recurringParentEndDate
             );
         } catch (error) {
-            return res.status(400).json({ error: error.message });
+            return respondToClientError(res, error);
         }
 
         await handleCompletionStatus(taskAttributes, status, task);
@@ -789,9 +812,7 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
                 );
                 taskAttributes.project_id = validProjectId;
             } catch (error) {
-                return res
-                    .status(error.message === 'Forbidden' ? 403 : 400)
-                    .json({ error: error.message });
+                return respondToClientError(res, error);
             }
         }
 
@@ -804,7 +825,7 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
                 );
                 taskAttributes.area_id = validAreaId;
             } catch (error) {
-                return res.status(400).json({ error: error.message });
+                return respondToClientError(res, error);
             }
         }
 
@@ -818,7 +839,7 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
                     );
                     taskAttributes.parent_task_id = validParentId;
                 } catch (error) {
-                    return res.status(400).json({ error: error.message });
+                    return respondToClientError(res, error);
                 }
             } else {
                 taskAttributes.parent_task_id = null;
@@ -834,7 +855,7 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
                     );
                     taskAttributes.goal_id = validGoalId;
                 } catch (error) {
-                    return res.status(400).json({ error: error.message });
+                    return respondToClientError(res, error);
                 }
             } else {
                 taskAttributes.goal_id = null;
@@ -855,7 +876,7 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
                     }
                 );
             } catch (error) {
-                return res.status(400).json({ error: error.message });
+                return respondToClientError(res, error);
             }
         }
 
@@ -992,17 +1013,16 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
 
         res.json(serializedTask);
     } catch (error) {
-        logError('Error updating task:', error);
-        res.status(400).json({
-            error: 'There was a problem updating the task.',
-            details: error.errors
-                ? error.errors.map((e) => e.message)
-                : [error.message],
-        });
+        return respondToTaskWriteError(
+            res,
+            next,
+            error,
+            'There was a problem updating the task.'
+        );
     }
 });
 
-router.delete('/task/:uid', requireTaskWriteAccess, async (req, res) => {
+router.delete('/task/:uid', requireTaskWriteAccess, async (req, res, next) => {
     try {
         const task = await taskRepository.findByUid(req.params.uid);
 
@@ -1014,10 +1034,12 @@ router.delete('/task/:uid', requireTaskWriteAccess, async (req, res) => {
 
         res.json({ message: 'Task successfully deleted' });
     } catch (error) {
-        logError('Error deleting task:', error);
-        res.status(400).json({
-            error: 'There was a problem deleting the task.',
-        });
+        return respondToTaskWriteError(
+            res,
+            next,
+            error,
+            'There was a problem deleting the task.'
+        );
     }
 });
 

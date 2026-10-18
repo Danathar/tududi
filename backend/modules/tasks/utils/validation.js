@@ -2,6 +2,7 @@ const { Project, Task, Area, Goal, Person } = require('../../../models');
 const permissionsService = require('../../../services/permissionsService');
 const { getWorkspaceUserIds } = require('../../../services/workspaceMembers');
 const peopleRepository = require('../../people/repository');
+const { ForbiddenError, ValidationError } = require('../../../shared/errors');
 
 function isUid(value) {
     const str = value.toString().trim();
@@ -30,7 +31,7 @@ async function validateProjectAccess(projectIdOrUid, userId) {
     const where = isUid(value) ? { uid: value } : { id: value };
     const project = await Project.findOne({ where });
     if (!project) {
-        throw new Error('Invalid project.');
+        throw new ValidationError('Invalid project.');
     }
 
     const projectAccess = await permissionsService.getAccess(
@@ -43,7 +44,7 @@ async function validateProjectAccess(projectIdOrUid, userId) {
         isOwner || projectAccess === 'rw' || projectAccess === 'admin';
 
     if (!canWrite) {
-        throw new Error('Forbidden');
+        throw new ForbiddenError('Forbidden');
     }
 
     return project.id;
@@ -65,11 +66,11 @@ async function validateParentTaskAccess(parentTaskId, userId, taskId = null) {
             where: { id: parentTaskId },
         });
         if (anyTask) {
-            throw new Error(
+            throw new ValidationError(
                 `Invalid parent task. Parent task exists but belongs to a different user (parent user_id: ${anyTask.user_id}, current user_id: ${userId}).`
             );
         } else {
-            throw new Error(
+            throw new ValidationError(
                 `Invalid parent task. Parent task with id ${parentTaskId} not found.`
             );
         }
@@ -85,7 +86,9 @@ async function validateParentTaskAccess(parentTaskId, userId, taskId = null) {
         isOwner || parentAccess === 'rw' || parentAccess === 'admin';
 
     if (!canWrite) {
-        throw new Error('Invalid parent task. Insufficient permissions.');
+        throw new ValidationError(
+            'Invalid parent task. Insufficient permissions.'
+        );
     }
 
     if (taskId !== null && taskId !== undefined) {
@@ -97,7 +100,7 @@ async function validateParentTaskAccess(parentTaskId, userId, taskId = null) {
 
 async function assertNoParentCycle(parentTask, taskId) {
     const cycleError = () =>
-        new Error(
+        new ValidationError(
             'Invalid parent task. A task cannot be its own parent or a subtask of its own subtask.'
         );
     const target = String(taskId);
@@ -129,7 +132,7 @@ async function assertNoParentCycle(parentTask, taskId) {
  *        undefined = not a recurring instance (apply strict validation)
  *        null = recurring instance with no end date (allow any defer_until)
  *        date = recurring instance with end date (validate against end date)
- * @throws {Error} If defer_until is after the applicable end date
+ * @throws {ValidationError} If defer_until is after the applicable end date
  *
  * Validation rules:
  * - If no defer_until or due_date: validation passes
@@ -166,7 +169,7 @@ function validateDeferUntilAndDueDate(
         const endDate = new Date(recurringParentEndDate);
         if (!isNaN(endDate.getTime())) {
             if (deferDate > endDate) {
-                throw new Error(
+                throw new ValidationError(
                     'Defer until date cannot be after the recurring task end date.'
                 );
             }
@@ -184,7 +187,9 @@ function validateDeferUntilAndDueDate(
     const dueDateEndOfDay = new Date(dueDateObj);
     dueDateEndOfDay.setUTCHours(23, 59, 59, 999);
     if (deferDate > dueDateEndOfDay) {
-        throw new Error('Defer until date cannot be after the due date.');
+        throw new ValidationError(
+            'Defer until date cannot be after the due date.'
+        );
     }
 }
 
@@ -209,7 +214,7 @@ async function validateAreaAccess(areaIdOrUid, userId) {
     const where = isUid(value) ? { uid: value } : { id: value };
     const area = await Area.findOne({ where });
     if (!area || !(await canWriteTo(userId, 'area', area.uid))) {
-        throw new Error('Invalid area.');
+        throw new ValidationError('Invalid area.');
     }
 
     return area.id;
@@ -224,7 +229,7 @@ async function validateGoalAccess(goalIdOrUid, userId) {
     const where = isUid(value) ? { uid: value } : { id: value };
     const goal = await Goal.findOne({ where });
     if (!goal || !(await canWriteTo(userId, 'goal', goal.uid))) {
-        throw new Error('Invalid goal.');
+        throw new ValidationError('Invalid goal.');
     }
 
     return goal.id;
@@ -248,7 +253,7 @@ async function validateAssignee(
         attributes: ['user_id', 'linked_user_id'],
         raw: true,
     });
-    if (!person) throw new Error('Invalid assignee.');
+    if (!person) throw new ValidationError('Invalid assignee.');
     if (person.user_id === userId) return assignedTo;
 
     const isSelfPerson = person.linked_user_id === person.user_id;
@@ -270,7 +275,7 @@ async function validateAssignee(
         if (allowed.has(person.user_id)) return assignedTo;
     }
 
-    throw new Error('Invalid assignee.');
+    throw new ValidationError('Invalid assignee.');
 }
 
 /**

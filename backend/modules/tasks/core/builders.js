@@ -13,6 +13,7 @@ const {
     dueDateTimeToUTC,
     utcToUserDateString,
 } = require('../../../utils/timezone-utils');
+const { ValidationError } = require('../../../shared/errors');
 
 // Sets an absolute reminder instant. Setting a new time re-arms the reminder.
 function applyReminderAt(attrs, body) {
@@ -26,7 +27,7 @@ function applyReminderAt(attrs, body) {
 
     const reminderAt = new Date(body.reminder_at);
     if (Number.isNaN(reminderAt.getTime())) {
-        throw new Error('reminder_at must be a valid date-time');
+        throw new ValidationError('reminder_at must be a valid date-time');
     }
     attrs.reminder_at = reminderAt;
     attrs.reminder_sent_at = null;
@@ -45,7 +46,7 @@ function applyDueTime(attrs, body, timezone, storedDueDate = null) {
 
     const timeString = body.due_time ? String(body.due_time).trim() : '';
     if (timeString && !DUE_TIME_PATTERN.test(timeString)) {
-        throw new Error('due_time must be in HH:mm format');
+        throw new ValidationError('due_time must be in HH:mm format');
     }
 
     const source = 'due_date' in attrs ? attrs.due_date : storedDueDate;
