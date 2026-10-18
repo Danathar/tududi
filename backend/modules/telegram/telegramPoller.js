@@ -528,8 +528,8 @@ const POLL_CONCURRENCY = Math.max(
 
 // Function to poll updates for all users (contains side effects)
 const pollUpdates = async () => {
-    const dueUsers = pollerState.usersToPool.filter(
-        (user) => user.telegram_bot_token && shouldPollUser(user.id)
+    const dueUsers = pollerState.usersToPool.filter((user) =>
+        shouldPollUser(user.id)
     );
 
     for (let i = 0; i < dueUsers.length; i += POLL_CONCURRENCY) {
@@ -538,9 +538,48 @@ const pollUpdates = async () => {
     }
 };
 
-const pollUser = async (user) => {
-    const token = user.telegram_bot_token;
+// Re-read the user row so changes made after polling started (new token,
+// cleared token, edited allow-list, reset chat id) apply on the next poll.
+// Returns the fresh user, or null when the user should no longer be polled.
+const refreshPolledUser = async (user) => {
+    const fresh = await User.findByPk(user.id);
+    if (!fresh || !fresh.telegram_bot_token) {
+        removeUser(user.id);
+        return null;
+    }
+
+    if (fresh.telegram_bot_token !== user.telegram_bot_token) {
+        // A different bot has its own update ids; start from scratch.
+        pollerState = {
+            ...pollerState,
+            userStatus: removeUserStatus(pollerState.userStatus, user.id),
+            userErrorState: removeUserErrorState(
+                pollerState.userErrorState,
+                user.id
+            ),
+        };
+    }
+
+    pollerState = {
+        ...pollerState,
+        usersToPool: pollerState.usersToPool.map((u) =>
+            u.id === user.id ? fresh : u
+        ),
+    };
+    return fresh;
+};
+
+const pollUser = async (polledUser) => {
     {
+        let user = polledUser;
+        try {
+            user = await refreshPolledUser(polledUser);
+        } catch (error) {
+            // Could not re-read the user; keep polling with what we have.
+            user = polledUser;
+        }
+        if (!user) return;
+        const token = user.telegram_bot_token;
         try {
             const lastUpdateId =
                 pollerState.userStatus[user.id]?.lastUpdateId || 0;
@@ -725,4 +764,5 @@ module.exports = {
     _createTelegramUrl: createTelegramUrl,
     _isAuthorizedTelegramUser: isAuthorizedTelegramUser,
     _processMessage: processMessage,
+    _pollUpdates: pollUpdates,
 };

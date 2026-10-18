@@ -9,6 +9,12 @@ const { parseVTODOToTask } = require('../icalendar/vtodo-parser');
 const encryptionService = require('../services/encryption-service');
 const { resolveRemoteHref, normalizeHref } = require('../utils/href-utils');
 const { getUserTimezone } = require('../utils/user-timezone');
+const { escapeXml } = require('../webdav/utils');
+
+// RFC 6578 3.2: a server that no longer accepts a sync-token answers the
+// sync-collection REPORT with 403 or 409 (DAV:valid-sync-token), and some
+// servers use 412. Any of these means "start over with a full listing".
+const INVALID_SYNC_TOKEN_STATUSES = [403, 409, 412];
 
 class PullPhase {
     async execute(calendar, userId, options = {}) {
@@ -72,7 +78,11 @@ class PullPhase {
         }
     }
 
-    async _fetchChangesFromRemote(remoteCalendar, calendar) {
+    async _fetchChangesFromRemote(
+        remoteCalendar,
+        calendar,
+        { ignoreSyncToken = false } = {}
+    ) {
         const password = encryptionService.decrypt(
             remoteCalendar.password_encrypted
         );
@@ -85,7 +95,9 @@ class PullPhase {
             `Fetching changes from remote CalDAV: ${remoteCalendar.server_url}`
         );
 
-        const syncToken = remoteCalendar.server_sync_token;
+        const syncToken = ignoreSyncToken
+            ? null
+            : remoteCalendar.server_sync_token;
 
         let reportBody;
         if (syncToken) {
@@ -136,6 +148,24 @@ class PullPhase {
                 );
             }
 
+            // A stored token the server rejects would fail every later pull
+            // the same way. Forget it and fall back to a full listing.
+            if (
+                syncToken &&
+                INVALID_SYNC_TOKEN_STATUSES.includes(error.response?.status)
+            ) {
+                logger.logInfo(
+                    `Remote CalDAV rejected the sync token for calendar ${calendar.id} (${error.response.status}), doing a full resync`
+                );
+                await RemoteCalendarRepository.updateServerSyncToken(
+                    remoteCalendar.id,
+                    null
+                );
+                return this._fetchChangesFromRemote(remoteCalendar, calendar, {
+                    ignoreSyncToken: true,
+                });
+            }
+
             logger.logError(
                 `Failed to fetch from remote CalDAV: ${error.message}`,
                 error
@@ -147,7 +177,7 @@ class PullPhase {
     _buildSyncCollectionReport(syncToken) {
         return `<?xml version="1.0" encoding="utf-8" ?>
 <D:sync-collection xmlns:D="DAV:">
-  <D:sync-token>${syncToken}</D:sync-token>
+  <D:sync-token>${escapeXml(syncToken)}</D:sync-token>
   <D:sync-level>1</D:sync-level>
   <D:prop>
     <D:getetag/>
@@ -233,16 +263,23 @@ class PullPhase {
                 }
                 const calendarData = rawCalendarData || null;
 
-                const allStatuses = propstatArray
-                    .map((ps) => ps.status || '')
-                    .join(' ');
-                const status =
-                    response.status ||
-                    allStatuses ||
-                    response.propstat?.status ||
-                    '';
+                // A deleted member is reported with a response-level 404
+                // (RFC 6578 3.5.2). A 404 inside a propstat only says that one
+                // property is not supported (RFC 4918 9.1), which is normal
+                // for getcontenttype, and must not read as a deletion. Some
+                // servers do put the 404 in the only propstat, so a response
+                // whose every propstat is 404 still counts.
+                const responseStatus =
+                    typeof response.status === 'string' ? response.status : '';
+                const removed = responseStatus
+                    ? responseStatus.includes('404')
+                    : !okPropstat &&
+                      propstatArray.length > 0 &&
+                      propstatArray.every((ps) =>
+                          String(ps.status || '').includes('404')
+                      );
 
-                if (status && status.includes('404')) {
+                if (removed) {
                     changedTasks.push({
                         action: 'delete',
                         href,

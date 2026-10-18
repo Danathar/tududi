@@ -6,6 +6,28 @@ const PushPhase = require('./push-phase');
 const SyncStateRepository = require('../repositories/sync-state-repository');
 const CalendarRepository = require('../repositories/calendar-repository');
 
+// Calendars store their setting as bidirectional / pull_only / push_only, and
+// callers have also passed pull / push. Anything else used to run no phase at
+// all and still report success.
+const DIRECTION_ALIASES = {
+    bidirectional: 'bidirectional',
+    pull: 'pull',
+    pull_only: 'pull',
+    push: 'push',
+    push_only: 'push',
+};
+
+function normalizeDirection(direction) {
+    const normalized = DIRECTION_ALIASES[direction];
+    if (!normalized) {
+        throw new AppError(
+            `Invalid sync direction: ${direction}. Must be one of: bidirectional, pull_only, push_only`,
+            400
+        );
+    }
+    return normalized;
+}
+
 class SyncEngine {
     constructor() {
         this.pullPhase = new PullPhase();
@@ -14,11 +36,10 @@ class SyncEngine {
     }
 
     async syncCalendar(calendarId, userId, options = {}) {
-        const {
-            direction = 'bidirectional',
-            force = false,
-            dryRun = false,
-        } = options;
+        const { force = false, dryRun = false } = options;
+        const direction = normalizeDirection(
+            options.direction || 'bidirectional'
+        );
 
         logger.logInfo(
             `Starting sync for calendar ${calendarId}, direction: ${direction}`
