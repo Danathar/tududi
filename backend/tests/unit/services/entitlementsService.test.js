@@ -225,6 +225,54 @@ describe('consumeMonthlyUsage', () => {
         );
     });
 
+    it('lets at most the limit through when calls run concurrently', async () => {
+        const user = await createTestUser({
+            email: `credits_race_${Date.now()}@example.com`,
+        });
+
+        const results = await Promise.allSettled(
+            Array.from({ length: 6 }, () =>
+                entitlements.consumeMonthlyUsage(user.id, 'ai_credits')
+            )
+        );
+
+        expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(
+            2
+        );
+        expect(
+            results
+                .filter((r) => r.status === 'rejected')
+                .every((r) => r.reason.code === 'PLAN_LIMIT_REACHED')
+        ).toBe(true);
+        const usage = await entitlements.getUsage(user.id);
+        expect(usage.ai_credits_used_this_month).toBe(2);
+    });
+
+    it('does not charge ai_requests when the credit limit refuses the call', async () => {
+        process.env.TUDUDI_PLANS_JSON = JSON.stringify({
+            free: {
+                limits: { ai_credits_per_month: 1, ai_requests_per_month: 10 },
+            },
+        });
+        plans._resetCache();
+        entitlements.invalidate();
+        const user = await createTestUser({
+            email: `credits_refund_${Date.now()}@example.com`,
+        });
+
+        await entitlements.consumeUsages(user.id, [
+            'ai_requests',
+            'ai_credits',
+        ]);
+        await expect(
+            entitlements.consumeUsages(user.id, ['ai_requests', 'ai_credits'])
+        ).rejects.toMatchObject({ code: 'PLAN_LIMIT_REACHED' });
+
+        const usage = await entitlements.getUsage(user.id);
+        expect(usage.ai_requests_this_month).toBe(1);
+        expect(usage.ai_credits_used_this_month).toBe(1);
+    });
+
     it("monthKey uses 'YYYY-MM', independent of the daily period key", () => {
         const now = new Date('2026-09-16T12:00:00Z');
         expect(entitlements.monthKey(now)).toBe('2026-09');

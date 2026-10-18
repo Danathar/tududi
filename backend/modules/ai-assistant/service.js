@@ -487,8 +487,7 @@ async function generateDailyBrief(userId) {
     // Charged once there is something to send, not on the way in: gathering
     // the context is a database read that can fail on its own, and losing a
     // day's allowance to our own error is not the user's mistake.
-    await entitlements.consumeUsage(userId, 'ai_requests');
-    await entitlements.consumeMonthlyUsage(userId, 'ai_credits');
+    await entitlements.consumeUsages(userId, ['ai_requests', 'ai_credits']);
 
     const systemPrompt = `You are a productivity assistant in Tududi. Return a daily brief as JSON. Keep every field very short — no full sentences, no filler words.
 
@@ -653,8 +652,7 @@ async function updateTaskInsightsDismissed(taskUid, userId, dismissed) {
 
 async function generateTaskInsights(taskContext, userId) {
     const client = await getOpenAIClient(userId);
-    await entitlements.consumeUsage(userId, 'ai_requests');
-    await entitlements.consumeMonthlyUsage(userId, 'ai_credits');
+    await entitlements.consumeUsages(userId, ['ai_requests', 'ai_credits']);
 
     const {
         taskUid,
@@ -861,8 +859,7 @@ async function updateProjectInsightsDismissed(projectUid, userId, dismissed) {
 
 async function generateProjectInsights(projectContext, userId) {
     const client = await getOpenAIClient(userId);
-    await entitlements.consumeUsage(userId, 'ai_requests');
-    await entitlements.consumeMonthlyUsage(userId, 'ai_credits');
+    await entitlements.consumeUsages(userId, ['ai_requests', 'ai_credits']);
 
     const {
         projectUid,

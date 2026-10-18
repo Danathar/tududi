@@ -408,30 +408,114 @@ function monthKey(now = new Date()) {
     return now.toISOString().slice(0, 7);
 }
 
-// Atomically records one use of a per-month metric and throws when the
-// month's budget is exhausted. Returns the new count.
-async function consumeUsage(userId, metric, n = 1) {
-    if (!isHostedMode()) return 0;
-    const ent = await getEntitlements(userId);
-    const limitKey = `${metric}_per_month`;
-    const limit = ent.limits[limitKey];
-
+// Adds `n` to the (user, metric, period) counter in a single UPDATE that
+// only matches while the new total stays within `limit`, so concurrent
+// callers cannot all pass a stale check. Returns true when the increment
+// was applied, false when it would have gone past the limit.
+async function incrementWithinLimit(userId, metric, period, n, limit) {
     const { UsageCounter } = models();
-    const period = monthKey();
-    const [row] = await UsageCounter.findOrCreate({
-        where: { user_id: userId, metric, period_key: period },
-        defaults: { user_id: userId, metric, period_key: period, count: 0 },
-    });
-
-    if (limit !== null && limit !== undefined && row.count + n > limit) {
-        throw new PlanLimitError(metric, limit, row.count, ent.plan);
+    const where = { user_id: userId, metric, period_key: period };
+    try {
+        await UsageCounter.findOrCreate({
+            where,
+            defaults: { ...where, count: 0 },
+        });
+    } catch (err) {
+        // Two first calls of the month can both miss the row; the unique
+        // index lets one create it, and the loser only needs it to exist.
+        if (err?.name !== 'SequelizeUniqueConstraintError') throw err;
     }
 
-    // increment() mutates the instance on PostgreSQL but not on SQLite, so
-    // re-read rather than add locally.
-    await row.increment('count', { by: n });
-    await row.reload();
-    return row.count;
+    const amount = Number(n);
+    if (!Number.isInteger(amount) || amount < 0) {
+        throw new Error(`Invalid usage amount: ${n}`);
+    }
+    const unlimited = limit === null || limit === undefined;
+    const [affected] = await UsageCounter.update(
+        { count: UsageCounter.sequelize.literal(`count + ${amount}`) },
+        {
+            where: unlimited
+                ? where
+                : { ...where, count: { [Op.lte]: limit - amount } },
+        }
+    );
+    return affected > 0;
+}
+
+async function readCount(userId, metric, period) {
+    const { UsageCounter } = models();
+    const row = await UsageCounter.findOne({
+        where: { user_id: userId, metric, period_key: period },
+        attributes: ['count'],
+        raw: true,
+    });
+    return row ? row.count : 0;
+}
+
+// Atomically records `n` uses of a per-month metric and throws when the
+// month's budget is exhausted, leaving the counter untouched. Returns the
+// new count.
+async function consumeUsage(userId, metric, n = 1, period = monthKey()) {
+    if (!isHostedMode()) return 0;
+    const ent = await getEntitlements(userId);
+    const limit = ent.limits[`${metric}_per_month`];
+
+    const applied = await incrementWithinLimit(
+        userId,
+        metric,
+        period,
+        n,
+        limit
+    );
+    const count = await readCount(userId, metric, period);
+    if (!applied) {
+        throw new PlanLimitError(metric, limit, count, ent.plan);
+    }
+    return count;
+}
+
+// Puts back a use taken by consumeUsage, e.g. when a later limit refuses
+// the same call. Never takes the counter below zero.
+async function releaseUsage(userId, metric, n = 1, period = monthKey()) {
+    if (!isHostedMode()) return;
+    const { UsageCounter } = models();
+    await UsageCounter.update(
+        { count: UsageCounter.sequelize.literal(`count - ${Number(n)}`) },
+        {
+            where: {
+                user_id: userId,
+                metric,
+                period_key: period,
+                count: { [Op.gte]: n },
+            },
+        }
+    );
+}
+
+// Consumes one use of each metric as a single charge: if any limit refuses,
+// the ones already taken are given back, so a refused call costs nothing.
+async function consumeUsages(userId, metrics) {
+    if (!isHostedMode()) return;
+    const period = monthKey();
+    const taken = [];
+    try {
+        for (const metric of metrics) {
+            await consumeUsage(userId, metric, 1, period);
+            taken.push(metric);
+        }
+    } catch (err) {
+        for (const metric of taken) {
+            try {
+                await releaseUsage(userId, metric, 1, period);
+            } catch (releaseErr) {
+                logError(
+                    releaseErr,
+                    'Failed to release usage after refused call'
+                );
+            }
+        }
+        throw err;
+    }
 }
 
 // Same as consumeUsage: kept as a separate name for call sites (e.g.
@@ -510,6 +594,8 @@ module.exports = {
     assertStorage,
     consumeUsage,
     consumeMonthlyUsage,
+    consumeUsages,
+    releaseUsage,
     monthKey,
     getUsage,
     getUsageForUsers,

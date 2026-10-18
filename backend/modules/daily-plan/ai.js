@@ -70,8 +70,7 @@ function languageInstruction(language) {
 }
 
 async function chargeForCall(userId) {
-    await entitlements.consumeUsage(userId, 'ai_requests');
-    await entitlements.consumeMonthlyUsage(userId, 'ai_credits');
+    await entitlements.consumeUsages(userId, ['ai_requests', 'ai_credits']);
 }
 
 // Budgets are generous on purpose: reasoning models spend most of them
@@ -483,6 +482,11 @@ const WRAP_UP_SCHEMA = {
 
 const isDone = (task) => task?.status === 2 || task?.status === 'done';
 
+// Habits stay open after a check-in and recurring tasks reopen, so a plan
+// item also counts as done when the plan marks its occurrence done.
+const isItemDone = (item) =>
+    item.occurrence_done === true || isDone(item.task);
+
 async function wrapUpDay(userId, date) {
     const user = await assertAiEnabled(userId);
     const timezone = getSafeTimezone(user.timezone);
@@ -506,8 +510,8 @@ async function wrapUpDay(userId, date) {
         const late =
             item.start_minute !== null &&
             item.start_minute + item.duration_minutes <= now &&
-            !isDone(item.task);
-        const state = isDone(item.task)
+            !isItemDone(item);
+        const state = isItemDone(item)
             ? 'done'
             : late
               ? 'missed its slot'
@@ -550,7 +554,7 @@ Plain text, no markdown. Return only the JSON object.${languageInstruction(user.
 
     const openUids = new Set(
         plan.items
-            .filter((item) => !isDone(item.task))
+            .filter((item) => !isItemDone(item))
             .map((item) => item.task_uid)
     );
     const nameByUid = new Map(
