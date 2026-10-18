@@ -4,6 +4,7 @@ const permissionsService = require('../../../services/permissionsService');
 const { logError } = require('../../../services/logService');
 const { serializeTask } = require('../core/serializers');
 const { parsePriority, parseStatus } = require('../core/parsers');
+const { ValidationError } = require('../../../shared/errors');
 
 async function getSubtasks(parentTaskId, userId, timezone) {
     const parent = await taskRepository.findById(parentTaskId);
@@ -57,14 +58,14 @@ function validateSubtasksInput(subtasks) {
 
     for (const subtask of subtasks) {
         if (!subtask || typeof subtask !== 'object' || Array.isArray(subtask)) {
-            throw new Error('Each subtask must be an object.');
+            throw new ValidationError('Each subtask must be an object.');
         }
         if (
             subtask.name !== undefined &&
             subtask.name !== null &&
             typeof subtask.name !== 'string'
         ) {
-            throw new Error('Subtask name must be a string.');
+            throw new ValidationError('Subtask name must be a string.');
         }
     }
 }

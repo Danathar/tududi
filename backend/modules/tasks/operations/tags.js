@@ -1,5 +1,6 @@
 const { Tag } = require('../../../models');
 const { validateTagName } = require('../../tags/tagsService');
+const { ValidationError } = require('../../../shared/errors');
 
 // Tags live in a join table, so changing them alone leaves the task row (and
 // its updated_at) untouched. CalDAV ETags, the collection CTag and the outbound
@@ -26,7 +27,7 @@ function validateTagsInput(tagsData) {
     if (!tagsData) return [];
 
     if (!Array.isArray(tagsData)) {
-        throw new Error('Tags must be an array of tag names.');
+        throw new ValidationError('Tags must be an array of tag names.');
     }
 
     const normalizedTags = tagsData.map((tag) =>
@@ -55,7 +56,7 @@ function validateTagsInput(tagsData) {
     }
 
     if (invalidTags.length > 0) {
-        throw new Error(
+        throw new ValidationError(
             `Invalid tag names: ${invalidTags.map((t) => `"${t.name}" (${t.error})`).join(', ')}`
         );
     }
