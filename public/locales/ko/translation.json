@@ -1095,6 +1095,7 @@
     "orUploadOwn": "또는 직접 업로드:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "이 필드는 필수입니다",
     "invalidEmail": "유효하지 않은 이메일 주소",
     "projectCreationFailed": "프로젝트 생성에 실패했습니다.",
@@ -1481,6 +1482,7 @@
     "unpinFromSidebar": "사이드바에서 고정 해제"
   },
   "areas": {
+    "toggleDropdownMenu": "드롭다운 메뉴 전환",
     "title": "영역",
     "noAreasFound": "발견된 영역이 없습니다",
     "editAreaAriaLabel": "영역 {{name}} 편집",
@@ -1507,6 +1509,7 @@
     "blankSlateProjects": "프로젝트로 이동"
   },
   "notes": {
+    "toggleDropdownMenu": "드롭다운 메뉴 전환",
     "loading": "노트 로딩 중...",
     "error": "노트 로딩 오류",
     "searchPlaceholder": "노트 검색...",

@@ -1,6 +1,8 @@
 'use strict';
 
 const areasRepository = require('../../areas/repository');
+const { validateName } = require('../../areas/validation');
+const rolesService = require('../../../services/rolesService');
 
 function registerAreaTools(server, context, tools) {
     // 1. list_areas - List all areas
@@ -87,12 +89,13 @@ function registerAreaTools(server, context, tools) {
             required: ['name'],
         },
         handler: async (params) => {
-            if (!params.name || params.name.trim().length === 0) {
-                throw new Error('Area name is required');
-            }
+            // Same capability POST /api/areas requires
+            await rolesService.assertCan(context.userId, 'create_projects');
+
+            const name = validateName(params.name);
 
             const area = await areasRepository.createForUser(context.userId, {
-                name: params.name.trim(),
+                name,
                 description: params.description || '',
                 color: params.color || null,
             });
@@ -149,7 +152,8 @@ function registerAreaTools(server, context, tools) {
             }
 
             const updates = {};
-            if (params.name !== undefined) updates.name = params.name;
+            if (params.name !== undefined)
+                updates.name = validateName(params.name);
             if (params.description !== undefined)
                 updates.description = params.description;
             if (params.color !== undefined)

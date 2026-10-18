@@ -1,7 +1,10 @@
 const request = require('supertest');
+const path = require('path');
+const fs = require('fs').promises;
 const app = require('../../app');
 const { User } = require('../../models');
 const { createTestUser } = require('../helpers/testUtils');
+const { getConfig } = require('../../config/config');
 
 describe('Users Routes', () => {
     let user, agent;
@@ -324,6 +327,27 @@ describe('Users Routes', () => {
 
             expect(response.status).toBe(401);
             expect(response.body.error).toBe('User not found');
+        });
+    });
+
+    describe('DELETE /api/profile/avatar', () => {
+        it('deletes the avatar file from the configured upload directory', async () => {
+            const dir = path.join(getConfig().uploadPath, 'avatars');
+            await fs.mkdir(dir, { recursive: true });
+            const name = `avatar-${user.id}-remove.png`;
+            const file = path.join(dir, name);
+            await fs.writeFile(file, 'png bytes');
+            await User.update(
+                { avatar_image: `/uploads/avatars/${name}` },
+                { where: { id: user.id } }
+            );
+
+            const response = await agent.delete('/api/profile/avatar');
+
+            expect(response.status).toBe(200);
+            await expect(fs.access(file)).rejects.toThrow();
+            const stored = await User.findByPk(user.id);
+            expect(stored.avatar_image).toBeNull();
         });
     });
 

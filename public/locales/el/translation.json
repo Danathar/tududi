@@ -764,6 +764,7 @@
     "aiApiKeyPlaceholder": "sk-..."
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "Αυτό το πεδίο είναι υποχρεωτικό",
     "invalidEmail": "Παρακαλώ εισάγετε ένα έγκυρο email",
     "passwordMismatch": "Οι κωδικοί δεν ταιριάζουν",
@@ -1018,6 +1019,7 @@
     "viewAs": "Προβολή"
   },
   "notes": {
+    "toggleDropdownMenu": "Εναλλαγή αναπτυσσόμενου μενού",
     "loading": "Φόρτωση σημειώσεων...",
     "error": "Σφάλμα φόρτωσης σημειώσεων",
     "searchPlaceholder": "Αναζήτηση σημειώσεων...",
@@ -1516,6 +1518,7 @@
     "tagDeleted": "Η ετικέτα διαγράφηκε!"
   },
   "areas": {
+    "toggleDropdownMenu": "Εναλλαγή αναπτυσσόμενου μενού",
     "title": "Περιοχές",
     "noAreasFound": "Δεν βρέθηκαν περιοχές",
     "editAreaAriaLabel": "Επεξεργασία περιοχής {{name}}",

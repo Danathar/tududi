@@ -1095,6 +1095,7 @@
     "orUploadOwn": "Или качете свой собствен:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "Това поле е задължително",
     "invalidEmail": "Невалиден имейл адрес",
     "projectCreationFailed": "Неуспешно създаване на проект.",
@@ -1481,6 +1482,7 @@
     "unpinFromSidebar": "Премахни от страничната лента"
   },
   "areas": {
+    "toggleDropdownMenu": "Превключи падащото меню",
     "title": "Области",
     "noAreasFound": "Не са намерени области",
     "editAreaAriaLabel": "Редактиране на област {{name}}",
@@ -1507,6 +1509,7 @@
     "blankSlateProjects": "Към проектите"
   },
   "notes": {
+    "toggleDropdownMenu": "Превключи падащото меню",
     "loading": "Зареждане на бележки...",
     "error": "Грешка при зареждане на бележки",
     "searchPlaceholder": "Търсене на бележки...",

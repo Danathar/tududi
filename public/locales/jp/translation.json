@@ -1036,6 +1036,7 @@
     "custom": "カスタム"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "この項目は必須です",
     "invalidEmail": "無効なメールアドレス",
     "passwordMismatch": "パスワードが一致しません",
@@ -1215,6 +1216,7 @@
     "unpinFromSidebar": "サイドバーからピン留め解除"
   },
   "areas": {
+    "toggleDropdownMenu": "ドロップダウンメニューを切り替え",
     "title": "エリア",
     "noAreasFound": "エリアが見つかりませんでした",
     "editAreaAriaLabel": "エリア {{name}} を編集",
@@ -1241,6 +1243,7 @@
     "blankSlateProjects": "プロジェクトへ"
   },
   "notes": {
+    "toggleDropdownMenu": "ドロップダウンメニューを切り替え",
     "loading": "ノートを読み込み中...",
     "noNotesFound": "ノートが見つかりませんでした",
     "title": "ノート",

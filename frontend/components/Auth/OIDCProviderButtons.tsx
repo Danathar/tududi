@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { getApiPath } from '../../config/paths';
 
 interface OIDCProvider {
     slug: string;
@@ -46,7 +47,7 @@ const OIDCProviderButtons: React.FC<OIDCProviderButtonsProps> = ({
     const { t } = useTranslation();
 
     const handleProviderClick = (slug: string) => {
-        window.location.href = `/api/oidc/auth/${slug}`;
+        window.location.href = getApiPath(`oidc/auth/${slug}`);
     };
 
     if (providers.length === 0) {

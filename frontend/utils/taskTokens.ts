@@ -1,4 +1,4 @@
-import { analyzeInboxText } from './inboxService';
+import { analyzeInboxText, InboxRecurrence } from './inboxService';
 
 export interface TokenResolved {
     name: string;
@@ -6,6 +6,8 @@ export interface TokenResolved {
     projectId: number | null;
     areaId: number | null;
     dueDate: string | null;
+    dueTime: string | null;
+    recurrence: InboxRecurrence | null;
 }
 
 interface NamedRef {
@@ -56,6 +58,11 @@ export const resolveTaskTokens = async (
         dueDate: analysis.parsed_due_date
             ? String(analysis.parsed_due_date).split('T')[0]
             : null,
+        dueTime:
+            analysis.parsed_due_date && analysis.parsed_due_time
+                ? analysis.parsed_due_time
+                : null,
+        recurrence: analysis.parsed_recurrence ?? null,
     };
 };
 
@@ -80,7 +87,13 @@ export const tokenChanges = (
         if (resolved.projectId !== null)
             changes.project_id = resolved.projectId;
         if (resolved.areaId !== null) changes.area_id = resolved.areaId;
-        if (resolved.dueDate) changes.due_date = resolved.dueDate;
+        if (resolved.dueDate) {
+            changes.due_date = resolved.dueDate;
+            if (resolved.dueTime) changes.due_time = resolved.dueTime;
+        }
+        // The phrase ("every monday") was cut from the name, so the
+        // recurrence it meant has to be saved with it.
+        if (resolved.recurrence) Object.assign(changes, resolved.recurrence);
     }
     return { changes, newTags };
 };

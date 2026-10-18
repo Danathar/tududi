@@ -93,6 +93,25 @@ describe('Daily plan routes', () => {
         expect(await DailyPlanItem.count()).toBe(0);
     });
 
+    it('judges overlaps and midnight on the duration taken from the task estimate', async () => {
+        const long = await makeTask({ estimated_minutes: 120 });
+        const other = await makeTask();
+
+        const overlap = await agent.put(`/api/daily-plan/${today}`).send({
+            items: [
+                { task_uid: long.uid, start_minute: 0 },
+                { task_uid: other.uid, start_minute: 60, duration_minutes: 30 },
+            ],
+        });
+        expect(overlap.status).toBe(400);
+
+        const pastMidnight = await agent.put(`/api/daily-plan/${today}`).send({
+            items: [{ task_uid: long.uid, start_minute: 1380 }],
+        });
+        expect(pastMidnight.status).toBe(400);
+        expect(await DailyPlanItem.count()).toBe(0);
+    });
+
     it('rejects a slot that runs past midnight', async () => {
         const a = await makeTask();
 

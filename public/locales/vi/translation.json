@@ -1095,6 +1095,7 @@
     "orUploadOwn": "Hoặc tải lên của riêng bạn:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "Trường này là bắt buộc",
     "invalidEmail": "Địa chỉ email không hợp lệ",
     "projectCreationFailed": "Tạo dự án không thành công.",
@@ -1481,6 +1482,7 @@
     "unpinFromSidebar": "Bỏ ghim khỏi thanh bên"
   },
   "areas": {
+    "toggleDropdownMenu": "Chuyển đổi menu thả xuống",
     "title": "Khu vực",
     "noAreasFound": "Không tìm thấy khu vực nào",
     "editAreaAriaLabel": "Chỉnh sửa khu vực {{name}}",
@@ -1507,6 +1509,7 @@
     "blankSlateProjects": "Đến dự án"
   },
   "notes": {
+    "toggleDropdownMenu": "Chuyển đổi menu thả xuống",
     "loading": "Đang tải ghi chú...",
     "error": "Lỗi khi tải ghi chú",
     "searchPlaceholder": "Tìm kiếm ghi chú...",

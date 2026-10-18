@@ -1,6 +1,8 @@
 'use strict';
 
 const goalsRepository = require('../../goals/repository');
+const goalsService = require('../../goals/service');
+const rolesService = require('../../../services/rolesService');
 
 function registerGoalTools(server, context, tools) {
     // 1. list_goals - List goals with optional filtering
@@ -163,13 +165,22 @@ function registerGoalTools(server, context, tools) {
             required: ['title', 'area_id'],
         },
         handler: async (params) => {
-            if (!params.title || params.title.trim().length === 0) {
+            // Same capability POST /api/goals requires
+            await rolesService.assertCan(context.userId, 'create_projects');
+
+            if (typeof params.title !== 'string' || !params.title.trim()) {
                 throw new Error('Goal title is required');
             }
 
+            // Same area check as the web: one the user owns or can edit
+            const areaId = await goalsService.resolveAreaId(
+                context.userId,
+                params.area_id
+            );
+
             const goal = await goalsRepository.create({
                 user_id: context.userId,
-                area_id: params.area_id,
+                area_id: areaId,
                 title: params.title.trim(),
                 why: params.why || null,
                 horizon: params.horizon || 'season',
@@ -266,7 +277,12 @@ function registerGoalTools(server, context, tools) {
             }
 
             const updates = {};
-            if (params.title !== undefined) updates.title = params.title;
+            if (params.title !== undefined) {
+                if (typeof params.title !== 'string' || !params.title.trim()) {
+                    throw new Error('Goal title is required');
+                }
+                updates.title = params.title.trim();
+            }
             if (params.why !== undefined) updates.why = params.why;
             if (params.horizon !== undefined) updates.horizon = params.horizon;
             if (params.target_date !== undefined)

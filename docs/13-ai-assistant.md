@@ -22,7 +22,7 @@ Setup differs by mode. **Self-hosted** installs let each user bring their own pr
 
 ### Self-hosted: per-user provider (Profile → AI Assistant)
 
-Each user can configure their own provider from **Profile → AI Assistant → AI Provider**: API key, base URL (for any OpenAI-compatible provider — Ollama, LM Studio, Groq, Azure OpenAI, etc.), and model. Values are stored per-user in the database (the API key encrypted at rest — see `backend/shared/crypto/secretCipher.js`) and take priority over `.env`, field by field. Leaving a field blank falls back to the corresponding `.env` value below, if the operator has set one.
+Each user can configure their own provider from **Profile → AI Assistant → AI Provider**: API key, base URL (for any OpenAI-compatible provider — Ollama, LM Studio, Groq, Azure OpenAI, etc.), and model. Values are stored per-user in the database (the API key encrypted at rest — see `backend/shared/crypto/secretCipher.js`) and take priority over `.env`, field by field. Leaving a field blank falls back to the corresponding `.env` value below, if the operator has set one, with one exception: the operator's `LLM_API_KEY` is only ever sent to the operator's own base URL. A user who sets their own base URL must also set their own API key, or AI features report `AI_NOT_CONFIGURED` for them. The shared demo account cannot change these settings, and the demo reset clears them.
 
 The API key is never sent back to the browser in full — the UI shows only that a key is set, plus its last 4 characters, and a "Clear" action to remove it.
 

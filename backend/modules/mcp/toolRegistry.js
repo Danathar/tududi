@@ -12,20 +12,55 @@ const { registerNoteTools } = require('./tools/noteTools');
 const { registerViewTools } = require('./tools/viewTools');
 const { registerPeopleTools } = require('./tools/peopleTools');
 const { registerGoalTools } = require('./tools/goalTools');
+const { validateToolArguments } = require('./argumentValidation');
 
-function registerAllTools(server, context, tools) {
-    registerTaskTools(server, context, tools);
-    registerCommentTools(server, context, tools);
-    registerProjectTools(server, context, tools);
-    registerInboxTools(server, context, tools);
-    registerMiscTools(server, context, tools);
-    registerHabitTools(server, context, tools);
-    registerAreaTools(server, context, tools);
-    registerTagTools(server, context, tools);
-    registerNoteTools(server, context, tools);
-    registerViewTools(server, context, tools);
-    registerPeopleTools(server, context, tools);
-    registerGoalTools(server, context, tools);
+// Registration order; the category is the name Profile > MCP lists the tools
+// under.
+const REGISTRARS = [
+    ['Tasks', registerTaskTools],
+    ['Comments', registerCommentTools],
+    ['Projects', registerProjectTools],
+    ['Inbox', registerInboxTools],
+    ['Misc', registerMiscTools],
+    ['Habits', registerHabitTools],
+    ['Areas', registerAreaTools],
+    ['Tags', registerTagTools],
+    ['Notes', registerNoteTools],
+    ['Views', registerViewTools],
+    ['People', registerPeopleTools],
+    ['Goals', registerGoalTools],
+];
+
+// Every call is checked against the tool's inputSchema before its handler
+// runs, so the tools do not each have to repeat the check.
+const validated = new WeakSet();
+
+function withArgumentValidation(tool) {
+    if (validated.has(tool)) return;
+    validated.add(tool);
+    const handler = tool.handler;
+    tool.handler = async (params, ...rest) => {
+        validateToolArguments(tool, params);
+        return handler(params, ...rest);
+    };
 }
 
-module.exports = { registerAllTools };
+function registerAllTools(server, context, tools) {
+    for (const [, register] of REGISTRARS) {
+        register(server, context, tools);
+    }
+    tools.forEach(withArgumentValidation);
+}
+
+// The tool names per category, taken from the registrars themselves so the
+// list cannot drift from what the server actually offers.
+function listToolCategories() {
+    return REGISTRARS.map(([category, register]) => {
+        const tools = [];
+        register(null, {}, tools);
+        const names = tools.map((tool) => tool.name);
+        return { category, count: names.length, tools: names };
+    });
+}
+
+module.exports = { registerAllTools, listToolCategories };
