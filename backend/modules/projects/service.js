@@ -3,7 +3,13 @@
 const entitlements = require('../../services/entitlementsService');
 const { Op } = require('sequelize');
 const projectsRepository = require('./repository');
-const { validateUid, validateName, formatDate } = require('./validation');
+const {
+    validateUid,
+    validateName,
+    validateStatus,
+    validatePriority,
+    formatDate,
+} = require('./validation');
 const { NotFoundError, ValidationError } = require('../../shared/errors');
 const { validateTagName } = require('../tags/tagsService');
 const permissionsService = require('../../services/permissionsService');
@@ -462,7 +468,7 @@ class ProjectsService {
         const tagsData = tags || Tags;
         const updateData = {};
 
-        if (name !== undefined) updateData.name = name;
+        if (name !== undefined) updateData.name = validateName(name);
         if (description !== undefined) updateData.description = description;
         if (goal_id !== undefined)
             updateData.goal_id =
@@ -472,14 +478,16 @@ class ProjectsService {
         if (pin_to_sidebar !== undefined)
             updateData.pin_to_sidebar = pin_to_sidebar;
         if (priority !== undefined)
-            updateData.priority = priority === '' ? null : priority;
+            updateData.priority = validatePriority(priority);
         if (due_date_at !== undefined)
             updateData.due_date_at = due_date_at === '' ? null : due_date_at;
         if (image_url !== undefined)
             updateData.image_url = image_url === '' ? null : image_url;
         if (color !== undefined) updateData.color = color === '' ? null : color;
-        if (status !== undefined) updateData.status = status;
-        else if (state !== undefined) updateData.status = state;
+        if (status !== undefined)
+            updateData.status = validateStatus(status, PROJECT_STATUSES);
+        else if (state !== undefined)
+            updateData.status = validateStatus(state, PROJECT_STATUSES);
 
         if (area_id !== undefined) {
             const resolvedAreaId = area_id === '' ? null : area_id;

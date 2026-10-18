@@ -3,6 +3,18 @@
 const { AppError } = require('../errors');
 const { logError } = require('../../services/logService');
 
+// body-parser (and raw-body) tag their errors with a `type`.
+const CLIENT_ERROR_CODES = {
+    'entity.parse.failed': 'INVALID_JSON',
+    'entity.too.large': 'PAYLOAD_TOO_LARGE',
+    'encoding.unsupported': 'UNSUPPORTED_ENCODING',
+    'charset.unsupported': 'UNSUPPORTED_CHARSET',
+    'request.aborted': 'REQUEST_ABORTED',
+    'request.size.invalid': 'BAD_REQUEST',
+    'stream.encoding.set': 'BAD_REQUEST',
+    'parameters.too.many': 'BAD_REQUEST',
+};
+
 /**
  * Global error handler middleware.
  * Converts errors to consistent JSON responses.
@@ -66,8 +78,18 @@ function errorHandler(err, req, res, next) {
         });
     }
 
+    // Client errors raised by Express and body-parser (invalid JSON, a body
+    // over the size limit, an unsupported encoding) carry a 4xx status and a
+    // message that is safe to show. Only 5xx errors are masked below.
+    const statusCode = err.statusCode || err.status || 500;
+    if (statusCode >= 400 && statusCode < 500) {
+        return res.status(statusCode).json({
+            error: err.message,
+            code: CLIENT_ERROR_CODES[err.type] || 'BAD_REQUEST',
+        });
+    }
+
     // Handle unknown errors
-    const statusCode = err.statusCode || 500;
     const message =
         process.env.NODE_ENV === 'production'
             ? 'Internal server error'
