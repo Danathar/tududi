@@ -119,6 +119,50 @@ describe('Notes Routes', () => {
             expect(response.body.map((n) => n.id)).toContain(note2.id);
         });
 
+        it('should sort by the requested column and direction', async () => {
+            const response = await agent
+                .get('/api/notes')
+                .query({ order_by: 'title:desc' });
+
+            expect(response.status).toBe(200);
+            expect(response.body.map((n) => n.title)).toEqual([
+                'Note 2',
+                'Note 1',
+            ]);
+        });
+
+        it('should default the direction when only a column is given', async () => {
+            const response = await agent
+                .get('/api/notes')
+                .query({ order_by: 'title' });
+
+            expect(response.status).toBe(200);
+            expect(response.body.map((n) => n.title)).toEqual([
+                'Note 1',
+                'Note 2',
+            ]);
+        });
+
+        it.each(['bogus:asc', 'title:sideways', 'title:asc:desc'])(
+            'should reject order_by=%s with 400',
+            async (orderBy) => {
+                const response = await agent
+                    .get('/api/notes')
+                    .query({ order_by: orderBy });
+
+                expect(response.status).toBe(400);
+                expect(response.body.error).toBeDefined();
+            }
+        );
+
+        it('should reject a repeated order_by with 400', async () => {
+            const response = await agent.get(
+                '/api/notes?order_by=title&order_by=content'
+            );
+
+            expect(response.status).toBe(400);
+        });
+
         it('should require authentication', async () => {
             const response = await request(app).get('/api/notes');
 

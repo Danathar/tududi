@@ -9,6 +9,8 @@ const {
     getTaskActivitySummary,
 } = require('./taskEventService');
 const { logError } = require('../../services/logService');
+const { ValidationError } = require('../../shared/errors');
+const { parseIntegerParam } = require('../../utils/list-params');
 const { numericIdParam } = require('../../middleware/numericIdParam');
 const router = express.Router();
 
@@ -137,7 +139,17 @@ router.get('/user/activity-summary', async (req, res) => {
 // GET /api/tasks/completion-analytics - Get completion time analytics for multiple tasks
 router.get('/tasks/completion-analytics', async (req, res) => {
     try {
-        const { limit = 50, offset = 0, projectUid } = req.query;
+        const { projectUid } = req.query;
+        const limit = parseIntegerParam(req.query.limit, 'limit', {
+            min: 1,
+            max: 500,
+            fallback: 50,
+        });
+        const offset = parseIntegerParam(req.query.offset, 'offset', {
+            min: 0,
+            max: Number.MAX_SAFE_INTEGER,
+            fallback: 0,
+        });
 
         // Get completed tasks for the user
         const { Task, Project } = require('../../models');
@@ -171,8 +183,8 @@ router.get('/tasks/completion-analytics', async (req, res) => {
                 { model: Project, attributes: ['name'], required: false },
             ],
             order: [['completed_at', 'DESC']],
-            limit: parseInt(limit),
-            offset: parseInt(offset),
+            limit,
+            offset,
         });
 
         // Get completion time analytics for each task
@@ -225,6 +237,9 @@ router.get('/tasks/completion-analytics', async (req, res) => {
             summary,
         });
     } catch (error) {
+        if (error instanceof ValidationError) {
+            return res.status(400).json({ error: error.message });
+        }
         logError('Error fetching completion analytics:', error);
         res.status(500).json({ error: 'Failed to fetch completion analytics' });
     }
