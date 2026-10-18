@@ -32,7 +32,9 @@ describe('Task history for users west of UTC', () => {
             due_date: '2026-06-15',
             priority: 'low',
         });
-        expect(created.status).toBe(201);
+        if (created.status !== 201) {
+            throw new Error(`task setup failed: ${created.status}`);
+        }
         task = await Task.findOne({ where: { uid: created.body.uid } });
         await TaskEvent.destroy({ where: { task_id: task.id } });
     });

@@ -615,12 +615,7 @@ describe('RecurringTaskService - recurrence interval normalization (#209)', () =
 
     it('never moves the next due date backwards for a negative interval', () => {
         const from = new Date(Date.UTC(2026, 0, 1, 7, 59, 59, 999));
-        for (const type of [
-            'daily',
-            'weekly',
-            'monthly',
-            'monthly_last_day',
-        ]) {
+        for (const type of ['daily', 'weekly', 'monthly', 'monthly_last_day']) {
             const next = calculateNextDueDate(
                 { recurrence_type: type, recurrence_interval: -3 },
                 from
