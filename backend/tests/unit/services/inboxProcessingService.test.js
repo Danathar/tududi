@@ -94,10 +94,10 @@ describe('inboxProcessingService', () => {
         });
 
         it('keeps a #word that cannot be a tag in the title', () => {
-            const result = processInboxItem('call #urgent,home today');
+            const result = processInboxItem('call #urgent,home please');
 
             expect(result.parsed_tags).toEqual([]);
-            expect(result.cleaned_content).toBe('call #urgent,home today');
+            expect(result.cleaned_content).toBe('call #urgent,home please');
         });
     });
 
