@@ -136,5 +136,36 @@ describe('Functional Services', () => {
             expect(taskSummaryService._getPriorityEmoji(2)).toBe('🔴'); // high
             expect(taskSummaryService._getPriorityEmoji(99)).toBe('⚪'); // unknown
         });
+
+        it("computes today's range in the user's timezone, not the server's", () => {
+            // 14:00Z on 2026-10-17 is 07:00 the same day in Los Angeles.
+            const now = new Date('2026-10-17T14:00:00Z');
+            const { today, tomorrow } =
+                taskSummaryService._createTodayDateRange(
+                    'America/Los_Angeles',
+                    now
+                );
+            expect(today.toISOString()).toBe('2026-10-17T07:00:00.000Z');
+            expect(tomorrow.toISOString()).toBe('2026-10-18T07:00:00.000Z');
+        });
+
+        it('uses the local day length on a DST-change day', () => {
+            const now = new Date('2026-11-01T18:00:00Z');
+            const { today, tomorrow } =
+                taskSummaryService._createTodayDateRange(
+                    'America/Los_Angeles',
+                    now
+                );
+            expect(today.toISOString()).toBe('2026-11-01T07:00:00.000Z');
+            expect(tomorrow.toISOString()).toBe('2026-11-02T08:00:00.000Z');
+        });
+
+        it('falls back to UTC for a missing timezone', () => {
+            const now = new Date('2026-10-17T23:30:00Z');
+            const { today, tomorrow } =
+                taskSummaryService._createTodayDateRange(null, now);
+            expect(today.toISOString()).toBe('2026-10-17T00:00:00.000Z');
+            expect(tomorrow.toISOString()).toBe('2026-10-18T00:00:00.000Z');
+        });
     });
 });

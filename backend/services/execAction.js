@@ -1,5 +1,4 @@
 const { sequelize, Action } = require('../models');
-const { isAdmin } = require('./rolesService');
 const { applyPerms } = require('./applyPerms');
 const {
     calculateProjectPerms,
@@ -10,8 +9,9 @@ const {
     calculateTagPerms,
 } = require('./permissionsCalculators');
 
+// Only a resource's owner shares it. Admins get no exception, or they could
+// grant themselves access to any user's private items.
 async function assertActorCanShare(actorUserId, resourceType, resourceOwnerId) {
-    if (await isAdmin(actorUserId)) return;
     if (resourceOwnerId !== actorUserId) {
         const err = new Error('Forbidden');
         err.status = 403;

@@ -84,6 +84,11 @@ function validateExpiresAt(expires_at) {
     if (Number.isNaN(parsedDate.getTime())) {
         throw new ValidationError('expires_at must be a valid date.');
     }
+    // A key that is already expired would be useless, and accepting one
+    // hides a client's clock or input mistake.
+    if (parsedDate.getTime() <= Date.now()) {
+        throw new ValidationError('expires_at must be in the future.');
+    }
     return parsedDate;
 }
 

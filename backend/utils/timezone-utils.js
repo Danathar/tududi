@@ -70,6 +70,17 @@ function getTodayBoundsInUTC(userTimezone) {
 }
 
 /**
+ * Get the start of the current week (Sunday 00:00) in the user's timezone, as UTC
+ * @param {string} userTimezone - User's timezone
+ * @param {Date} [now] - The current instant (defaults to now)
+ * @returns {Date} UTC Date object
+ */
+function getStartOfWeekInUTC(userTimezone, now = new Date()) {
+    const local = moment.tz(now, getSafeTimezone(userTimezone)).startOf('day');
+    return local.subtract(local.day(), 'days').utc().toDate();
+}
+
+/**
  * Get date range for "upcoming" tasks (next N days) in user timezone
  * Includes today through N days ahead
  * @param {string} userTimezone - User's timezone
@@ -251,6 +262,7 @@ module.exports = {
     getCurrentDateInTimezone,
     getDayBoundsInUTC,
     getTodayBoundsInUTC,
+    getStartOfWeekInUTC,
     getUpcomingRangeInUTC,
     isToday,
     isOverdue,

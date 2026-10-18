@@ -34,6 +34,9 @@ const {
     getUpcomingRangeInUTC,
 } = require('../../utils/timezone-utils');
 const permissionsService = require('../../services/permissionsService');
+const {
+    revokeProjectSharesForItem,
+} = require('../../services/containerShareSync');
 const habitService = require('../habits/habitService');
 
 const {
@@ -50,6 +53,7 @@ const {
     buildTaskAttributes,
     buildUpdateAttributes,
 } = require('./core/builders');
+const { parseRecurrenceInterval } = require('./core/parsers');
 const {
     createSubtasks,
     updateSubtasks,
@@ -678,6 +682,15 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
 
         const oldValues = captureOldValues(task);
         const oldStatus = task.status;
+        const oldProjectId = task.project_id;
+
+        if (recurrence_interval !== undefined) {
+            try {
+                parseRecurrenceInterval(recurrence_interval);
+            } catch (error) {
+                return res.status(400).json({ error: error.message });
+            }
+        }
 
         if (update_parent_recurrence && task.recurring_parent_id) {
             const parentTask = await taskRepository.findByIdAndUser(
@@ -693,7 +706,7 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
                             : parentTask.recurrence_type,
                     recurrence_interval:
                         recurrence_interval !== undefined
-                            ? recurrence_interval
+                            ? parseRecurrenceInterval(recurrence_interval)
                             : parentTask.recurrence_interval,
                     recurrence_end_date:
                         recurrence_end_date !== undefined
@@ -926,12 +939,25 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
 
         await updateTaskTags(task, tagsData, req.currentUser.id);
         await updateSubtasks(task.id, subtasks, req.currentUser.id);
+
+        // Moving the task out of a shared project takes away the access that
+        // project's (or its area's or goal's) collaborators had to it.
+        if (
+            taskAttributes.project_id !== undefined &&
+            oldProjectId &&
+            taskAttributes.project_id !== oldProjectId
+        ) {
+            await revokeProjectSharesForItem('task', task.id, oldProjectId);
+        }
+
         await logTaskChanges(
             task,
             oldValues,
             req.body,
             tagsData,
-            req.currentUser.id
+            req.currentUser.id,
+            'web',
+            req.currentUser.timezone
         );
 
         const taskWithAssociations = await taskRepository.findById(task.id, {

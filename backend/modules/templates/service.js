@@ -12,6 +12,7 @@ const { validateUid, validateName } = require('./utils/validation');
 const { NotFoundError, ValidationError } = require('../../shared/errors');
 const { uid: generateUid } = require('../../utils/uid');
 const { sortTags } = require('../tasks/core/serializers');
+const { validateAreaAccess } = require('../tasks/utils/validation');
 const { validateTagName } = require('../tags/tagsService');
 const { logError } = require('../../services/logService');
 const { getConfig } = require('../../config/config');
@@ -255,12 +256,15 @@ class TemplatesService {
         const newName = options.name || `${template.name} (Copy)`;
         const projectUid = generateUid();
 
+        // Only an area the caller owns or can edit; missing and inaccessible
+        // areas get the same error so another user's area is never probed.
         let areaId = null;
         if (options.area_uid) {
-            const area = await projectsRepository.findAreaByUid(
-                options.area_uid
-            );
-            areaId = area ? area.id : null;
+            try {
+                areaId = await validateAreaAccess(options.area_uid, userId);
+            } catch {
+                throw new ValidationError('Invalid area.');
+            }
         }
 
         const newProject = await projectsRepository.create({

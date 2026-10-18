@@ -1,6 +1,6 @@
 const request = require('supertest');
 const app = require('../../app');
-const { Task, Project, Note, Role } = require('../../models');
+const { Task, Project, Note, Role, Permission } = require('../../models');
 const { createTestUser } = require('../helpers/testUtils');
 
 describe('Admin Permissions - Resource Visibility', () => {
@@ -143,6 +143,46 @@ describe('Admin Permissions - Resource Visibility', () => {
 
             // Regular user should NOT see admin's task
             expect(taskIds).not.toContain(adminTask.id);
+        });
+    });
+
+    describe('Sharing', () => {
+        it("admin cannot share another user's task with themselves", async () => {
+            const regularTask = await Task.create({
+                name: 'Regular private task',
+                user_id: regularUser.id,
+            });
+
+            const res = await adminAgent.post('/api/shares').send({
+                resource_type: 'task',
+                resource_uid: regularTask.uid,
+                target_user_email: adminUser.email,
+                access_level: 'rw',
+            });
+            expect(res.status).toBe(403);
+            expect(
+                await Permission.count({
+                    where: {
+                        user_id: adminUser.id,
+                        resource_uid: regularTask.uid,
+                    },
+                })
+            ).toBe(0);
+
+            const read = await adminAgent.get(`/api/task/${regularTask.uid}`);
+            expect([403, 404]).toContain(read.status);
+        });
+
+        it("admin cannot list who another user's project is shared with", async () => {
+            const regularProject = await Project.create({
+                name: 'Regular private project',
+                user_id: regularUser.id,
+            });
+
+            const res = await adminAgent.get(
+                `/api/shares?resource_type=project&resource_uid=${regularProject.uid}`
+            );
+            expect(res.status).toBe(403);
         });
     });
 

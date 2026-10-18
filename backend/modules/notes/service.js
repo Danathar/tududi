@@ -16,6 +16,9 @@ const scopeService = require('../../services/scopeService');
 const { sortTags } = require('../tasks/core/serializers');
 const { logError } = require('../../services/logService');
 const { noteAttachments } = require('../../services/entityAttachments');
+const {
+    revokeProjectSharesForItem,
+} = require('../../services/containerShareSync');
 
 /**
  * Serialize a note with sorted tags.
@@ -299,12 +302,25 @@ class NotesService {
             }
         }
 
+        const oldProjectId = note.project_id;
         await notesRepository.update(note, updateData);
 
-        // Handle tags if provided
+        // Moving the note out of a shared project takes away the access that
+        // project's (or its area's or goal's) collaborators had to it.
+        if (
+            updateData.project_id !== undefined &&
+            oldProjectId &&
+            updateData.project_id !== oldProjectId
+        ) {
+            await revokeProjectSharesForItem('note', note.id, oldProjectId);
+        }
+
+        // Handle tags if provided. Tags belong to the note's owner, so a
+        // collaborator's edit resolves names in the owner's tag list instead
+        // of swapping the owner's tags for the collaborator's own.
         if (tags !== undefined) {
             const tagNames = parseTagsFromBody(tags);
-            await updateNoteTags(note, tagNames, userId);
+            await updateNoteTags(note, tagNames, note.user_id);
         }
 
         // Reload with associations

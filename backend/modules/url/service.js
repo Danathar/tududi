@@ -31,6 +31,47 @@ const fetchWithTimeout = async (url, options = {}, timeoutMs = 7000) => {
     }
 };
 
+const NAMED_ENTITIES = {
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+    nbsp: ' ',
+};
+
+// Decodes the named entities above plus decimal (&#39;) and hex (&#x27;)
+// character references in a single pass, so "&amp;lt;" stays "&lt;".
+function decodeHtmlEntities(text) {
+    return text.replace(
+        /&(?:#(\d+)|#x([0-9a-f]+)|([a-z]+));/gi,
+        (match, dec, hex, name) => {
+            if (dec || hex) {
+                const codePoint = dec ? parseInt(dec, 10) : parseInt(hex, 16);
+                if (codePoint > 0 && codePoint <= 0x10ffff) {
+                    return String.fromCodePoint(codePoint);
+                }
+                return match;
+            }
+            const decoded = NAMED_ENTITIES[name.toLowerCase()];
+            return decoded === undefined ? match : decoded;
+        }
+    );
+}
+
+// Returns the content="..." of a <meta> tag whose `attr` is `value`, or null.
+// The closing quote must match the opening one (backreference), so a
+// double-quoted value can contain an apostrophe and vice versa.
+function matchMetaContent(html, attr, value) {
+    // attr and value are fixed strings from this file, never user input.
+    const pattern = new RegExp(
+        `<meta[^>]+${attr}=["']${value}["'][^>]+content=(["'])([\\s\\S]*?)\\1`,
+        'i'
+    );
+    const match = html.match(pattern);
+    return match && match[2] ? match[2] : null;
+}
+
 // Fast regex-based metadata extraction (much faster than cheerio for head content)
 function extractMetadataFromHtml(html) {
     try {
@@ -38,18 +79,18 @@ function extractMetadataFromHtml(html) {
         let title = null;
 
         // Try og:title first
-        const ogTitleMatch = html.match(
-            /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i
-        );
+        const ogTitleMatch = matchMetaContent(html, 'property', 'og:title');
         if (ogTitleMatch) {
-            title = ogTitleMatch[1];
+            title = ogTitleMatch;
         } else {
             // Try twitter:title
-            const twitterTitleMatch = html.match(
-                /<meta[^>]+name=["']twitter:title["'][^>]+content=["']([^"']+)["']/i
+            const twitterTitleMatch = matchMetaContent(
+                html,
+                'name',
+                'twitter:title'
             );
             if (twitterTitleMatch) {
-                title = twitterTitleMatch[1];
+                title = twitterTitleMatch;
             } else {
                 // Fallback to title tag
                 const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
@@ -60,13 +101,7 @@ function extractMetadataFromHtml(html) {
         }
 
         if (title) {
-            title = title.trim();
-            title = title
-                .replace(/&lt;/g, '<')
-                .replace(/&gt;/g, '>')
-                .replace(/&quot;/g, '"')
-                .replace(/&#39;/g, "'")
-                .replace(/&amp;/g, '&');
+            title = decodeHtmlEntities(title.trim());
 
             if (title.length > 100) {
                 title = title.substring(0, 100) + '...';
@@ -75,42 +110,51 @@ function extractMetadataFromHtml(html) {
 
         // Extract image with priority: og:image > twitter:image
         let image = null;
-        const ogImageMatch = html.match(
-            /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i
-        );
+        const ogImageMatch = matchMetaContent(html, 'property', 'og:image');
         if (ogImageMatch) {
-            image = ogImageMatch[1];
+            image = ogImageMatch;
         } else {
-            const twitterImageMatch = html.match(
-                /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i
+            const twitterImageMatch = matchMetaContent(
+                html,
+                'name',
+                'twitter:image'
             );
             if (twitterImageMatch) {
-                image = twitterImageMatch[1];
+                image = twitterImageMatch;
             }
         }
 
         // Extract description
         let description = null;
-        const ogDescMatch = html.match(
-            /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i
+        const ogDescMatch = matchMetaContent(
+            html,
+            'property',
+            'og:description'
         );
         if (ogDescMatch) {
-            description = ogDescMatch[1];
+            description = ogDescMatch;
         } else {
-            const twitterDescMatch = html.match(
-                /<meta[^>]+name=["']twitter:description["'][^>]+content=["']([^"']+)["']/i
+            const twitterDescMatch = matchMetaContent(
+                html,
+                'name',
+                'twitter:description'
             );
             if (twitterDescMatch) {
-                description = twitterDescMatch[1];
+                description = twitterDescMatch;
             } else {
-                const metaDescMatch = html.match(
-                    /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i
+                const metaDescMatch = matchMetaContent(
+                    html,
+                    'name',
+                    'description'
                 );
                 if (metaDescMatch) {
-                    description = metaDescMatch[1];
+                    description = metaDescMatch;
                 }
             }
         }
+
+        if (image) image = decodeHtmlEntities(image);
+        if (description) description = decodeHtmlEntities(description);
 
         if (description && description.length > 150) {
             description = description.substring(0, 150) + '...';
@@ -252,10 +296,21 @@ function fetchMetadataViaHttp(normalizedUrl, maxRedirects = MAX_REDIRECTS) {
                         [301, 302, 303, 307, 308].includes(res.statusCode) &&
                         res.headers.location
                     ) {
-                        const redirectUrl = new URL(
-                            res.headers.location,
-                            currentUrl
-                        ).href;
+                        // This callback runs outside any try/catch or
+                        // promise chain, so a Location the URL parser
+                        // rejects (e.g. "http://[") would otherwise throw
+                        // uncaught and take the whole process down.
+                        let redirectUrl;
+                        try {
+                            redirectUrl = new URL(
+                                res.headers.location,
+                                currentUrl
+                            ).href;
+                        } catch {
+                            res.resume();
+                            conclude(null);
+                            return;
+                        }
                         res.resume();
                         makeRequest(redirectUrl, redirectCount + 1);
                         return;

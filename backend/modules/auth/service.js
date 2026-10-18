@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const { User, sequelize } = require('../../models');
 const { isAdmin } = require('../../services/rolesService');
 const { getWorkspaceUserIds } = require('../../services/workspaceMembers');
@@ -31,6 +32,22 @@ const {
     ServiceUnavailableError,
 } = require('../../shared/errors');
 
+// A bcrypt hash of a random secret, made once, that login compares against
+// when there is no real hash to check, so those answers take as long as a
+// wrong password does.
+let dummyPasswordHashPromise = null;
+function getDummyPasswordHash() {
+    if (!dummyPasswordHashPromise) {
+        dummyPasswordHashPromise = User.hashPassword(
+            crypto.randomBytes(32).toString('hex')
+        ).catch((error) => {
+            dummyPasswordHashPromise = null;
+            throw error;
+        });
+    }
+    return dummyPasswordHashPromise;
+}
+
 class AuthService {
     getVersion() {
         return { version: packageJson.version, build: getBuildInfo() };
@@ -60,6 +77,11 @@ class AuthService {
 
         if (!email || !password) {
             throw new ValidationError('Email and password are required');
+        }
+
+        // A JSON body can carry a number, boolean or object here.
+        if (typeof email !== 'string' || typeof password !== 'string') {
+            throw new ValidationError('Email and password must be text');
         }
 
         // Before the transaction opens: the domain check may wait on DNS,
@@ -246,7 +268,7 @@ class AuthService {
         return { user: null };
     }
 
-    async login(email, password, session) {
+    async login(email, password, req) {
         if (!isPasswordAuthEnabled()) {
             throw new ForbiddenError(
                 'Password login is disabled. Please use SSO to sign in.'
@@ -268,21 +290,14 @@ class AuthService {
         const user = await User.findOne({
             where: { email: email.trim().toLowerCase() },
         });
-        if (!user) {
-            throw new UnauthorizedError('Invalid credentials');
-        }
 
-        if (!user.password_digest) {
-            const oidcEnabled =
-                (process.env.OIDC_ENABLED || '').toLowerCase() === 'true';
-            if (oidcEnabled) {
-                throw new UnauthorizedError(
-                    'This account has no password set. Please sign in with your SSO provider, or contact an administrator to set a password.'
-                );
-            }
-            throw new UnauthorizedError(
-                'This account has no password set. Use "Forgot password" to create one.'
-            );
+        // An unknown email, an account with no password (SSO or invited) and
+        // a wrong password all get the same answer after the same bcrypt
+        // work, so the response cannot tell which emails have accounts or
+        // which accounts have no password.
+        if (!user || !user.password_digest) {
+            await User.checkPassword(password, await getDummyPasswordHash());
+            throw new UnauthorizedError('Invalid credentials');
         }
 
         const isValidPassword = await User.checkPassword(
@@ -301,10 +316,16 @@ class AuthService {
             throw error;
         }
 
-        session.userId = user.id;
+        // A fresh session id at sign-in. Without it, a session id planted in
+        // the browser before sign-in (session fixation) would become the
+        // victim's authenticated session.
+        await new Promise((resolve, reject) =>
+            req.session.regenerate((err) => (err ? reject(err) : resolve()))
+        );
+        req.session.userId = user.id;
 
         await new Promise((resolve, reject) => {
-            session.save((err) => {
+            req.session.save((err) => {
                 if (err) reject(err);
                 else resolve();
             });

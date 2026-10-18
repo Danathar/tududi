@@ -498,4 +498,53 @@ describe('Users Routes', () => {
             expect(response.body.error).toBe('User not found');
         });
     });
+
+    describe('changing the password', () => {
+        let otherAgent;
+
+        beforeEach(async () => {
+            otherAgent = request.agent(app);
+            await otherAgent.post('/api/login').send({
+                email: user.email,
+                password: 'password123',
+            });
+        });
+
+        it('POST /api/profile/change-password signs out the other sessions', async () => {
+            expect((await otherAgent.get('/api/profile')).status).toBe(200);
+
+            const response = await agent
+                .post('/api/profile/change-password')
+                .send({
+                    currentPassword: 'password123',
+                    newPassword: 'newpassword456',
+                });
+
+            expect(response.status).toBe(200);
+            expect((await otherAgent.get('/api/profile')).status).toBe(401);
+            expect((await agent.get('/api/profile')).status).toBe(200);
+        });
+
+        it('PATCH /api/profile with newPassword signs out the other sessions', async () => {
+            expect((await otherAgent.get('/api/profile')).status).toBe(200);
+
+            const response = await agent.patch('/api/profile').send({
+                currentPassword: 'password123',
+                newPassword: 'newpassword456',
+            });
+
+            expect(response.status).toBe(200);
+            expect((await otherAgent.get('/api/profile')).status).toBe(401);
+            expect((await agent.get('/api/profile')).status).toBe(200);
+        });
+
+        it('leaves the other sessions alone when no password changes', async () => {
+            const response = await agent
+                .patch('/api/profile')
+                .send({ appearance: 'dark' });
+
+            expect(response.status).toBe(200);
+            expect((await otherAgent.get('/api/profile')).status).toBe(200);
+        });
+    });
 });
