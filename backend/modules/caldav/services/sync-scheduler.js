@@ -67,7 +67,7 @@ class SyncScheduler {
         }
     }
 
-    async _syncCalendar(calendar) {
+    async _syncCalendar(calendar, options = {}) {
         try {
             const {
                 hasFeature,
@@ -84,6 +84,8 @@ class SyncScheduler {
                 calendar.user_id,
                 {
                     direction: calendar.sync_direction || 'bidirectional',
+                    dryRun: options.dryRun === true,
+                    force: options.force === true,
                 }
             );
 
@@ -104,11 +106,13 @@ class SyncScheduler {
                 error
             );
 
-            await CalendarRepository.updateSyncStatus(
-                calendar.id,
-                'error',
-                error.message
-            );
+            if (!options.dryRun) {
+                await CalendarRepository.updateSyncStatus(
+                    calendar.id,
+                    'error',
+                    error.message
+                );
+            }
 
             throw error;
         }
@@ -125,7 +129,7 @@ class SyncScheduler {
             throw new Error('Unauthorized access to calendar');
         }
 
-        return await this._syncCalendar(calendar);
+        return await this._syncCalendar(calendar, options);
     }
 
     async syncUserCalendars(userId, options = {}) {
@@ -143,7 +147,7 @@ class SyncScheduler {
             }
 
             try {
-                const result = await this._syncCalendar(calendar);
+                const result = await this._syncCalendar(calendar, options);
                 results.push(result);
             } catch (error) {
                 logger.logError(
