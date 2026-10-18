@@ -52,6 +52,7 @@ const {
     SiteVisit,
 } = require('../models');
 const { getConfig } = require('../config/config');
+const { projectCoverFilename } = require('../utils/image-upload');
 const { assertAnotherAdminRemains } = require('./rolesService');
 const { getBackupsDirectory } = require('./backupService');
 const { destroyUserSessions } = require('./sessionService');
@@ -192,11 +193,22 @@ async function eraseUserAccount(userId) {
                 filesToDelete.push([config.uploadPath, a.file_path]);
             }
         }
+        // A cover another user's project still shows stays: image_url is
+        // set by the owner, so it can name someone else's cover.
         for (const project of userProjects) {
-            if (!project.image_url) continue;
+            const coverFilename = projectCoverFilename(project.image_url);
+            if (!coverFilename) continue;
+            const usedByOthers = await Project.count({
+                where: {
+                    image_url: project.image_url,
+                    user_id: { [Op.ne]: userId },
+                },
+                ...tx,
+            });
+            if (usedByOthers > 0) continue;
             filesToDelete.push([
                 path.join(config.uploadPath, 'projects'),
-                path.basename(project.image_url.split('?')[0]),
+                coverFilename,
             ]);
         }
         if (taskIds.length > 0) {
