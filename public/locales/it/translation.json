@@ -1095,6 +1095,7 @@
     "orUploadOwn": "Oppure carica il tuo:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "Questo campo è obbligatorio",
     "invalidEmail": "Indirizzo email non valido",
     "projectCreationFailed": "Creazione progetto fallita.",
@@ -1481,6 +1482,7 @@
     "unpinFromSidebar": "Rimuovi dalla barra laterale"
   },
   "areas": {
+    "toggleDropdownMenu": "Attiva/disattiva menu a discesa",
     "title": "Aree",
     "noAreasFound": "Nessuna area trovata",
     "editAreaAriaLabel": "Modifica area {{name}}",
@@ -1507,6 +1509,7 @@
     "blankSlateProjects": "Vai ai progetti"
   },
   "notes": {
+    "toggleDropdownMenu": "Attiva/disattiva menu a discesa",
     "loading": "Caricamento note...",
     "error": "Errore nel caricamento delle note",
     "searchPlaceholder": "Cerca note...",

@@ -247,6 +247,35 @@ describe('CalDAV Protocol - Phase 3', () => {
             expect(response.text).toContain('Test Task');
         });
 
+        // #226: XML cannot carry most control characters. One task name
+        // with one used to fail the whole multistatus with a 500.
+        test('PROPFIND depth 1 strips control characters from a task name', async () => {
+            await Task.create({
+                uid: 'test-task-ctrl',
+                user_id: testUser.id,
+                name: 'bad\u0001name',
+                note: 'note\u0002with\u001Fcontrols',
+                status: 0,
+            });
+
+            const response = await propfind(
+                app,
+                '/caldav/caldav@test.com/tasks/'
+            )
+                .set('Authorization', authHeader)
+                .set('Depth', '1')
+                .set('Content-Type', 'application/xml')
+                .send(
+                    '<?xml version="1.0"?><D:propfind xmlns:D="DAV:"><D:prop><D:displayname/></D:prop></D:propfind>'
+                )
+                .expect(207);
+
+            expect(response.text).toContain('test-task-1.ics');
+            expect(response.text).toContain('test-task-ctrl.ics');
+            expect(response.text).toContain('badname');
+            expect(response.text).not.toContain('\u0001');
+        });
+
         test('PROPFIND on individual task should return task properties', async () => {
             const propfindXml = `<?xml version="1.0" encoding="utf-8" ?>
 <D:propfind xmlns:D="DAV:">
@@ -333,6 +362,41 @@ describe('CalDAV Protocol - Phase 3', () => {
 
             expect(response.text).toContain('getetag');
             expect(response.text).not.toContain('BEGIN:VCALENDAR');
+        });
+
+        // #226: the note travels inside calendar-data.
+        test('REPORT with calendar-data strips control characters from a note', async () => {
+            await Task.create({
+                uid: 'report-task-ctrl',
+                user_id: testUser.id,
+                name: 'Control\u0007 chars',
+                note: 'line\u0001one\u000Bline two',
+                status: 0,
+                due_date: new Date('2026-06-16T10:00:00Z'),
+            });
+
+            const reportXml = `<?xml version="1.0" encoding="utf-8" ?>
+<C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop>
+    <D:getetag/>
+    <C:calendar-data/>
+  </D:prop>
+  <C:filter>
+    <C:comp-filter name="VTODO"/>
+  </C:filter>
+</C:calendar-query>`;
+
+            const response = await report(app, '/caldav/caldav@test.com/tasks/')
+                .set('Authorization', authHeader)
+                .set('Content-Type', 'application/xml')
+                .send(reportXml)
+                .expect(207);
+
+            expect(response.text).toContain('report-task-1.ics');
+            expect(response.text).toContain('report-task-ctrl.ics');
+            expect(response.text).toContain('lineoneline two');
+            // eslint-disable-next-line no-control-regex
+            expect(response.text).not.toMatch(/[\u0001\u0007\u000B]/);
         });
     });
 
@@ -479,6 +543,115 @@ END:VCALENDAR`;
                 .set('Content-Type', 'text/calendar')
                 .send(vtodo)
                 .expect(412);
+        });
+
+        // #231: If-None-Match: * means "create only".
+        test('PUT with If-None-Match: * does not overwrite an existing task', async () => {
+            const put = (summary) =>
+                request(app)
+                    .put('/caldav/caldav@test.com/tasks/n1.ics')
+                    .set('Authorization', authHeader)
+                    .set('If-None-Match', '*')
+                    .set('Content-Type', 'text/calendar')
+                    .send(
+                        `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTODO\r\nUID:n1\r\nSUMMARY:${summary}\r\nEND:VTODO\r\nEND:VCALENDAR`
+                    );
+
+            await put('original').expect(201);
+            await put('overwritten').expect(412);
+
+            const task = await Task.findOne({ where: { uid: 'n1' } });
+            expect(task.name).toBe('original');
+        });
+
+        test('PUT of a VTODO without SUMMARY creates a task with a fallback name', async () => {
+            await request(app)
+                .put('/caldav/caldav@test.com/tasks/o1.ics')
+                .set('Authorization', authHeader)
+                .set('Content-Type', 'text/calendar')
+                .send(
+                    'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTODO\r\nUID:o1\r\nEND:VTODO\r\nEND:VCALENDAR'
+                )
+                .expect(201);
+
+            const task = await Task.findOne({ where: { uid: 'o1' } });
+            expect(task.name).toBe('Untitled');
+        });
+
+        test('PUT of a VTODO without SUMMARY keeps the existing name', async () => {
+            const existing = await Task.create({
+                uid: 'o2',
+                user_id: testUser.id,
+                name: 'Keep me',
+                status: 0,
+            });
+
+            await request(app)
+                .put('/caldav/caldav@test.com/tasks/o2.ics')
+                .set('Authorization', authHeader)
+                .set('Content-Type', 'text/calendar')
+                .send(
+                    'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTODO\r\nUID:o2\r\nSTATUS:COMPLETED\r\nEND:VTODO\r\nEND:VCALENDAR'
+                )
+                .expect(204);
+
+            await existing.reload();
+            expect(existing.name).toBe('Keep me');
+            expect(existing.status).toBe(2);
+        });
+
+        // #230: the habit fields are Tududi-only. A client that edits the
+        // task and drops the X-TUDUDI-* properties must not reset them.
+        test('PUT without X-TUDUDI-HABIT-* properties keeps the habit data', async () => {
+            const existing = await Task.create({
+                uid: 'habit-put',
+                user_id: testUser.id,
+                name: 'Habit',
+                status: 0,
+                habit_mode: true,
+                habit_current_streak: 7,
+                habit_total_completions: 20,
+            });
+
+            await request(app)
+                .put('/caldav/caldav@test.com/tasks/habit-put.ics')
+                .set('Authorization', authHeader)
+                .set('Content-Type', 'text/calendar')
+                .send(
+                    'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTODO\r\nUID:habit-put\r\nSUMMARY:Habit renamed\r\nEND:VTODO\r\nEND:VCALENDAR'
+                )
+                .expect(204);
+
+            await existing.reload();
+            expect(existing.name).toBe('Habit renamed');
+            expect(existing.habit_mode).toBe(true);
+            expect(existing.habit_current_streak).toBe(7);
+            expect(existing.habit_total_completions).toBe(20);
+        });
+
+        // #229: a date-only UNTIL used to be stored as 'Invalid date'.
+        test('PUT keeps an RRULE with a date-only UNTIL', async () => {
+            await request(app)
+                .put('/caldav/caldav@test.com/tasks/m1.ics')
+                .set('Authorization', authHeader)
+                .set('Content-Type', 'text/calendar')
+                .send(
+                    'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTODO\r\nUID:m1\r\nSUMMARY:Daily until NYE\r\nDTSTART;VALUE=DATE:20250101\r\nRRULE:FREQ=DAILY;UNTIL=20251231\r\nEND:VTODO\r\nEND:VCALENDAR'
+                )
+                .expect(201);
+
+            const task = await Task.findOne({ where: { uid: 'm1' } });
+            expect(task.recurrence_type).toBe('daily');
+            expect(task.recurrence_end_date).not.toBeNull();
+            expect(
+                Number.isNaN(new Date(task.recurrence_end_date).getTime())
+            ).toBe(false);
+
+            const response = await request(app)
+                .get('/caldav/caldav@test.com/tasks/m1.ics')
+                .set('Authorization', authHeader)
+                .expect(200);
+            expect(response.text).toMatch(/RRULE:FREQ=DAILY;UNTIL=2025123\d/);
         });
 
         // eslint-disable-next-line jest/expect-expect

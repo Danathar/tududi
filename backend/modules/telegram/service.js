@@ -141,7 +141,10 @@ class TelegramService {
         }
 
         // Update user's telegram bot token
-        await user.update({ telegram_bot_token: token });
+        // A different bot means the stored chat id no longer applies.
+        const updates = { telegram_bot_token: token };
+        if (user.telegram_bot_token !== token) updates.telegram_chat_id = null;
+        await user.update(updates);
 
         return {
             success: true,

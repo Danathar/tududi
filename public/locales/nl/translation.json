@@ -1095,6 +1095,7 @@
     "orUploadOwn": "Of upload je eigen:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "Dit veld is verplicht",
     "invalidEmail": "Ongeldig e-mailadres",
     "projectCreationFailed": "Mislukt om project aan te maken.",
@@ -1481,6 +1482,7 @@
     "unpinFromSidebar": "Losmaken van zijbalk"
   },
   "areas": {
+    "toggleDropdownMenu": "Schakel dropdownmenu in",
     "title": "Gebieden",
     "noAreasFound": "Geen gebieden gevonden",
     "editAreaAriaLabel": "Bewerk gebied {{name}}",
@@ -1507,6 +1509,7 @@
     "blankSlateProjects": "Naar projecten"
   },
   "notes": {
+    "toggleDropdownMenu": "Schakel dropdownmenu in",
     "loading": "Bezig met het laden van notities...",
     "error": "Fout bij het laden van notities",
     "searchPlaceholder": "Zoek notities...",

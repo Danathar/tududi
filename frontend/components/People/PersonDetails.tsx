@@ -18,6 +18,7 @@ import {
     deletePerson,
 } from '../../utils/peopleService';
 import { useToast } from '../Shared/ToastContext';
+import { getApiPath } from '../../config/paths';
 import PersonModal from './PersonModal';
 import PersonHero from './PersonHero';
 import SignInLinkModal from './SignInLinkModal';
@@ -73,7 +74,9 @@ const PersonDetails: React.FC = () => {
             setPerson(p);
 
             const response = await fetch(
-                `/api/tasks?assigned_to=${encodeURIComponent(uid)}&status=active`,
+                getApiPath(
+                    `tasks?assigned_to=${encodeURIComponent(uid)}&status=active`
+                ),
                 {
                     credentials: 'include',
                     headers: { Accept: 'application/json' },

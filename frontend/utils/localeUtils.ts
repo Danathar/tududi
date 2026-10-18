@@ -1,4 +1,4 @@
-import { getUserTimezone } from './dateUtils';
+import { getUserTimezone, INTL_LOCALE } from './dateUtils';
 
 /**
  * Maps IANA timezone identifiers to ISO 3166-1 alpha-2 country codes.
@@ -108,7 +108,13 @@ export const getCountryFromTimezone = (timezone: string): string | null => {
  *
  * For example: language "en" + timezone "Europe/Athens" → "en-GR" → DD/MM format
  */
-export const resolveUserLocale = (preferredLanguage?: string): string => {
+export const resolveUserLocale = (language?: string): string => {
+    // The app's codes for Japanese (jp) and Ukrainian (ua) are not language
+    // subtags. Intl accepts "jp-JP" without complaint but has no data for
+    // it, so the pickers would fall back to US formats.
+    const preferredLanguage = language
+        ? (INTL_LOCALE[language.split('-')[0]] ?? language)
+        : language;
     const timezone = getUserTimezone();
     const country = getCountryFromTimezone(timezone);
 

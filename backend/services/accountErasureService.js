@@ -158,6 +158,47 @@ async function eraseUserAccount(userId) {
             ...tx,
         });
         const taskIds = userTasks.map((t) => t.id);
+
+        // Files other people attached to this user's tasks, notes and
+        // projects go away with those rows (foreign key cascade), whoever
+        // uploaded them, so their files must be removed too. Project cover
+        // images are plain files referenced by URL.
+        const userNotes = await Note.findAll({
+            where: { user_id: userId },
+            attributes: ['id'],
+            raw: true,
+            ...tx,
+        });
+        const userProjects = await Project.findAll({
+            where: { user_id: userId },
+            attributes: ['id', 'image_url'],
+            raw: true,
+            ...tx,
+        });
+        const parentLinked = [
+            [TaskAttachment, 'task_id', taskIds],
+            [NoteAttachment, 'note_id', userNotes.map((n) => n.id)],
+            [ProjectAttachment, 'project_id', userProjects.map((p) => p.id)],
+        ];
+        for (const [Model, key, ids] of parentLinked) {
+            if (ids.length === 0) continue;
+            const rows = await Model.findAll({
+                where: { [key]: ids },
+                attributes: ['file_path'],
+                raw: true,
+                ...tx,
+            });
+            for (const a of rows) {
+                filesToDelete.push([config.uploadPath, a.file_path]);
+            }
+        }
+        for (const project of userProjects) {
+            if (!project.image_url) continue;
+            filesToDelete.push([
+                path.join(config.uploadPath, 'projects'),
+                path.basename(project.image_url.split('?')[0]),
+            ]);
+        }
         if (taskIds.length > 0) {
             await RecurringCompletion.destroy({
                 where: { task_id: taskIds },

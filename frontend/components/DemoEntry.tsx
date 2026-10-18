@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getApiPath } from '../config/paths';
+import { getApiPath, getAssetPath } from '../config/paths';
 
 // One click from the marketing site into the sandbox. There is no password
 // to publish and no form to fill in: this asks the server for a session on
@@ -20,7 +20,7 @@ const DemoEntry: React.FC = () => {
                 if (!res.ok) throw new Error(String(res.status));
                 // A full load rather than a route change, so every store
                 // starts from the demo session rather than an empty one.
-                window.location.href = '/today';
+                window.location.href = getAssetPath('today');
             } catch {
                 setFailed(true);
             }
@@ -46,7 +46,7 @@ const DemoEntry: React.FC = () => {
                             )}
                         </p>
                         <a
-                            href="/login"
+                            href={getAssetPath('login')}
                             className="text-blue-500 hover:text-blue-600"
                         >
                             {t('auth.back_to_login', 'Back to Login')}

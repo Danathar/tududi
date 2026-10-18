@@ -201,10 +201,35 @@ END:VCALENDAR`;
     it('should parse CATEGORIES as tags', async () => {
         const vtodo = basicVTODO.replace(
             'END:VTODO',
-            'CATEGORIES:work\\,urgent\nEND:VTODO'
+            'CATEGORIES:work,urgent\nEND:VTODO'
         );
         const task = await parseVTODOToTask(vtodo);
         expect(task.tag_names).toEqual(['work', 'urgent']);
+    });
+
+    // #232: every value of a multi-value CATEGORIES is a tag, and so is
+    // every value of a repeated CATEGORIES property.
+    it('should read every CATEGORIES value, not only the first', async () => {
+        const vtodo = basicVTODO.replace(
+            'END:VTODO',
+            'CATEGORIES:work,home,errands\nCATEGORIES:later,work\nEND:VTODO'
+        );
+        const task = await parseVTODOToTask(vtodo);
+        expect(task.tag_names).toEqual(['work', 'home', 'errands', 'later']);
+    });
+
+    it('should keep an escaped comma inside one CATEGORIES value', async () => {
+        const vtodo = basicVTODO.replace(
+            'END:VTODO',
+            'CATEGORIES:rock\\, paper\nEND:VTODO'
+        );
+        const task = await parseVTODOToTask(vtodo);
+        expect(task.tag_names).toEqual(['rock, paper']);
+    });
+
+    it('should return no tags when CATEGORIES is absent', async () => {
+        const task = await parseVTODOToTask(basicVTODO);
+        expect(task.tag_names).toEqual([]);
     });
 
     it('should parse habit mode custom properties', async () => {
@@ -219,6 +244,40 @@ END:VTODO`
         expect(task.habit_mode).toBe(true);
         expect(task.habit_current_streak).toBe(5);
         expect(task.habit_total_completions).toBe(42);
+    });
+
+    // #230: without X-TUDUDI-HABIT-MODE the habit fields are left out, so a
+    // PUT from a client that drops the X- properties keeps the stored habit.
+    it('should leave habit fields out when X-TUDUDI-HABIT-MODE is absent', async () => {
+        const task = await parseVTODOToTask(basicVTODO);
+        expect(task).not.toHaveProperty('habit_mode');
+        expect(task).not.toHaveProperty('habit_current_streak');
+        expect(task).not.toHaveProperty('habit_total_completions');
+    });
+
+    it('should turn habit mode off when X-TUDUDI-HABIT-MODE is false', async () => {
+        const vtodo = basicVTODO.replace(
+            'END:VTODO',
+            'X-TUDUDI-HABIT-MODE:false\nEND:VTODO'
+        );
+        const task = await parseVTODOToTask(vtodo);
+        expect(task.habit_mode).toBe(false);
+        expect(task).not.toHaveProperty('habit_current_streak');
+    });
+
+    // #229: a DATE UNTIL (required when DTSTART is a DATE) is the end of
+    // that day in the user's timezone, not an Invalid Date.
+    it('should parse an RRULE with a date-only UNTIL', async () => {
+        const vtodo = basicVTODO.replace(
+            'END:VTODO',
+            'DTSTART;VALUE=DATE:20250101\nRRULE:FREQ=DAILY;UNTIL=20251231\nEND:VTODO'
+        );
+        const task = await parseVTODOToTask(vtodo, 'Europe/Berlin');
+        expect(task.recurrence_type).toBe('daily');
+        expect(task.recurrence_end_date).toBeInstanceOf(Date);
+        expect(task.recurrence_end_date.toISOString()).toBe(
+            '2025-12-31T22:59:59.999Z'
+        );
     });
 
     it('should parse X-TUDUDI-ORDER custom property', async () => {

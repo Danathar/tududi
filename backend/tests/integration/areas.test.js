@@ -1,6 +1,6 @@
 const request = require('supertest');
 const app = require('../../app');
-const { Area, Goal, Task, User } = require('../../models');
+const { Area, Goal, Project, Task, User } = require('../../models');
 const { createTestUser } = require('../helpers/testUtils');
 
 describe('Areas Routes', () => {
@@ -138,6 +138,26 @@ describe('Areas Routes', () => {
             const personalArea = response.body.find((a) => a.uid === area2.uid);
             expect(personalArea.goals_count).toBe(0);
             expect(personalArea.tasks_count).toBe(0);
+        });
+
+        it('should not count project templates in projects_count', async () => {
+            await Project.create({
+                name: 'Real project',
+                area_id: area1.id,
+                user_id: user.id,
+            });
+            await Project.create({
+                name: 'A template',
+                area_id: area1.id,
+                user_id: user.id,
+                is_template: true,
+            });
+
+            const response = await agent.get('/api/areas');
+
+            expect(response.status).toBe(200);
+            const workArea = response.body.find((a) => a.uid === area1.uid);
+            expect(workArea.projects_count).toBe(1);
         });
     });
 

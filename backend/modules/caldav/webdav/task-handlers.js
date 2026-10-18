@@ -105,6 +105,19 @@ async function handlePutTask(req, res) {
             }
         }
 
+        // If-None-Match: * asks to create the resource only if it does not
+        // exist yet (RFC 9110 13.1.2). Clients send it on create so that two
+        // devices cannot silently overwrite each other's new task.
+        const ifNoneMatch = req.headers['if-none-match'];
+        if (
+            existingTask &&
+            ifNoneMatch &&
+            (ifNoneMatch.trim() === '*' ||
+                matchesETag(ifNoneMatch, generateETag(existingTask)))
+        ) {
+            return res.status(412).send('Precondition Failed');
+        }
+
         let taskData;
         try {
             const userTimezone = req.currentUser.timezone || 'UTC';
@@ -153,6 +166,15 @@ async function handlePutTask(req, res) {
             if (taskData.order === null || Number.isNaN(taskData.order)) {
                 delete taskData.order;
             }
+            // SUMMARY is optional in a VTODO, but a task needs a name. Keep
+            // the one it has.
+            if (!taskData.name) {
+                delete taskData.name;
+            }
+        } else if (!taskData.name) {
+            // Same fallback the sync engine uses for a remote task with no
+            // SUMMARY; without it the insert fails on Task.name NOT NULL.
+            taskData.name = 'Untitled';
         }
 
         // Per-project route: file the task into the URL's project (or null for
@@ -160,10 +182,17 @@ async function handlePutTask(req, res) {
         // VTODO's x-tududi-project-uid is parsed into taskData.project_uid but
         // never mapped to project_id (Sequelize silently drops the unknown key).
         if (req.params.projectUid !== undefined) {
-            taskData.project_id = await resolveProjectIdForPut(
+            const target = await resolveProjectIdForPut(
                 req.params.projectUid,
                 userId
             );
+            if (target.status === 404) {
+                return res.status(404).send('Not Found');
+            }
+            if (target.status === 403) {
+                return res.status(403).json({ error: 'Forbidden' });
+            }
+            taskData.project_id = target.projectId;
         }
         delete taskData.project_uid;
 
