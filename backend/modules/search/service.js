@@ -97,20 +97,24 @@ class SearchService {
 
         if (searchQuery) {
             const lowerQuery = searchQuery.toLowerCase();
-            conditions[Op.or] = [
-                sequelize.where(
-                    sequelize.fn('LOWER', sequelize.col('Task.name')),
-                    {
-                        [Op.like]: `%${lowerQuery}%`,
-                    }
-                ),
-                sequelize.where(
-                    sequelize.fn('LOWER', sequelize.col('Task.note')),
-                    {
-                        [Op.like]: `%${lowerQuery}%`,
-                    }
-                ),
-            ];
+            // Pushed to extraConditions (Op.and) so later Op.or clauses, such
+            // as the non_recurring filter, cannot overwrite the text match.
+            extraConditions.push({
+                [Op.or]: [
+                    sequelize.where(
+                        sequelize.fn('LOWER', sequelize.col('Task.name')),
+                        {
+                            [Op.like]: `%${lowerQuery}%`,
+                        }
+                    ),
+                    sequelize.where(
+                        sequelize.fn('LOWER', sequelize.col('Task.note')),
+                        {
+                            [Op.like]: `%${lowerQuery}%`,
+                        }
+                    ),
+                ],
+            });
         }
 
         if (priority) {
@@ -135,10 +139,12 @@ class SearchService {
                     conditions.recurring_parent_id = null;
                     break;
                 case 'non_recurring':
-                    conditions[Op.or] = [
-                        { recurrence_type: 'none' },
-                        { recurrence_type: null },
-                    ];
+                    extraConditions.push({
+                        [Op.or]: [
+                            { recurrence_type: 'none' },
+                            { recurrence_type: null },
+                        ],
+                    });
                     conditions.recurring_parent_id = null;
                     break;
                 case 'instances':
@@ -205,7 +211,7 @@ class SearchService {
     /**
      * Build task include config.
      */
-    buildTaskInclude(tagIds, extras) {
+    buildTaskInclude(extras) {
         const include = [
             { model: Project, attributes: ['id', 'uid', 'name'] },
             {
@@ -221,17 +227,15 @@ class SearchService {
             },
         ];
 
-        const requireTags = tagIds.length > 0 || extras.has('has_tags');
+        // Tag filtering happens through the matchingIds subquery in
+        // searchTasks, so this include has no where and loads every tag.
+        const requireTags = extras.has('has_tags');
         const tagInclude = {
             model: Tag,
             through: { attributes: [] },
             attributes: ['id', 'name', 'uid'],
             required: requireTags,
         };
-
-        if (tagIds.length > 0) {
-            tagInclude.where = { id: { [Op.in]: tagIds } };
-        }
 
         include.push(tagInclude);
         return { include, tagInclude: requireTags ? tagInclude : undefined };
@@ -269,10 +273,7 @@ class SearchService {
         if (matchingIds) {
             conditions.id = { [Op.in]: matchingIds };
         }
-        const { include, tagInclude } = this.buildTaskInclude(
-            tagIds,
-            params.extras
-        );
+        const { include, tagInclude } = this.buildTaskInclude(params.extras);
 
         let count = 0;
         if (params.hasPagination) {
@@ -325,7 +326,8 @@ class SearchService {
             }
         }
 
-        const conditions = { user_id: userId };
+        // Templates live in the projects table but are not real projects.
+        const conditions = { user_id: userId, is_template: false };
         if (matchingIds) {
             conditions.id = { [Op.in]: matchingIds };
         }

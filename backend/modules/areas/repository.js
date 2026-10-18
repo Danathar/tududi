@@ -89,7 +89,11 @@ class AreasRepository extends BaseRepository {
         const [projectCounts, goalCounts, taskCounts] = await Promise.all([
             Project.findAll({
                 where: {
-                    [Op.and]: [{ area_id: { [Op.in]: areaIds } }, projectWhere],
+                    [Op.and]: [
+                        { area_id: { [Op.in]: areaIds } },
+                        { is_template: false },
+                        projectWhere,
+                    ],
                 },
                 attributes: [
                     'area_id',
