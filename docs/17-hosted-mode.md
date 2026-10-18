@@ -41,7 +41,7 @@ Other knobs:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `TUDUDI_TRIAL_DAYS` | `14` | a self-registered account gets the trial plan for this long, counted from when it verifies its email (SSO sign-ups: from creation). `0` turns trials off |
+| `TUDUDI_TRIAL_DAYS` | `7` | a self-registered account gets the trial plan for this long, counted from when it verifies its email (SSO sign-ups: from creation). `0` turns trials off |
 | `TUDUDI_TRIAL_READ_ONLY_DAYS` | `30` | with `TUDUDI_REQUIRE_SUBSCRIPTION`, how long an unpaid ended trial stays readable before the account is deleted |
 | `TUDUDI_DELETE_EXPIRED_TRIALS` | `true` | set `false` to keep ended trials read-only instead of deleting them; past the window they get the usual 402 wall |
 | `RATE_LIMIT_SIGNUP_MAX` / `RATE_LIMIT_SIGNUP_WINDOW_MS` | `3` / 24 h | password sign-ups per IP on a hosted instance; only created accounts count |
@@ -51,27 +51,35 @@ Other knobs:
 
 ## Trials
 
-A trial is its own plan (`trial` in `config/plans.js`): Pro, minus what costs
-money or can be abused by someone who signed up only to misuse it.
+A trial is its own plan (`trial` in `config/plans.js`): Pro with a smaller AI
+allowance and one member, minus public note links, which could be abused by
+someone who signed up only to misuse them.
 
 - **Starts on email verification**, once per account. Signing up does not
   start it, so an address that never receives mail never gets one. Members
-  added by an owner and admins never get a trial.
+  added by an owner and admins never get a trial of their own.
 - **Returning accounts get one too.** A verified account that never had a
   trial under these rules, never subscribed and has no comp gets its trial on
   its first request after trials are switched on (`startTrialOnReturn`, run
   by the subscription gate). A `trial_ends_at` with no `trial_started_at`
   dates from before these rules and counts as never started.
-- **No AI** (`features.ai: false`, AI budgets `0`), **no public note links**
-  (`features.public_notes: false`; turning a link off still works) and **no
-  members** (`max_members: 0`). Each answers `402 FEATURE_NOT_IN_PLAN` with
-  `details.plan: "trial"`, and the app sends the browser to
-  `/subscription/new?feature=<name>`.
+- **Limited AI** (30 requests and 10 credits a month, against Pro's 200 and
+  50), **one member** (`max_members: 1`) and **no public note links**
+  (`features.public_notes: false`; turning a link off still works). A member
+  added on a trial shares the owner's trial while it runs, and becomes a paid
+  seat if the owner subscribes. A feature the trial leaves out answers
+  `402 FEATURE_NOT_IN_PLAN` with `details.plan: "trial"`, and the app sends
+  the browser to `/subscription/new?feature=<name>`. Set any of these to `0`
+  or `false` with `TUDUDI_PLANS_JSON` to take them out again.
 - **One trial per mailbox.** `users.email_canonical` folds `+tags`, Gmail dots
   and googlemail.com, and a hosted sign-up (password or SSO) whose mailbox
   already has an account is refused. Self-hosted instances skip this check.
 - **Always visible.** During the trial a bar on every page counts the days
   left and links to `/subscription/new`.
+- **Reminded before it ends.** The daily `account_lifecycle` job emails a
+  running, never-paid trial owner when 3 days are left and again on the last
+  day (`billing_accounts.trial_reminder_days`), with or without
+  `TUDUDI_REQUIRE_SUBSCRIPTION`.
 - **Then read-only.** With `TUDUDI_REQUIRE_SUBSCRIPTION`, an ended, never-paid
   trial can still `GET` everything (and export) for
   `TUDUDI_TRIAL_READ_ONLY_DAYS`; writes answer `402 TRIAL_ENDED`.
@@ -369,13 +377,23 @@ dashboard shows the total and the last seven days beside it.
 
 ## Visits and dashboard metrics
 
-The admin dashboard (`/admin`) shows two panels. **Last 7 days** holds
-signups and their activation, verified-email share, tasks created and
-completed, active users, waitlist joins and, when hosted, the trial and
-churn signals. **Visits, last 7 days** shows how people arrive and what they
-do: visitors and page views per day, visit-to-signup rate, blog readers, app
-opens, app users (this week, today, last 30 days), top pages and top
-referrers. Every figure sits next to the week before.
+The admin dashboard (`/admin`) shows three panels. **Trial funnel, last 30
+days** follows the people who signed up in that span: site visitors
+(marketing site and blog), trial signups (people who made their own account;
+members added to another account are left out), activated users (5 or more
+tasks, or a planned day) and paid (activated and has had a subscription).
+Each step shows its count, the share that made it from the step before, and
+how that share moved against the 30 days before. Paid needs a hosted
+instance, and visitors need visit tracking. Recent signups may still be on
+their trial, so the paid step trails the others.
+
+**Last 7 days** groups the week into new users (verified email, created
+something, planned a first day, kept planning, waitlist joins), usage
+(active users, tasks created and completed) and, when hosted, trials and
+churn. **Visits, last 7 days** shows how people arrive and what they do:
+visitors and page views per day, blog readers, app opens, app users (this
+week, today, last 30 days), top pages and top referrers. Every figure sits
+next to the week before.
 
 A visit is a navigation answered with a page: a marketing page, a blog page
 (a blog host, or `/blog` on the app host), or the app shell. Redirects,
