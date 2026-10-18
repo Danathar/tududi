@@ -1,4 +1,5 @@
 const { safeRequest } = require('../services/safe-request');
+const { withRemoteAuth } = require('../services/remote-auth');
 const { AppError } = require('../../../shared/errors');
 const logger = require('../../../services/logService');
 const { Task } = require('../../../models');
@@ -190,20 +191,22 @@ class PushPhase {
                 headers['If-Match'] = formatEntityTag(syncState.etag);
             }
 
-            const response = await safeRequest({
-                method: 'PUT',
-                url: taskUrl,
-                headers,
-                auth: {
-                    username: remoteCalendar.username,
-                    password: password,
-                },
-                data: vtodoString,
-                timeout: parseInt(
-                    process.env.CALDAV_REQUEST_TIMEOUT || '30000',
-                    10
-                ),
-            });
+            const response = await safeRequest(
+                withRemoteAuth(
+                    {
+                        method: 'PUT',
+                        url: taskUrl,
+                        headers,
+                        data: vtodoString,
+                        timeout: parseInt(
+                            process.env.CALDAV_REQUEST_TIMEOUT || '30000',
+                            10
+                        ),
+                    },
+                    remoteCalendar,
+                    password
+                )
+            );
 
             const newEtag = response.headers.etag?.replace(/^"|"$/g, '');
 
@@ -286,18 +289,20 @@ class PushPhase {
         );
 
         try {
-            await safeRequest({
-                method: 'DELETE',
-                url: taskUrl,
-                auth: {
-                    username: remoteCalendar.username,
-                    password: password,
-                },
-                timeout: parseInt(
-                    process.env.CALDAV_REQUEST_TIMEOUT || '30000',
-                    10
-                ),
-            });
+            await safeRequest(
+                withRemoteAuth(
+                    {
+                        method: 'DELETE',
+                        url: taskUrl,
+                        timeout: parseInt(
+                            process.env.CALDAV_REQUEST_TIMEOUT || '30000',
+                            10
+                        ),
+                    },
+                    remoteCalendar,
+                    password
+                )
+            );
 
             await SyncStateRepository.deleteByTaskAndCalendar(
                 task.id,

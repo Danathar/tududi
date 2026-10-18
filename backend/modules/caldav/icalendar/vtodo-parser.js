@@ -121,9 +121,11 @@ async function parseVTODOToTask(vtodoString, userTimezone) {
             parent_task_uid: null,
             project_uid: null,
             tag_names: [],
-            habit_mode: false,
-            habit_current_streak: 0,
-            habit_total_completions: 0,
+            // habit_mode, habit_current_streak and habit_total_completions
+            // are Tududi-only and set only when the VTODO carries
+            // X-TUDUDI-HABIT-MODE. A client that drops the X- properties
+            // must not reset an existing habit (the model's defaults cover
+            // a new task).
             order: null,
         };
 
@@ -187,7 +189,7 @@ async function parseVTODOToTask(vtodoString, userTimezone) {
 
         const rrule = vtodo.getFirstPropertyValue('rrule');
         if (rrule) {
-            const recurrenceData = parseRRULE(rrule.toString());
+            const recurrenceData = parseRRULE(rrule.toString(), userTimezone);
             if (recurrenceData) {
                 Object.assign(task, recurrenceData);
             }
@@ -203,21 +205,26 @@ async function parseVTODOToTask(vtodoString, userTimezone) {
             task.project_uid = projectUid;
         }
 
-        const categories = vtodo.getFirstPropertyValue('categories');
-        if (categories) {
-            if (Array.isArray(categories)) {
-                task.tag_names = categories;
-            } else if (typeof categories === 'string') {
-                task.tag_names = categories.split(',').map((t) => t.trim());
-            } else {
-                task.tag_names = [categories];
+        // CATEGORIES is a list (RFC 5545 3.8.1.2): one property may carry
+        // several comma-separated values, and a VTODO may repeat the property.
+        const tagNames = [];
+        for (const prop of vtodo.getAllProperties('categories')) {
+            for (const value of prop.getValues()) {
+                const name = typeof value === 'string' ? value.trim() : '';
+                if (name && !tagNames.includes(name)) {
+                    tagNames.push(name);
+                }
             }
         }
+        task.tag_names = tagNames;
 
         const habitMode = vtodo.getFirstPropertyValue('x-tududi-habit-mode');
-        if (habitMode === 'true' || habitMode === true) {
-            task.habit_mode = true;
-
+        if (habitMode !== null && habitMode !== undefined) {
+            task.habit_mode =
+                habitMode === true ||
+                String(habitMode).trim().toLowerCase() === 'true';
+        }
+        if (task.habit_mode) {
             const streak = vtodo.getFirstPropertyValue('x-tududi-habit-streak');
             if (streak) {
                 task.habit_current_streak = parseInt(streak, 10) || 0;
