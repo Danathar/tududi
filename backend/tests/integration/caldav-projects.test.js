@@ -412,6 +412,72 @@ describe('CalDAV Per-Project Calendars', () => {
                 expect(created).not.toBeNull();
                 expect(created.project_id).toBeNull();
             });
+
+            // #230: a project the caller cannot write into used to resolve
+            // to "no project", so the PUT returned 204 and the task left its
+            // project.
+            const renameVtodo = (uid) =>
+                [
+                    'BEGIN:VCALENDAR',
+                    'VERSION:2.0',
+                    'PRODID:-//Test//EN',
+                    'BEGIN:VTODO',
+                    `UID:${uid}`,
+                    'SUMMARY:Renamed',
+                    'END:VTODO',
+                    'END:VCALENDAR',
+                ].join('\r\n');
+
+            test('PUT to an unknown project returns 404 and keeps the task in its project', async () => {
+                await Task.create({
+                    uid: 'put-unknown-proj',
+                    user_id: testUser.id,
+                    name: 'Stays put',
+                    project_id: testProject.id,
+                });
+
+                await request(app)
+                    .put(
+                        `/caldav/${ENC(testUser.email)}/projects/doesnotexist/put-unknown-proj.ics`
+                    )
+                    .set('Authorization', authHeader)
+                    .set('Content-Type', 'text/calendar')
+                    .send(renameVtodo('put-unknown-proj'))
+                    .expect(404);
+
+                const task = await Task.findOne({
+                    where: { uid: 'put-unknown-proj' },
+                });
+                expect(task.project_id).toBe(testProject.id);
+                expect(task.name).toBe('Stays put');
+            });
+
+            test("PUT to another user's project returns 404", async () => {
+                const other = await User.create({
+                    email: 'projects-caldav-other@test.com',
+                    password_digest: await bcrypt.hash('password123', 10),
+                    verified: true,
+                });
+                const otherProject = await Project.create({
+                    uid: 'proj-caldav-other-1',
+                    user_id: other.id,
+                    name: 'Not yours',
+                });
+
+                await request(app)
+                    .put(
+                        `/caldav/${ENC(testUser.email)}/projects/${ENC(otherProject.uid)}/put-other-proj.ics`
+                    )
+                    .set('Authorization', authHeader)
+                    .set('Content-Type', 'text/calendar')
+                    .send(renameVtodo('put-other-proj'))
+                    .expect(404);
+
+                const task = await Task.findOne({
+                    where: { uid: 'put-other-proj' },
+                });
+                expect(task).toBeNull();
+            });
         });
 
         describe('MKCOL', () => {
