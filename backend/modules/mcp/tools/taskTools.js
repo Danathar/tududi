@@ -55,14 +55,7 @@ const {
 } = require('../../tasks/queries/metrics-computation');
 const { filterTasksByParams } = require('../../tasks/queries/query-builders');
 
-const RECURRENCE_TYPES = [
-    'none',
-    'daily',
-    'weekly',
-    'monthly',
-    'monthly_weekday',
-    'monthly_last_day',
-];
+const RECURRENCE_TYPES = Object.values(Task.RECURRENCE_TYPE);
 
 const RECURRENCE_FIELDS = [
     'recurrence_type',
@@ -85,7 +78,7 @@ const recurrenceInputSchemaProperties = {
     recurrence_interval: {
         type: 'number',
         description:
-            'Repeat every N days/weeks/months, depending on recurrence_type (default 1)',
+            'Repeat every N days/weeks/months/years, depending on recurrence_type (default 1)',
     },
     recurrence_weekday: {
         type: 'number',

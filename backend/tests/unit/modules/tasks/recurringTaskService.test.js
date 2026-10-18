@@ -12,6 +12,7 @@ const moment = require('moment-timezone');
 const {
     processDueDateForStorage,
 } = require('../../../../utils/timezone-utils');
+const { Task } = require('../../../../models');
 
 describe('RecurringTaskService - UTC Consistency', () => {
     describe('calculateDailyRecurrence', () => {
@@ -632,5 +633,77 @@ describe('RecurringTaskService - recurrence interval normalization (#209)', () =
         );
         expect(isNaN(next.getTime())).toBe(false);
         expect(next.toISOString()).toBe('2026-02-01T07:59:59.999Z');
+    });
+});
+
+describe('RecurringTaskService - yearly recurrence (#297)', () => {
+    const tz = 'America/Los_Angeles';
+    const due = (dateString) => processDueDateForStorage(dateString, tz);
+    const local = (date) =>
+        moment.tz(date, tz).format('YYYY-MM-DD HH:mm:ss.SSS');
+
+    it('keeps the same local month and day one year later', () => {
+        const next = calculateNextDueDate(
+            { recurrence_type: 'yearly', recurrence_interval: 1 },
+            due('2026-05-20'),
+            tz
+        );
+        expect(local(next)).toBe('2027-05-20 23:59:59.999');
+    });
+
+    it('steps recurrence_interval years', () => {
+        const next = calculateNextDueDate(
+            { recurrence_type: 'yearly', recurrence_interval: 3 },
+            due('2026-11-05'),
+            tz
+        );
+        expect(local(next)).toBe('2029-11-05 23:59:59.999');
+    });
+
+    it('lands Feb 29 on Feb 28 in a year without Feb 29', () => {
+        const next = calculateNextDueDate(
+            { recurrence_type: 'yearly', recurrence_interval: 1 },
+            due('2028-02-29'),
+            tz
+        );
+        expect(local(next)).toBe('2029-02-28 23:59:59.999');
+    });
+
+    it('keeps Feb 29 when the target year has one', () => {
+        const next = calculateNextDueDate(
+            { recurrence_type: 'yearly', recurrence_interval: 4 },
+            due('2028-02-29'),
+            tz
+        );
+        expect(local(next)).toBe('2032-02-29 23:59:59.999');
+    });
+
+    it('defaults to UTC when no timezone is given', () => {
+        const next = calculateNextDueDate(
+            { recurrence_type: 'yearly', recurrence_interval: 1 },
+            new Date(Date.UTC(2026, 11, 31, 23, 59, 59, 999))
+        );
+        expect(next.toISOString()).toBe('2027-12-31T23:59:59.999Z');
+    });
+
+    it('can schedule every repeat type in Task.RECURRENCE_TYPE', () => {
+        const from = new Date(Date.UTC(2026, 0, 15, 12, 0, 0, 0));
+        const types = Object.values(Task.RECURRENCE_TYPE).filter(
+            (type) => type !== Task.RECURRENCE_TYPE.NONE
+        );
+        expect(types).toContain('yearly');
+        for (const type of types) {
+            const next = calculateNextDueDate(
+                {
+                    recurrence_type: type,
+                    recurrence_interval: 1,
+                    recurrence_weekday: 4,
+                    recurrence_week_of_month: 3,
+                },
+                from
+            );
+            expect(next).toBeInstanceOf(Date);
+            expect(next.getTime()).toBeGreaterThan(from.getTime());
+        }
     });
 });

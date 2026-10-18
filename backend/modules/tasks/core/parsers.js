@@ -36,16 +36,9 @@ const TASK_STATUS_NAMES = [
     'planned',
 ];
 
-const RECURRENCE_TYPES = [
-    'none',
-    'daily',
-    'weekly',
-    'monthly',
-    'monthly_weekday',
-    'monthly_last_day',
-    'yearly',
-    'weekdays',
-];
+// Task.RECURRENCE_TYPE is the one list of repeat types the recurrence engine
+// can schedule.
+const RECURRENCE_TYPES = Object.values(Task.RECURRENCE_TYPE);
 
 // Checks the fields of a task update that would otherwise be stored as sent
 // (a blank name, an unknown status or recurrence type). Create already

@@ -113,9 +113,9 @@ async function calculateNextIterations(task, startFromDate, userTimezone) {
     // Parse start date using start-of-day in user timezone (used for weekly/daily logic)
     let startDate = dateStringToUTC(todayLocalStr, safeTimezone, 'start');
 
-    // Daily and weekly recurrence repeat on a fixed cadence measured from the
-    // task's own due date (e.g. "every 14 days"), so the due date - not
-    // "today" - determines which dates are valid occurrences. Anchor on it
+    // Daily, weekly and yearly recurrence repeat on a fixed cadence measured
+    // from the task's own due date (e.g. "every 14 days"), so the due date -
+    // not "today" - determines which dates are valid occurrences. Anchor on it
     // and fast-forward through real occurrences (via calculateNextDueDate,
     // the same stepping logic used to generate the next real instance) until
     // we reach today. Recalculating the pattern from "today" instead loses
@@ -123,7 +123,8 @@ async function calculateNextIterations(task, startFromDate, userTimezone) {
     // greater than 1 (#1489).
     if (
         (task.recurrence_type === 'daily' ||
-            task.recurrence_type === 'weekly') &&
+            task.recurrence_type === 'weekly' ||
+            task.recurrence_type === 'yearly') &&
         task.due_date
     ) {
         let cursor = new Date(task.due_date);

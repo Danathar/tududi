@@ -85,6 +85,9 @@ const calculateNextDueDate = (task, fromDate, timezone = 'UTC') => {
                 timezone
             );
 
+        case 'yearly':
+            return calculateYearlyRecurrence(startDate, interval, timezone);
+
         default:
             return null;
     }
@@ -239,6 +242,16 @@ const calculateMonthlyLastDayRecurrence = (
     return withLocalTime(target, local).toDate();
 };
 
+// Same local month and day, `interval` years on. Feb 29 lands on Feb 28 in a
+// year that has no Feb 29.
+const calculateYearlyRecurrence = (fromDate, interval, timezone = 'UTC') => {
+    const local = toLocal(fromDate, timezone);
+    const target = local.clone().startOf('month').add(interval, 'years');
+    target.date(Math.min(local.date(), target.daysInMonth()));
+
+    return withLocalTime(target, local).toDate();
+};
+
 const getFirstWeekdayOfMonth = (year, month, weekday) => {
     const firstOfMonth = new Date(year, month, 1);
     const firstWeekday = firstOfMonth.getDay();
@@ -337,6 +350,7 @@ module.exports = {
     calculateMonthlyRecurrence,
     calculateMonthlyWeekdayRecurrence,
     calculateMonthlyLastDayRecurrence,
+    calculateYearlyRecurrence,
     calculateVirtualOccurrences,
     shouldGenerateNextTask,
     getFirstWeekdayOfMonth,
