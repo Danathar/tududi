@@ -42,6 +42,9 @@ const {
 const {
     processDueDateForStorage,
     processDeferUntilForStorage,
+    getSafeTimezone,
+    getTodayBoundsInUTC,
+    getStartOfWeekInUTC,
 } = require('../../../utils/timezone-utils');
 const permissionsService = require('../../../services/permissionsService');
 const { resolveTagsForTransaction } = require('./tagResolver');
@@ -1614,17 +1617,16 @@ function registerTaskTools(server, context, tools) {
                 status: 1,
             });
 
-            const startOfDay = new Date();
-            startOfDay.setHours(0, 0, 0, 0);
+            // Days and weeks in the user's timezone, not the server's.
+            const userTimezone = getSafeTimezone(context.user?.timezone);
+            const startOfDay = getTodayBoundsInUTC(userTimezone).start;
             const todayCompletions = await taskRepository.count({
                 user_id: context.userId,
                 status: 2,
                 completed_at: { [Op.gte]: startOfDay },
             });
 
-            const startOfWeek = new Date();
-            startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-            startOfWeek.setHours(0, 0, 0, 0);
+            const startOfWeek = getStartOfWeekInUTC(userTimezone);
             const weekCompletions = await taskRepository.count({
                 user_id: context.userId,
                 status: 2,

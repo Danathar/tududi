@@ -123,6 +123,68 @@ describe('eventsForDate', () => {
     });
 });
 
+describe('eventsForDate on DST-change days', () => {
+    const DST_ICS = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//test//EN',
+        'BEGIN:VEVENT',
+        'UID:standup',
+        'DTSTART;TZID=America/New_York:20260301T090000',
+        'DTEND;TZID=America/New_York:20260301T093000',
+        'RRULE:FREQ=DAILY',
+        'SUMMARY:Standup',
+        'END:VEVENT',
+        'BEGIN:VEVENT',
+        'UID:overnight',
+        'DTSTART;TZID=America/New_York:20261031T220000',
+        'DTEND;TZID=America/New_York:20261101T030000',
+        'SUMMARY:Overnight shift',
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ].join('\r\n');
+    const events = parseCalendar(DST_ICS);
+    const standup = (date) =>
+        eventsForDate(events, date, 'America/New_York').find(
+            (e) => e.uid === 'standup'
+        );
+
+    it('reports local wall-clock minutes across spring forward', () => {
+        const minutes = [
+            '2026-03-06',
+            '2026-03-07',
+            '2026-03-08',
+            '2026-03-09',
+        ].map((date) => [standup(date).start_minute, standup(date).end_minute]);
+        expect(minutes).toEqual([
+            [540, 570],
+            [540, 570],
+            [540, 570],
+            [540, 570],
+        ]);
+    });
+
+    it('reports local wall-clock minutes on the fall-back day', () => {
+        expect(standup('2026-11-01').start_minute).toBe(540);
+        expect(standup('2026-11-01').end_minute).toBe(570);
+    });
+
+    it('clips an event crossing midnight into a fall-back day', () => {
+        const before = eventsForDate(
+            events,
+            '2026-10-31',
+            'America/New_York'
+        ).find((e) => e.uid === 'overnight');
+        const after = eventsForDate(
+            events,
+            '2026-11-01',
+            'America/New_York'
+        ).find((e) => e.uid === 'overnight');
+        expect([before.start_minute, before.end_minute]).toEqual([1320, 1440]);
+        expect([after.start_minute, after.end_minute]).toEqual([0, 180]);
+    });
+});
+
 describe('eventsForRange', () => {
     const events = parseCalendar(ICS);
     const range = eventsForRange(

@@ -5,6 +5,7 @@ const {
     parseStatus,
     parseEstimatedMinutes,
     validateTaskUpdateInput,
+    parseRecurrenceInterval,
 } = require('./parsers');
 const {
     processDueDateForStorage,
@@ -217,7 +218,7 @@ function buildTaskAttributes(body, userId, timezone, isUpdate = false) {
         status: parseStatus(body.status),
         note: resolveNote(body),
         recurrence_type: recurrenceType,
-        recurrence_interval: body.recurrence_interval || null,
+        recurrence_interval: parseRecurrenceInterval(body.recurrence_interval),
         recurrence_end_date: body.recurrence_end_date || null,
         recurrence_weekday:
             body.recurrence_weekday !== undefined
@@ -292,7 +293,7 @@ function buildUpdateAttributes(body, task, timezone) {
         recurrence_type: recurrenceType,
         recurrence_interval:
             body.recurrence_interval !== undefined
-                ? body.recurrence_interval
+                ? parseRecurrenceInterval(body.recurrence_interval)
                 : task.recurrence_interval,
         recurrence_end_date:
             body.recurrence_end_date !== undefined
