@@ -1,5 +1,6 @@
 const { Task } = require('../../../models');
 const { ValidationError } = require('../../../shared/errors');
+const { MAX_RECURRENCE_INTERVAL } = require('../recurringTaskService');
 
 function parsePriority(priority) {
     if (priority === undefined) return null;
@@ -35,16 +36,9 @@ const TASK_STATUS_NAMES = [
     'planned',
 ];
 
-const RECURRENCE_TYPES = [
-    'none',
-    'daily',
-    'weekly',
-    'monthly',
-    'monthly_weekday',
-    'monthly_last_day',
-    'yearly',
-    'weekdays',
-];
+// Task.RECURRENCE_TYPE is the one list of repeat types the recurrence engine
+// can schedule.
+const RECURRENCE_TYPES = Object.values(Task.RECURRENCE_TYPE);
 
 // Checks the fields of a task update that would otherwise be stored as sent
 // (a blank name, an unknown status or recurrence type). Create already
@@ -75,9 +69,30 @@ function validateTaskUpdateInput(body) {
     }
 }
 
+// "Repeat every N days/weeks/months". Empty values clear it (the recurrence
+// code treats a missing interval as 1). Anything else must be a whole number
+// from 1 up: a zero or negative interval would step the next due date
+// backwards, which hangs next-iterations and corrupts completions.
+function parseRecurrenceInterval(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const interval = Number(value);
+    if (
+        typeof value === 'boolean' ||
+        !Number.isInteger(interval) ||
+        interval < 1 ||
+        interval > MAX_RECURRENCE_INTERVAL
+    ) {
+        throw new ValidationError(
+            `recurrence_interval must be a whole number between 1 and ${MAX_RECURRENCE_INTERVAL}`
+        );
+    }
+    return interval;
+}
+
 module.exports = {
     validateTaskUpdateInput,
     parsePriority,
     parseStatus,
     parseEstimatedMinutes,
+    parseRecurrenceInterval,
 };

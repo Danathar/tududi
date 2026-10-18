@@ -6,7 +6,13 @@ const {
     calculateMonthlyWeekdayRecurrence,
     calculateMonthlyLastDayRecurrence,
     calculateVirtualOccurrences,
+    normalizeRecurrenceInterval,
 } = require('../../../../modules/tasks/recurringTaskService');
+const moment = require('moment-timezone');
+const {
+    processDueDateForStorage,
+} = require('../../../../utils/timezone-utils');
+const { Task } = require('../../../../models');
 
 describe('RecurringTaskService - UTC Consistency', () => {
     describe('calculateDailyRecurrence', () => {
@@ -479,5 +485,225 @@ describe('RecurringTaskService - UTC Consistency', () => {
 
             expect(result).toBeNull();
         });
+    });
+});
+
+describe('RecurringTaskService - user timezone calendar (#238)', () => {
+    const tz = 'America/Los_Angeles';
+    // Due dates are stored as local end-of-day converted to UTC.
+    const due = (dateString) => processDueDateForStorage(dateString, tz);
+    const local = (date) =>
+        moment.tz(date, tz).format('YYYY-MM-DD HH:mm:ss.SSS');
+
+    it('steps a daily task one local day across spring forward', () => {
+        const next = calculateNextDueDate(
+            { recurrence_type: 'daily', recurrence_interval: 1 },
+            due('2026-03-07'),
+            tz
+        );
+        expect(local(next)).toBe('2026-03-08 23:59:59.999');
+    });
+
+    it('steps a daily task one local day across fall back', () => {
+        const next = calculateNextDueDate(
+            { recurrence_type: 'daily', recurrence_interval: 1 },
+            due('2026-10-31'),
+            tz
+        );
+        expect(local(next)).toBe('2026-11-01 23:59:59.999');
+    });
+
+    it('keeps the local day of month for a monthly task after DST', () => {
+        const next = calculateNextDueDate(
+            { recurrence_type: 'monthly', recurrence_interval: 1 },
+            due('2026-03-05'),
+            tz
+        );
+        expect(local(next)).toBe('2026-04-05 23:59:59.999');
+    });
+
+    it('does not skip February for monthly_last_day west of UTC', () => {
+        const next = calculateNextDueDate(
+            { recurrence_type: 'monthly_last_day', recurrence_interval: 1 },
+            due('2026-01-31'),
+            tz
+        );
+        expect(local(next)).toBe('2026-02-28 23:59:59.999');
+    });
+
+    it('does not skip February for monthly day 31 west of UTC', () => {
+        const next = calculateNextDueDate(
+            {
+                recurrence_type: 'monthly',
+                recurrence_interval: 1,
+                recurrence_month_day: 31,
+            },
+            due('2026-01-31'),
+            tz
+        );
+        expect(local(next)).toBe('2026-02-28 23:59:59.999');
+    });
+
+    it('lands monthly_weekday on the local weekday west of UTC', () => {
+        const next = calculateNextDueDate(
+            {
+                recurrence_type: 'monthly_weekday',
+                recurrence_interval: 1,
+                recurrence_weekday: 1, // Monday
+                recurrence_week_of_month: 1,
+            },
+            due('2026-01-05'),
+            tz
+        );
+        expect(local(next)).toBe('2026-02-02 23:59:59.999');
+        expect(moment.tz(next, tz).day()).toBe(1);
+    });
+
+    it('does not overflow monthly_weekday from the 31st', () => {
+        const next = calculateNextDueDate(
+            {
+                recurrence_type: 'monthly_weekday',
+                recurrence_interval: 1,
+                recurrence_weekday: 6, // Saturday
+                recurrence_week_of_month: 5,
+            },
+            due('2026-01-31'),
+            tz
+        );
+        // February 2026 has four Saturdays; the last is the 28th.
+        expect(local(next)).toBe('2026-02-28 23:59:59.999');
+    });
+
+    it('keeps a weekly task on its local weekday across spring forward', () => {
+        const next = calculateNextDueDate(
+            {
+                recurrence_type: 'weekly',
+                recurrence_interval: 1,
+                recurrence_weekday: 6, // Saturday
+            },
+            due('2026-03-07'),
+            tz
+        );
+        expect(local(next)).toBe('2026-03-14 23:59:59.999');
+    });
+
+    it('keeps local end-of-day for a positive-offset timezone', () => {
+        const tokyo = 'Asia/Tokyo';
+        const next = calculateNextDueDate(
+            { recurrence_type: 'monthly_last_day', recurrence_interval: 1 },
+            processDueDateForStorage('2026-01-31', tokyo),
+            tokyo
+        );
+        expect(moment.tz(next, tokyo).format('YYYY-MM-DD HH:mm')).toBe(
+            '2026-02-28 23:59'
+        );
+    });
+});
+
+describe('RecurringTaskService - recurrence interval normalization (#209)', () => {
+    it.each([
+        [3, 3],
+        ['2', 2],
+        [null, 1],
+        [undefined, 1],
+        [0, 1],
+        [-3, 1],
+        ['abc', 1],
+        [1.5, 1],
+    ])('normalizes %p to %p', (input, expected) => {
+        expect(normalizeRecurrenceInterval(input)).toBe(expected);
+    });
+
+    it('never moves the next due date backwards for a negative interval', () => {
+        const from = new Date(Date.UTC(2026, 0, 1, 7, 59, 59, 999));
+        for (const type of ['daily', 'weekly', 'monthly', 'monthly_last_day']) {
+            const next = calculateNextDueDate(
+                { recurrence_type: type, recurrence_interval: -3 },
+                from
+            );
+            expect(next.getTime()).toBeGreaterThan(from.getTime());
+        }
+    });
+
+    it('never returns an Invalid Date for a non-numeric interval', () => {
+        const from = new Date(Date.UTC(2026, 0, 1, 7, 59, 59, 999));
+        const next = calculateNextDueDate(
+            { recurrence_type: 'monthly', recurrence_interval: 'abc' },
+            from
+        );
+        expect(isNaN(next.getTime())).toBe(false);
+        expect(next.toISOString()).toBe('2026-02-01T07:59:59.999Z');
+    });
+});
+
+describe('RecurringTaskService - yearly recurrence (#297)', () => {
+    const tz = 'America/Los_Angeles';
+    const due = (dateString) => processDueDateForStorage(dateString, tz);
+    const local = (date) =>
+        moment.tz(date, tz).format('YYYY-MM-DD HH:mm:ss.SSS');
+
+    it('keeps the same local month and day one year later', () => {
+        const next = calculateNextDueDate(
+            { recurrence_type: 'yearly', recurrence_interval: 1 },
+            due('2026-05-20'),
+            tz
+        );
+        expect(local(next)).toBe('2027-05-20 23:59:59.999');
+    });
+
+    it('steps recurrence_interval years', () => {
+        const next = calculateNextDueDate(
+            { recurrence_type: 'yearly', recurrence_interval: 3 },
+            due('2026-11-05'),
+            tz
+        );
+        expect(local(next)).toBe('2029-11-05 23:59:59.999');
+    });
+
+    it('lands Feb 29 on Feb 28 in a year without Feb 29', () => {
+        const next = calculateNextDueDate(
+            { recurrence_type: 'yearly', recurrence_interval: 1 },
+            due('2028-02-29'),
+            tz
+        );
+        expect(local(next)).toBe('2029-02-28 23:59:59.999');
+    });
+
+    it('keeps Feb 29 when the target year has one', () => {
+        const next = calculateNextDueDate(
+            { recurrence_type: 'yearly', recurrence_interval: 4 },
+            due('2028-02-29'),
+            tz
+        );
+        expect(local(next)).toBe('2032-02-29 23:59:59.999');
+    });
+
+    it('defaults to UTC when no timezone is given', () => {
+        const next = calculateNextDueDate(
+            { recurrence_type: 'yearly', recurrence_interval: 1 },
+            new Date(Date.UTC(2026, 11, 31, 23, 59, 59, 999))
+        );
+        expect(next.toISOString()).toBe('2027-12-31T23:59:59.999Z');
+    });
+
+    it('can schedule every repeat type in Task.RECURRENCE_TYPE', () => {
+        const from = new Date(Date.UTC(2026, 0, 15, 12, 0, 0, 0));
+        const types = Object.values(Task.RECURRENCE_TYPE).filter(
+            (type) => type !== Task.RECURRENCE_TYPE.NONE
+        );
+        expect(types).toContain('yearly');
+        for (const type of types) {
+            const next = calculateNextDueDate(
+                {
+                    recurrence_type: type,
+                    recurrence_interval: 1,
+                    recurrence_weekday: 4,
+                    recurrence_week_of_month: 3,
+                },
+                from
+            );
+            expect(next).toBeInstanceOf(Date);
+            expect(next.getTime()).toBeGreaterThan(from.getTime());
+        }
     });
 });

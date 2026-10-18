@@ -53,6 +53,7 @@ const {
     buildTaskAttributes,
     buildUpdateAttributes,
 } = require('./core/builders');
+const { parseRecurrenceInterval } = require('./core/parsers');
 const {
     createSubtasks,
     updateSubtasks,
@@ -683,6 +684,14 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
         const oldStatus = task.status;
         const oldProjectId = task.project_id;
 
+        if (recurrence_interval !== undefined) {
+            try {
+                parseRecurrenceInterval(recurrence_interval);
+            } catch (error) {
+                return res.status(400).json({ error: error.message });
+            }
+        }
+
         if (update_parent_recurrence && task.recurring_parent_id) {
             const parentTask = await taskRepository.findByIdAndUser(
                 task.recurring_parent_id,
@@ -697,7 +706,7 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
                             : parentTask.recurrence_type,
                     recurrence_interval:
                         recurrence_interval !== undefined
-                            ? recurrence_interval
+                            ? parseRecurrenceInterval(recurrence_interval)
                             : parentTask.recurrence_interval,
                     recurrence_end_date:
                         recurrence_end_date !== undefined
@@ -946,7 +955,9 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
             oldValues,
             req.body,
             tagsData,
-            req.currentUser.id
+            req.currentUser.id,
+            'web',
+            req.currentUser.timezone
         );
 
         const taskWithAssociations = await taskRepository.findById(task.id, {

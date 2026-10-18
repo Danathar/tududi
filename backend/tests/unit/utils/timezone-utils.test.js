@@ -4,6 +4,7 @@ const {
     getCurrentDateInTimezone,
     getDayBoundsInUTC,
     getTodayBoundsInUTC,
+    getStartOfWeekInUTC,
     getUpcomingRangeInUTC,
     isToday,
     isOverdue,
@@ -329,6 +330,20 @@ describe('timezone-utils', () => {
             );
             // Samoa is 13 hours ahead of UTC
             expect(result).toEqual(new Date('2024-01-14T11:00:00.000Z'));
+        });
+    });
+
+    describe('getStartOfWeekInUTC', () => {
+        it("returns Sunday 00:00 in the user's timezone", () => {
+            // Monday 2026-10-19 10:00 in Auckland (UTC+13).
+            const now = new Date('2026-10-18T21:00:00Z');
+            expect(
+                getStartOfWeekInUTC('Pacific/Auckland', now).toISOString()
+            ).toBe('2026-10-17T11:00:00.000Z');
+            // Still Sunday 2026-10-18 in UTC.
+            expect(getStartOfWeekInUTC('UTC', now).toISOString()).toBe(
+                '2026-10-18T00:00:00.000Z'
+            );
         });
     });
 });

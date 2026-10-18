@@ -1,6 +1,7 @@
 const {
     parseRRULE,
 } = require('../../../../../modules/caldav/icalendar/rrule-parser');
+const { Task } = require('../../../../../models');
 
 describe('RRULE Parser', () => {
     it('should return null for empty RRULE', () => {
@@ -173,5 +174,27 @@ describe('RRULE Parser', () => {
                 expect(result.recurrence_type).toBe(type);
             });
         });
+    });
+});
+
+describe('RRULE Parser and the recurrence engine (#297)', () => {
+    // Every type the parser can produce must be one tududi can schedule,
+    // or a synced task silently stops repeating after its first completion.
+    it.each([
+        'FREQ=DAILY',
+        'FREQ=WEEKLY',
+        'FREQ=WEEKLY;BYDAY=MO,WE,FR',
+        'FREQ=MONTHLY',
+        'FREQ=MONTHLY;BYMONTHDAY=15',
+        'FREQ=MONTHLY;BYMONTHDAY=-1',
+        'FREQ=MONTHLY;BYDAY=2TH',
+        'FREQ=YEARLY',
+        'FREQ=YEARLY;INTERVAL=2',
+    ])('maps %s to a type in Task.RECURRENCE_TYPE', (rrule) => {
+        const result = parseRRULE(rrule);
+        expect(result).not.toBeNull();
+        expect(Object.values(Task.RECURRENCE_TYPE)).toContain(
+            result.recurrence_type
+        );
     });
 });

@@ -42,6 +42,9 @@ const {
 const {
     processDueDateForStorage,
     processDeferUntilForStorage,
+    getSafeTimezone,
+    getTodayBoundsInUTC,
+    getStartOfWeekInUTC,
 } = require('../../../utils/timezone-utils');
 const permissionsService = require('../../../services/permissionsService');
 const { resolveTagsForTransaction } = require('./tagResolver');
@@ -52,14 +55,7 @@ const {
 } = require('../../tasks/queries/metrics-computation');
 const { filterTasksByParams } = require('../../tasks/queries/query-builders');
 
-const RECURRENCE_TYPES = [
-    'none',
-    'daily',
-    'weekly',
-    'monthly',
-    'monthly_weekday',
-    'monthly_last_day',
-];
+const RECURRENCE_TYPES = Object.values(Task.RECURRENCE_TYPE);
 
 const RECURRENCE_FIELDS = [
     'recurrence_type',
@@ -82,7 +78,7 @@ const recurrenceInputSchemaProperties = {
     recurrence_interval: {
         type: 'number',
         description:
-            'Repeat every N days/weeks/months, depending on recurrence_type (default 1)',
+            'Repeat every N days/weeks/months/years, depending on recurrence_type (default 1)',
     },
     recurrence_weekday: {
         type: 'number',
@@ -1614,17 +1610,16 @@ function registerTaskTools(server, context, tools) {
                 status: 1,
             });
 
-            const startOfDay = new Date();
-            startOfDay.setHours(0, 0, 0, 0);
+            // Days and weeks in the user's timezone, not the server's.
+            const userTimezone = getSafeTimezone(context.user?.timezone);
+            const startOfDay = getTodayBoundsInUTC(userTimezone).start;
             const todayCompletions = await taskRepository.count({
                 user_id: context.userId,
                 status: 2,
                 completed_at: { [Op.gte]: startOfDay },
             });
 
-            const startOfWeek = new Date();
-            startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-            startOfWeek.setHours(0, 0, 0, 0);
+            const startOfWeek = getStartOfWeekInUTC(userTimezone);
             const weekCompletions = await taskRepository.count({
                 user_id: context.userId,
                 status: 2,

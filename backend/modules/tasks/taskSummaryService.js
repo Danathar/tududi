@@ -1,5 +1,7 @@
 const { User, Task, Project, Tag } = require('../../models');
 const { Op } = require('sequelize');
+const moment = require('moment-timezone');
+const { getSafeTimezone } = require('../../utils/timezone-utils');
 const TelegramPoller = require('../telegram/telegramPoller');
 
 // escape markdown special characters
@@ -23,13 +25,16 @@ const getPriorityEmoji = (priority) => {
     return emojiMap[priority] || '⚪';
 };
 
-// create date range for today
-const createTodayDateRange = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return { today, tomorrow };
+// Today as [local midnight, next local midnight) in the user's timezone,
+// as UTC instants. Due dates are stored as the user's local end-of-day, so
+// the server's own midnight would pick yesterday's or tomorrow's tasks for
+// users in other zones.
+const createTodayDateRange = (timezone, now = new Date()) => {
+    const start = moment.tz(now, getSafeTimezone(timezone)).startOf('day');
+    return {
+        today: start.toDate(),
+        tomorrow: start.clone().add(1, 'day').toDate(),
+    };
 };
 
 // format task for display
@@ -180,7 +185,7 @@ const fetchCompletedTodayTasks = async (userId, today, tomorrow) =>
             user_id: userId,
             status: 2, // done
             parent_task_id: null,
-            updated_at: {
+            completed_at: {
                 [Op.gte]: today,
                 [Op.lt]: tomorrow,
             },
@@ -245,7 +250,7 @@ const generateSummaryForUser = async (userId) => {
         const user = await fetchUser(userId);
         if (!user) return null;
 
-        const { today, tomorrow } = createTodayDateRange();
+        const { today, tomorrow } = createTodayDateRange(user.timezone);
 
         // Fetch all task data in parallel
         const [dueToday, inProgress, completedToday] = await Promise.all([
