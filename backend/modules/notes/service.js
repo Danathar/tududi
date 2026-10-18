@@ -136,8 +136,10 @@ class NotesService {
      */
     async getAll(userId, options = {}) {
         const { orderBy, tagFilter, scopeQuery } = options;
-        const { column: orderColumn, direction: orderDirection } =
-            parseOrderBy(orderBy || 'title:asc', NOTE_ORDER_COLUMNS);
+        const { column: orderColumn, direction: orderDirection } = parseOrderBy(
+            orderBy || 'title:asc',
+            NOTE_ORDER_COLUMNS
+        );
 
         // area_uid / project_uid / tags narrow the list to a Focus scope
         const scope = scopeQuery

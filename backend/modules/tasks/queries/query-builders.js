@@ -330,8 +330,9 @@ async function filterTasksByParams(
     }
 
     if (params.order_by) {
-        const { column: orderColumn, direction: orderDirection } =
-            parseOrderBy(params.order_by, [
+        const { column: orderColumn, direction: orderDirection } = parseOrderBy(
+            params.order_by,
+            [
                 'custom',
                 'created_at',
                 'updated_at',
@@ -340,7 +341,8 @@ async function filterTasksByParams(
                 'status',
                 'due_date',
                 'completed_at',
-            ]);
+            ]
+        );
 
         if (orderColumn === 'custom') {
             orderClause = customOrderClause(userId);
