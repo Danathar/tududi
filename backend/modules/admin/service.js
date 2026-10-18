@@ -29,6 +29,15 @@ const { destroyUserSessions } = require('../../services/sessionService');
 const { getConfig } = require('../../config/config');
 const { getBuildInfo } = require('../../services/buildInfo');
 
+// A user id from the URL, as a positive integer.
+function parseUserId(value) {
+    const id = Number(value);
+    if (!Number.isInteger(id) || id <= 0) {
+        throw new ValidationError('Invalid user id');
+    }
+    return id;
+}
+
 class AdminService {
     /**
      * Check if requester is admin or if bootstrapping (no roles yet).
@@ -381,6 +390,25 @@ class AdminService {
     // signed up themselves or added as a member, verified, on the trial
     // (and the days left), paying, comped, or an ended trial waiting to be
     // deleted. The admin dashboard lists it, newest first.
+    async userEmails(requesterId, userId) {
+        await this.verifyAdmin(requesterId);
+        return require('./userEmails').describe(parseUserId(userId));
+    }
+
+    async previewUserEmail(requesterId, userId, key) {
+        await this.verifyAdmin(requesterId);
+        return require('./userEmails').preview(parseUserId(userId), key);
+    }
+
+    async sendUserEmail(requesterId, userId, key) {
+        await this.verifyAdmin(requesterId);
+        return require('./userEmails').send(
+            parseUserId(userId),
+            key,
+            requesterId
+        );
+    }
+
     async userStatuses(requesterId) {
         await this.verifyAdmin(requesterId);
         const { User, Role, Account, BillingAccount } = require('../../models');
@@ -389,36 +417,44 @@ class AdminService {
         const now = new Date();
         const DAY_MS = 24 * 60 * 60 * 1000;
 
-        const [users, adminRoles, accounts, billingRows, identityIds, usage] =
-            await Promise.all([
-                User.findAll({
-                    attributes: [
-                        'id',
-                        'email',
-                        'name',
-                        'surname',
-                        'created_at',
-                        'email_verified',
-                        'password_digest',
-                        'account_id',
-                    ],
-                    order: [['created_at', 'DESC']],
-                }),
-                Role.findAll({
-                    where: { is_admin: true },
-                    attributes: ['user_id'],
-                    raw: true,
-                }),
-                hosted
-                    ? Account.findAll({
-                          attributes: ['id', 'owner_user_id'],
-                          raw: true,
-                      })
-                    : [],
-                hosted ? BillingAccount.findAll() : [],
-                adminRepository.findIdentityUserIds(null),
-                adminRepository.countItemsByUser(),
-            ]);
+        const [
+            users,
+            adminRoles,
+            accounts,
+            billingRows,
+            identityIds,
+            usage,
+            emailCounts,
+        ] = await Promise.all([
+            User.findAll({
+                attributes: [
+                    'id',
+                    'email',
+                    'name',
+                    'surname',
+                    'created_at',
+                    'email_verified',
+                    'password_digest',
+                    'account_id',
+                ],
+                order: [['created_at', 'DESC']],
+            }),
+            Role.findAll({
+                where: { is_admin: true },
+                attributes: ['user_id'],
+                raw: true,
+            }),
+            hosted
+                ? Account.findAll({
+                      attributes: ['id', 'owner_user_id'],
+                      raw: true,
+                  })
+                : [],
+            hosted ? BillingAccount.findAll() : [],
+            adminRepository.findIdentityUserIds(null),
+            adminRepository.countItemsByUser(),
+            adminRepository.countSentEmailsByUser(),
+        ]);
 
         const adminIds = new Set(adminRoles.map((r) => r.user_id));
         const ownerByAccount = new Map(
@@ -498,6 +534,7 @@ class AdminService {
                     subscription_status: payer?.status ?? null,
                     ever_paid: !!payer?.provider_subscription_id,
                     usage: usageOf(usage.get(u.id)),
+                    emails_sent: emailCounts.get(u.id) || 0,
                 };
             }),
         };
@@ -573,10 +610,8 @@ class AdminService {
             }),
             adminRepository.findCreatorIdsSince(weekStart),
             hosted
-                ? BillingAccount.count({
-                      where: { trial_started_at: { [Op.gte]: weekStart } },
-                  })
-                : 0,
+                ? countByWeek(BillingAccount, 'trial_started_at', {})
+                : { last7d: 0, prev7d: 0 },
             hosted
                 ? BillingAccount.count({
                       where: {
@@ -653,7 +688,8 @@ class AdminService {
             visits,
             billing: hosted
                 ? {
-                      trials_started_7d: trialsStarted,
+                      trials_started_7d: trialsStarted.last7d,
+                      trials_started_prev7d: trialsStarted.prev7d,
                       trials_ending_7d: trialsEnding,
                       canceled_7d: canceled,
                       payment_failed_7d: failed,
@@ -705,6 +741,113 @@ class AdminService {
         };
     }
 
+    // Visitors, signups, activated users and paying customers for everyone
+    // who signed up in the last 30 days, and the 30 days before to compare.
+    // A signup is someone who made their own account (a member added to
+    // another account did not), on a hosted instance that starts a trial.
+    // Activated is five tasks or a planned day. Paid is anyone who has had a
+    // subscription. Each step counts only people from the step before.
+    async funnel(now = new Date()) {
+        const { User, Account, BillingAccount } = require('../../models');
+        const { getConfig } = require('../../config/config');
+        const visitService = require('../../services/visitService');
+        const entitlements = require('../../services/entitlementsService');
+        const { Op } = require('sequelize');
+        const DAY_MS = 24 * 60 * 60 * 1000;
+        const DAYS = 30;
+        const ACTIVATION_TASKS = 5;
+
+        const today = new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+        );
+        const start = new Date(today.getTime() - (DAYS - 1) * DAY_MS);
+        const prevStart = new Date(start.getTime() - DAYS * DAY_MS);
+        const tomorrow = new Date(today.getTime() + DAY_MS);
+        const dayKey = (date) => date.toISOString().slice(0, 10);
+        const hosted = entitlements.isHostedMode();
+        const visitsOn = getConfig().visits?.enabled !== false;
+
+        const users = await User.findAll({
+            attributes: ['id', 'created_at', 'account_id'],
+            where: { created_at: { [Op.gte]: prevStart } },
+            raw: true,
+        });
+        const accountIds = [
+            ...new Set(users.map((u) => u.account_id).filter(Boolean)),
+        ];
+        const [accounts, visitors, prevVisitors] = await Promise.all([
+            accountIds.length
+                ? Account.findAll({
+                      attributes: ['id', 'owner_user_id'],
+                      where: { id: accountIds },
+                      raw: true,
+                  })
+                : [],
+            visitsOn
+                ? visitService.siteVisitors(dayKey(start), dayKey(tomorrow))
+                : null,
+            visitsOn
+                ? visitService.siteVisitors(dayKey(prevStart), dayKey(start))
+                : null,
+        ]);
+        const ownerOf = new Map(accounts.map((a) => [a.id, a.owner_user_id]));
+        const signups = users.filter((u) => {
+            const owner = u.account_id ? ownerOf.get(u.account_id) : null;
+            return !owner || owner === u.id;
+        });
+        const ids = signups.map((u) => u.id);
+
+        const [taskCounts, plans, billing] = await Promise.all([
+            adminRepository.countTasksByUser(ids),
+            adminRepository.findPlanSizes(ids),
+            hosted && ids.length
+                ? BillingAccount.findAll({
+                      attributes: ['user_id', 'provider_subscription_id'],
+                      where: { user_id: ids },
+                      raw: true,
+                  })
+                : [],
+        ]);
+        const planned = new Set(plans.map((p) => p.user_id));
+        const isActivated = (id) =>
+            (taskCounts.get(id) || 0) >= ACTIVATION_TASKS || planned.has(id);
+        const paidIds = new Set(
+            billing
+                .filter((b) => b.provider_subscription_id)
+                .map((b) => b.user_id)
+        );
+
+        const stepsOf = (cohort, siteVisitors) => {
+            const activated = cohort.filter((u) => isActivated(u.id));
+            return {
+                visitors: siteVisitors,
+                signups: cohort.length,
+                activated: activated.length,
+                paid: hosted
+                    ? activated.filter((u) => paidIds.has(u.id)).length
+                    : null,
+                paid_any: hosted
+                    ? cohort.filter((u) => paidIds.has(u.id)).length
+                    : null,
+            };
+        };
+
+        return {
+            days: DAYS,
+            hosted,
+            trials: hosted && (getConfig().hosted.trialDays || 0) > 0,
+            activation_tasks: ACTIVATION_TASKS,
+            current: stepsOf(
+                signups.filter((u) => new Date(u.created_at) >= start),
+                visitors
+            ),
+            previous: stepsOf(
+                signups.filter((u) => new Date(u.created_at) < start),
+                prevVisitors
+            ),
+        };
+    }
+
     async overview(requesterId) {
         await this.verifyAdmin(requesterId);
         const {
@@ -740,6 +883,7 @@ class AdminService {
             registrationSetting,
             openFeedback,
             trends,
+            funnel,
             itemsByUser,
             userIds,
         ] = await Promise.all([
@@ -760,6 +904,7 @@ class AdminService {
             Setting.findOne({ where: { key: 'registration_enabled' } }),
             Feedback.count({ where: { resolved_at: null } }),
             this.trends(),
+            this.funnel(),
             adminRepository.countItemsByUser(),
             User.findAll({ attributes: ['id'], raw: true }),
         ]);
@@ -783,6 +928,7 @@ class AdminService {
             waitlist: { total: waitlist, last7d: waitlistWeek },
             feedback: { open: openFeedback },
             trends,
+            funnel,
             billing: {
                 paying,
                 hosted: config.hosted?.enabled === true,

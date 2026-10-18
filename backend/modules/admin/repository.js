@@ -26,6 +26,19 @@ class AdminRepository {
     // Items each user created, per kind, plus when they last created one.
     // Recurring instances, system tags and self-people are made by the app,
     // not the user, so none of them count.
+    // Account emails that went out, per user id.
+    async countSentEmailsByUser() {
+        const { EmailDelivery } = require('../../models');
+        const { fn, col } = require('sequelize');
+        const rows = await EmailDelivery.findAll({
+            where: { status: 'sent' },
+            attributes: ['user_id', [fn('COUNT', col('id')), 'count']],
+            group: ['user_id'],
+            raw: true,
+        });
+        return new Map(rows.map((r) => [r.user_id, Number(r.count)]));
+    }
+
     async countItemsByUser() {
         const models = require('../../models');
         const { Op, fn, col } = require('sequelize');
@@ -117,6 +130,21 @@ class AdminRepository {
             )
         );
         return new Set(results.flat().map((row) => row.user_id));
+    }
+
+    // How many tasks each of the given users created, recurring instances
+    // left out, as a Map of user id to count.
+    async countTasksByUser(userIds) {
+        if (!userIds || userIds.length === 0) return new Map();
+        const { Task } = require('../../models');
+        const { fn, col } = require('sequelize');
+        const rows = await Task.findAll({
+            attributes: ['user_id', [fn('COUNT', col('id')), 'tasks']],
+            where: { user_id: userIds, recurring_parent_id: null },
+            group: ['user_id'],
+            raw: true,
+        });
+        return new Map(rows.map((row) => [row.user_id, Number(row.tasks)]));
     }
 
     // Every day plan of the given users that holds at least one task, as

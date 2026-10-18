@@ -64,7 +64,7 @@ class AuthService {
         };
     }
 
-    async register(email, password) {
+    async register(email, password, language) {
         if (!isPasswordAuthEnabled()) {
             throw new ForbiddenError(
                 'Password registration is disabled. Please use SSO to sign in.'
@@ -97,7 +97,8 @@ class AuthService {
             const { user, verificationToken } = await createUnverifiedUser(
                 email,
                 password,
-                transaction
+                transaction,
+                { language }
             );
 
             const emailResult = await sendVerificationEmail(
