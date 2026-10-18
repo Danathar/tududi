@@ -1,7 +1,7 @@
 'use strict';
 
 const usersService = require('./service');
-const { UnauthorizedError } = require('../../shared/errors');
+const { ForbiddenError, UnauthorizedError } = require('../../shared/errors');
 const { getAuthenticatedUserId } = require('../../utils/request-utils');
 const { logError } = require('../../services/logService');
 const fs = require('fs').promises;
@@ -16,6 +16,17 @@ function requireUserId(req) {
         throw new UnauthorizedError('Authentication required');
     }
     return userId;
+}
+
+// Credential changes need the signed-in web session. A bearer token (an API
+// key or an OAuth access token) must not be able to mint keys that outlive it
+// or set a password, which would turn a leaked token into a lasting takeover.
+function requireInteractiveSession(req) {
+    if (!req.session?.userId) {
+        throw new ForbiddenError(
+            'This action needs a signed-in browser session, not an API token.'
+        );
+    }
 }
 
 async function safeDeleteFile(filePath) {
@@ -73,7 +84,12 @@ const usersController = {
     async updateProfile(req, res, next) {
         try {
             const userId = requireUserId(req);
-            const profile = await usersService.updateProfile(userId, req.body);
+            if (req.body?.newPassword) {
+                requireInteractiveSession(req);
+            }
+            const profile = await usersService.updateProfile(userId, req.body, {
+                exceptSid: req.sessionID,
+            });
             res.json(profile);
         } catch (error) {
             next(error);
@@ -138,11 +154,13 @@ const usersController = {
     async changePassword(req, res, next) {
         try {
             const userId = requireUserId(req);
+            requireInteractiveSession(req);
             const { currentPassword, newPassword } = req.body;
             const result = await usersService.changePassword(
                 userId,
                 currentPassword,
-                newPassword
+                newPassword,
+                { exceptSid: req.sessionID }
             );
             res.json(result);
         } catch (error) {
@@ -171,6 +189,7 @@ const usersController = {
     async createApiKey(req, res, next) {
         try {
             const userId = requireUserId(req);
+            requireInteractiveSession(req);
             const { name, expires_at } = req.body || {};
             const result = await usersService.createApiKey(
                 userId,
