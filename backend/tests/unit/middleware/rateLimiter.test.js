@@ -52,6 +52,16 @@ const buildApp = (...limiters) => {
     });
     limiters.forEach((limiter) => app.use(limiter));
     app.all('/ok', (req, res) => res.json({ ok: true }));
+    // Stands in for a route behind requireAuth: tt_ tokens are accepted and
+    // resolve to a user, anything else is refused.
+    app.all('/authed', (req, res) => {
+        const header = req.headers.authorization || '';
+        if (header.startsWith('Bearer tt_')) {
+            req.currentUser = { id: 1 };
+            return res.json({ ok: true });
+        }
+        return res.status(401).json({ error: 'nope' });
+    });
     app.all('/protected', (req, res) => {
         if (req.headers.authorization === 'Bearer good-token') {
             return res.json({ ok: true });
@@ -146,27 +156,51 @@ describe('general API limiters', () => {
             .expect(200);
     });
 
-    it('gives each bearer token its own budget instead of the anonymous IP one', async () => {
+    it('gives each accepted bearer token its own budget instead of the anonymous IP one', async () => {
         const app = buildApp(apiLimiter, authenticatedApiLimiter);
         const ip = nextIp();
 
         for (let i = 0; i < 3; i++) {
             await request(app)
-                .get('/ok')
+                .get('/authed')
                 .set('X-Forwarded-For', ip)
                 .set('Authorization', 'Bearer tt_one')
                 .expect(200);
         }
         await request(app)
-            .get('/ok')
+            .get('/authed')
             .set('X-Forwarded-For', ip)
             .set('Authorization', 'Bearer tt_one')
             .expect(429);
         await request(app)
-            .get('/ok')
+            .get('/authed')
             .set('X-Forwarded-For', ip)
             .set('Authorization', 'Bearer tt_two')
             .expect(200);
+    });
+
+    it('counts unvalidated bearer tokens against the anonymous IP budget', async () => {
+        const app = buildApp(apiLimiter, authenticatedApiLimiter);
+        const ip = nextIp();
+
+        // A public route answers 200 whatever the token, so a fresh junk
+        // token per request must not get a fresh budget.
+        await request(app)
+            .get('/ok')
+            .set('X-Forwarded-For', ip)
+            .set('Authorization', 'Bearer junk1')
+            .expect(200);
+        await request(app)
+            .get('/ok')
+            .set('X-Forwarded-For', ip)
+            .set('Authorization', 'Bearer junk2')
+            .expect(200);
+        await request(app)
+            .get('/ok')
+            .set('X-Forwarded-For', ip)
+            .set('Authorization', 'Bearer junk3')
+            .expect(429);
+        await request(app).get('/ok').set('X-Forwarded-For', ip).expect(429);
     });
 });
 

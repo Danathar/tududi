@@ -133,35 +133,45 @@ app.use(
 );
 
 // CORS configuration
-app.use(
-    cors({
-        origin: config.allowedOrigins,
-        credentials: true,
-        methods: [
-            'GET',
-            'POST',
-            'PUT',
-            'PATCH',
-            'DELETE',
-            'OPTIONS',
-            'PROPFIND',
-            'REPORT',
-        ],
-        allowedHeaders: [
-            'Authorization',
-            'Content-Type',
-            'Accept',
-            'X-Requested-With',
-            'x-csrf-token',
-            'Depth',
-            'If-Match',
-            'If-None-Match',
-        ],
-        exposedHeaders: ['Content-Type', 'ETag', 'DAV', 'Allow'],
-        maxAge: 1728000,
-        preflightContinue: true,
-    })
-);
+const corsOptions = {
+    origin: config.allowedOrigins,
+    credentials: true,
+    methods: [
+        'GET',
+        'POST',
+        'PUT',
+        'PATCH',
+        'DELETE',
+        'OPTIONS',
+        'PROPFIND',
+        'REPORT',
+    ],
+    allowedHeaders: [
+        'Authorization',
+        'Content-Type',
+        'Accept',
+        'X-Requested-With',
+        'x-csrf-token',
+        'Depth',
+        'If-Match',
+        'If-None-Match',
+    ],
+    exposedHeaders: ['Content-Type', 'ETag', 'DAV', 'Allow'],
+    maxAge: 1728000,
+};
+// cors treats every OPTIONS request as a preflight. CalDAV clients send
+// OPTIONS to discover the server (DAV and Allow headers), so those requests
+// continue to the CalDAV routes. Everywhere else cors answers the preflight
+// itself with 204: letting it continue would hit the rate limiters and
+// requireAuth, and a browser rejects a preflight that is not 2xx.
+const corsForCalDAV = cors({ ...corsOptions, preflightContinue: true });
+const corsDefault = cors(corsOptions);
+app.use((req, res, next) => {
+    const isCalDAVPath =
+        req.path.startsWith('/caldav/') ||
+        req.path.startsWith('/.well-known/caldav');
+    return (isCalDAVPath ? corsForCalDAV : corsDefault)(req, res, next);
+});
 
 // Stripe webhook: raw body, before JSON parsing, sessions, CSRF and rate
 // limiting. The signature is the authentication.
