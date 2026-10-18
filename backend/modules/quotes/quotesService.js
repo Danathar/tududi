@@ -12,7 +12,7 @@ const createDefaultQuotes = () => [
 ];
 
 // get quotes file path
-const getQuotesFilePath = () => path.join(__dirname, '../config/quotes.yml');
+const getQuotesFilePath = () => path.join(__dirname, '../../config/quotes.yml');
 
 // Side effect function to check if file exists
 const fileExists = (filePath) => fs.existsSync(filePath);

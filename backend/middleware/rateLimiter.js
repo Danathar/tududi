@@ -21,8 +21,10 @@ const getBearerCredential = (req) => {
 // req.currentUser is not set yet when they run. Identify the caller from what
 // is already available: a resolved user (route-level limiters), the session,
 // or a hash of the Bearer credential. The credential is not validated here, so
-// a made-up token only gets its own bucket; bearerFailureLimiter is what
-// throttles invalid tokens.
+// a made-up token only gets its own bucket. bearerFailureLimiter throttles
+// tokens that fail authentication. Public routes answer 200 whatever the
+// token, so apiLimiter also counts Bearer requests against the IP until
+// requireAuth accepts the token.
 const requestIdentity = (req) => {
     const userId = req.currentUser?.id || req.session?.userId;
     if (userId) return `user:${userId}`;
@@ -205,9 +207,18 @@ const apiLimiter = rateLimit({
     skip: (req) => {
         // Skip if rate limiting is disabled
         if (!rateLimitConfig.enabled) return true;
-        // Callers with a session or Bearer credential use the per-identity limiter
-        return !!requestIdentity(req);
+        // Signed-in callers use the per-identity limiter. A Bearer credential
+        // is not checked yet, so it does not exempt the request from the IP
+        // budget on its own.
+        return !!(req.currentUser?.id || req.session?.userId);
     },
+    // A Bearer request is handed back once requireAuth accepted the token, so
+    // valid API tokens are limited only by authenticatedApiLimiter. Anonymous
+    // requests, and tokens nothing validated (public routes, failed auth),
+    // stay counted against the IP.
+    skipSuccessfulRequests: true,
+    requestWasSuccessful: (req) =>
+        !!getBearerCredential(req) && !!req.currentUser,
     handler: (req, res) => {
         res.status(429).json({
             error: 'Rate limit exceeded',

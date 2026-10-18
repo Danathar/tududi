@@ -1095,6 +1095,7 @@
     "orUploadOwn": "或上传您自己的："
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "此字段为必填项",
     "invalidEmail": "无效的电子邮件地址",
     "projectCreationFailed": "项目创建失败。",
@@ -1481,6 +1482,7 @@
     "unpinFromSidebar": "从侧边栏取消固定"
   },
   "areas": {
+    "toggleDropdownMenu": "切换下拉菜单",
     "title": "区域",
     "noAreasFound": "未找到区域",
     "editAreaAriaLabel": "编辑区域 {{name}}",
@@ -1507,6 +1509,7 @@
     "blankSlateProjects": "前往项目"
   },
   "notes": {
+    "toggleDropdownMenu": "切换下拉菜单",
     "loading": "加载笔记...",
     "error": "加载笔记时出错",
     "searchPlaceholder": "搜索笔记...",

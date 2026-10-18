@@ -1,4 +1,7 @@
-import { toggleTaskListItem } from '../markdownTaskList';
+import {
+    toggleTaskListItem,
+    toggleTaskListItemAtLine,
+} from '../markdownTaskList';
 
 describe('toggleTaskListItem', () => {
     it('checks and unchecks a dash item', () => {
@@ -43,5 +46,24 @@ describe('toggleTaskListItem', () => {
 
     it('returns the content unchanged for an out-of-range index', () => {
         expect(toggleTaskListItem('- [ ] a', 3)).toBe('- [ ] a');
+    });
+});
+
+describe('toggleTaskListItemAtLine', () => {
+    it('flips the item on the given 1-based line only', () => {
+        const content = '- [ ]\n- [ ] real\n    - [ ] indented code';
+        expect(toggleTaskListItemAtLine(content, 2)).toBe(
+            '- [ ]\n- [x] real\n    - [ ] indented code'
+        );
+        expect(toggleTaskListItemAtLine('> - [x] quoted', 1)).toBe(
+            '> - [ ] quoted'
+        );
+    });
+
+    it('returns the content unchanged for a line that is not a task item', () => {
+        const content = 'plain\n- [ ]\n- [ ] real';
+        expect(toggleTaskListItemAtLine(content, 1)).toBe(content);
+        expect(toggleTaskListItemAtLine(content, 2)).toBe(content);
+        expect(toggleTaskListItemAtLine(content, 9)).toBe(content);
     });
 });

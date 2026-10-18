@@ -49,7 +49,10 @@ async function validateProjectAccess(projectIdOrUid, userId) {
     return project.id;
 }
 
-async function validateParentTaskAccess(parentTaskId, userId) {
+// `taskId` is the task being re-parented, when it already exists. A task may
+// not become its own parent, nor a subtask of one of its own subtasks: every
+// list filters on parent_task_id IS NULL, so a cycle hides all of its tasks.
+async function validateParentTaskAccess(parentTaskId, userId, taskId = null) {
     if (!parentTaskId || !parentTaskId.toString().trim()) {
         return null;
     }
@@ -85,7 +88,35 @@ async function validateParentTaskAccess(parentTaskId, userId) {
         throw new Error('Invalid parent task. Insufficient permissions.');
     }
 
+    if (taskId !== null && taskId !== undefined) {
+        await assertNoParentCycle(parentTask, taskId);
+    }
+
     return parentTaskId;
+}
+
+async function assertNoParentCycle(parentTask, taskId) {
+    const cycleError = () =>
+        new Error(
+            'Invalid parent task. A task cannot be its own parent or a subtask of its own subtask.'
+        );
+    const target = String(taskId);
+    const seen = new Set();
+    let current = parentTask;
+
+    while (current) {
+        const currentId = String(current.id);
+        if (currentId === target) {
+            throw cycleError();
+        }
+        if (seen.has(currentId) || !current.parent_task_id) {
+            return;
+        }
+        seen.add(currentId);
+        current = await Task.findByPk(current.parent_task_id, {
+            attributes: ['id', 'parent_task_id'],
+        });
+    }
 }
 
 /**

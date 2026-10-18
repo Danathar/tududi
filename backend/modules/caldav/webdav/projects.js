@@ -420,15 +420,22 @@ async function handleProjectReport(req, res) {
     }
 }
 
-// Resolve the project_id a PUT into a project collection should set (or null for
-// the inbox / unknown project). Used by webdav/task-handlers.handlePutTask.
+// Resolve the project_id a PUT into a project collection should set. Returns
+// { projectId } (null for the inbox), or { status } when the URL names a
+// project the caller cannot file tasks into: 404 when it does not exist or is
+// not visible to them, 403 when it is read-only. Treating those as the inbox
+// would move an existing task out of its project. Used by
+// webdav/task-handlers.handlePutTask.
 async function resolveProjectIdForPut(projectUid, userId) {
-    if (!projectUid || projectUid === INBOX_UID) return null;
+    if (!projectUid || projectUid === INBOX_UID) return { projectId: null };
     const project = await Project.findOne({
         where: { uid: projectUid },
         attributes: ['id', 'uid', 'user_id'],
     });
-    return isWritable(await projectAccess(project, userId)) ? project.id : null;
+    const access = await projectAccess(project, userId);
+    if (access === ACCESS.NONE) return { status: 404 };
+    if (!isWritable(access)) return { status: 403 };
+    return { projectId: project.id };
 }
 
 module.exports = {

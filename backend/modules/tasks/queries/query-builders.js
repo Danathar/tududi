@@ -373,7 +373,7 @@ async function filterTasksByParams(
         tagFilteredTaskIds = taggedTaskIds.map((row) => row.task_id);
 
         if (tagFilteredTaskIds.length === 0) {
-            return [];
+            return page ? { rows: [], count: 0 } : [];
         }
     }
 
