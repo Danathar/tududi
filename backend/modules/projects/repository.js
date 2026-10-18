@@ -38,7 +38,8 @@ class ProjectsRepository extends BaseRepository {
      */
     async findAllWithFilters(whereClause) {
         return this.model.findAll({
-            where: whereClause,
+            // Templates are listed under /api/templates, not as projects.
+            where: { [Op.and]: [{ is_template: false }, whereClause] },
             include: [
                 {
                     model: Task,
