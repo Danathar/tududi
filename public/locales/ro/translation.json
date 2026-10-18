@@ -1097,6 +1097,7 @@
     "orUploadOwn": "Sau încarcă propriul tău:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "Acest câmp este obligatoriu",
     "invalidEmail": "Adresă de email invalidă",
     "projectCreationFailed": "Crearea proiectului a eșuat.",
@@ -1483,6 +1484,7 @@
     "unpinFromSidebar": "Dezfixează din bara laterală"
   },
   "areas": {
+    "toggleDropdownMenu": "Comută meniul derulant",
     "title": "Arii",
     "noAreasFound": "Nu au fost găsite arii",
     "editAreaAriaLabel": "Editează aria {{name}}",
@@ -1509,6 +1511,7 @@
     "blankSlateProjects": "Mergi la proiecte"
   },
   "notes": {
+    "toggleDropdownMenu": "Comută meniul derulant",
     "loading": "Se încarcă notițele...",
     "error": "Eroare la încărcarea notițelor",
     "searchPlaceholder": "Caută notițe...",

@@ -65,7 +65,32 @@ function isWholeNumberInRange(value, min, max) {
     return Number.isInteger(value) && value >= min && value <= max;
 }
 
-// Checks the shape of each item and that no two time slots overlap.
+// Checks that every timed slot stays inside the day and no two overlap.
+// Takes the duration each slot will be stored with, so the answer matches
+// what the planner ends up showing.
+function checkSlots(entries) {
+    const scheduled = entries
+        .filter((entry) => entry.start_minute !== null)
+        .map((entry) => ({
+            start: entry.start_minute,
+            end: entry.start_minute + entry.duration_minutes,
+        }))
+        .sort((a, b) => a.start - b.start);
+    for (const slot of scheduled) {
+        if (slot.end > MINUTES_PER_DAY) {
+            throw new ValidationError('A time slot cannot run past midnight');
+        }
+    }
+    for (let i = 1; i < scheduled.length; i++) {
+        if (scheduled[i].start < scheduled[i - 1].end) {
+            throw new ValidationError('Planned time slots cannot overlap');
+        }
+    }
+}
+
+// Checks the shape of each item and that no two time slots overlap, judged
+// on the default duration for items that do not give one; replaceItems
+// checks again once it knows each task's estimate.
 // Positions come from array order, so the client only has to send the list.
 function validateItems(items) {
     if (!Array.isArray(items)) {
@@ -127,19 +152,12 @@ function validateItems(items) {
         };
     });
 
-    const scheduled = normalized
-        .filter((item) => item.start_minute !== null)
-        .map((item) => ({
-            start: item.start_minute,
-            end:
-                item.start_minute + (item.duration_minutes ?? DEFAULT_DURATION),
+    checkSlots(
+        normalized.map((item) => ({
+            start_minute: item.start_minute,
+            duration_minutes: item.duration_minutes ?? DEFAULT_DURATION,
         }))
-        .sort((a, b) => a.start - b.start);
-    for (let i = 1; i < scheduled.length; i++) {
-        if (scheduled[i].start < scheduled[i - 1].end) {
-            throw new ValidationError('Planned time slots cannot overlap');
-        }
-    }
+    );
 
     return normalized;
 }
@@ -261,6 +279,8 @@ async function replaceItems(user, date, items) {
         throw new NotFoundError(`Task ${missing.task_uid} not found`);
     }
 
+    // An item without its own duration is stored with the task's estimate,
+    // so that is the length the overlap and midnight checks must use.
     const rows = normalized.map((item, index) => {
         const task = byUid.get(item.task_uid);
         return {
@@ -273,6 +293,7 @@ async function replaceItems(user, date, items) {
                 DEFAULT_DURATION,
         };
     });
+    checkSlots(rows);
 
     await repository.replaceItems(user.id, planDate, rows);
     return getPlan(user, planDate);

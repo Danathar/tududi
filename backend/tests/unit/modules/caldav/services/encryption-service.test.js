@@ -78,6 +78,22 @@ describe('CalDAV Encryption Service', () => {
         });
     });
 
+    describe('short ENCRYPTION_KEY', () => {
+        const { getConfig } = require('../../../../../config/config');
+
+        it('round-trips with a key shorter than 32 bytes', () => {
+            const config = getConfig();
+            const previous = config.encryptionKey;
+            config.encryptionKey = 'your-256-bit-encryption-key';
+            try {
+                const encrypted = encrypt('my-secret-password');
+                expect(decrypt(encrypted)).toBe('my-secret-password');
+            } finally {
+                config.encryptionKey = previous;
+            }
+        });
+    });
+
     describe('isEncrypted', () => {
         it('should return true for encrypted data', () => {
             const encrypted = encrypt('test');

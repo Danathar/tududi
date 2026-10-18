@@ -1095,6 +1095,7 @@
     "orUploadOwn": "Или загрузите свой:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "Это поле обязательно для заполнения",
     "invalidEmail": "Неверный адрес электронной почты",
     "projectCreationFailed": "Не удалось создать проект.",
@@ -1481,6 +1482,7 @@
     "unpinFromSidebar": "Открепить от боковой панели"
   },
   "areas": {
+    "toggleDropdownMenu": "Переключить выпадающее меню",
     "title": "Области",
     "noAreasFound": "Области не найдены",
     "editAreaAriaLabel": "Редактировать область {{name}}",
@@ -1507,6 +1509,7 @@
     "blankSlateProjects": "Перейти к проектам"
   },
   "notes": {
+    "toggleDropdownMenu": "Переключить выпадающее меню",
     "loading": "Загрузка заметок...",
     "error": "Ошибка загрузки заметок",
     "searchPlaceholder": "Поиск заметок...",

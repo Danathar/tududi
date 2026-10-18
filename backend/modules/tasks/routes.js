@@ -7,17 +7,9 @@ const eventsRouter = require('./events');
 const relationsRouter = require('./relations/routes');
 const orderRouter = require('./order/routes');
 
-const {
-    Task,
-    TaskEvent,
-    TaskAttachment,
-    Project,
-    sequelize,
-} = require('../../models');
+const { Task, Project } = require('../../models');
 const { numericIdParam } = require('../../middleware/numericIdParam');
 const taskRepository = require('./repository');
-const { deleteAttachmentFiles } = require('../../utils/attachment-utils');
-const { withForeignKeyChecksDisabled } = require('../../utils/db-dialect');
 const {
     resetQueryCounter,
     getQueryStats,
@@ -34,7 +26,7 @@ const { serializeTask, serializeTasks } = require('./core/serializers');
 const {
     applyViewerProjectAreas,
 } = require('../../services/projectAreaOverrides');
-const { updateTaskTags } = require('./operations/tags');
+const { updateTaskTags, validateTagsInput } = require('./operations/tags');
 const { filterTasksByParams } = require('./queries/query-builders');
 const {
     getSafeTimezone,
@@ -58,7 +50,11 @@ const {
     buildTaskAttributes,
     buildUpdateAttributes,
 } = require('./core/builders');
-const { createSubtasks, updateSubtasks } = require('./operations/subtasks');
+const {
+    createSubtasks,
+    updateSubtasks,
+    validateSubtasksInput,
+} = require('./operations/subtasks');
 const { requireQuota } = require('../../middleware/entitlements');
 const { handleCompletionStatus } = require('./operations/completion');
 const { captureOldValues, logTaskChanges } = require('./utils/logging');
@@ -66,6 +62,7 @@ const { notifyAssignee } = require('./operations/assignment');
 const {
     handleParentChildOnStatusChange,
 } = require('./operations/parent-child');
+const { deleteTask } = require('./operations/deletion');
 const { TASK_INCLUDES_WITH_SUBTASKS } = require('./utils/constants');
 
 const {
@@ -456,6 +453,15 @@ router.post(
                     .json({ error: 'Task name is required.' });
             }
 
+            // Tags and subtasks are written after the task row, so check
+            // them first: a 400 must leave nothing saved (#245).
+            try {
+                validateTagsInput(tagsData);
+                validateSubtasksInput(subtasks);
+            } catch (error) {
+                return res.status(400).json({ error: error.message });
+            }
+
             const timezone = getSafeTimezone(req.currentUser.timezone);
             const taskAttributes = buildTaskAttributes(
                 req.body,
@@ -661,6 +667,15 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
             return res.status(404).json({ error: 'Task not found.' });
         }
 
+        // Tags and subtasks are written after the task row, so check them
+        // before any write: a 400 must leave the task unchanged (#245).
+        try {
+            validateTagsInput(tagsData);
+            validateSubtasksInput(subtasks);
+        } catch (error) {
+            return res.status(400).json({ error: error.message });
+        }
+
         const oldValues = captureOldValues(task);
         const oldStatus = task.status;
 
@@ -772,7 +787,8 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
                 try {
                     const validParentId = await validateParentTaskAccess(
                         parent_task_id,
-                        req.currentUser.id
+                        req.currentUser.id,
+                        task.id
                     );
                     taskAttributes.parent_task_id = validParentId;
                 } catch (error) {
@@ -870,11 +886,14 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
             completed_at: task.completed_at,
         });
 
-        // Defensive check: ensure completed_at is null if status is not DONE
+        // Defensive check: ensure completed_at is null if status is not DONE.
+        // An archived task keeps the date it was completed.
         if (
             taskAttributes.status !== undefined &&
             taskAttributes.status !== Task.STATUS.DONE &&
             taskAttributes.status !== 'done' &&
+            taskAttributes.status !== Task.STATUS.ARCHIVED &&
+            taskAttributes.status !== 'archived' &&
             task.completed_at !== null
         ) {
             console.log(
@@ -946,100 +965,17 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
 
 router.delete('/task/:uid', requireTaskWriteAccess, async (req, res) => {
     try {
-        const task = await taskRepository.findByUid(req.params.uid, {
-            include: [{ model: TaskAttachment, as: 'Attachments' }],
-        });
+        const task = await taskRepository.findByUid(req.params.uid);
 
         if (!task) {
             return res.status(404).json({ error: 'Task not found.' });
         }
 
-        const taskId = task.id;
-
-        const childTasks = await taskRepository.findRecurringChildren(taskId);
-
-        if (childTasks.length > 0) {
-            const now = new Date();
-
-            const futureInstances = childTasks.filter((child) => {
-                if (!child.due_date) return true;
-                return new Date(child.due_date) > now;
-            });
-
-            const pastInstances = childTasks.filter((child) => {
-                if (!child.due_date) return false;
-                return new Date(child.due_date) <= now;
-            });
-
-            for (const futureInstance of futureInstances) {
-                await futureInstance.destroy();
-            }
-
-            for (const pastInstance of pastInstances) {
-                await pastInstance.update({
-                    recurring_parent_id: null,
-                    recurrence_type: 'none',
-                    recurrence_interval: null,
-                    recurrence_end_date: null,
-                    recurrence_weekday: null,
-                    recurrence_month_day: null,
-                    recurrence_week_of_month: null,
-                    completion_based: false,
-                });
-            }
-        }
-
-        // Before the row goes away, so the remote copy does not survive to be
-        // pulled back in as a new task on the next sync (#1371). Required lazily
-        // because the CalDAV module already depends on this one.
-        try {
-            const {
-                deleteTaskFromRemotes,
-            } = require('../caldav/services/task-deletion-service');
-            await deleteTaskFromRemotes(task);
-        } catch (error) {
-            logError('Error removing task from CalDAV remotes:', error);
-        }
-
-        // Dependent rows are removed in dependency order below, which is
-        // what PostgreSQL relies on; older SQLite databases additionally get
-        // constraint checks switched off for the duration.
-        await withForeignKeyChecksDisabled(sequelize, async () => {
-            await TaskEvent.destroy({
-                where: { task_id: taskId },
-                force: true,
-            });
-
-            await sequelize.query('DELETE FROM tasks_tags WHERE task_id = ?', {
-                replacements: [taskId],
-            });
-
-            await sequelize.query(
-                'DELETE FROM task_relations WHERE source_task_id = ? OR target_task_id = ?',
-                { replacements: [taskId, taskId] }
-            );
-
-            await sequelize.query(
-                'DELETE FROM user_task_orders WHERE task_id = ?',
-                { replacements: [taskId] }
-            );
-
-            await taskRepository.clearRecurringParent(taskId);
-
-            // Unlink attachment files from disk before destroying rows, so a
-            // dangling file never outlives the record that gated its access
-            // (GHSA-43p8-ch4p-gqg4).
-            await deleteAttachmentFiles(task.Attachments);
-            await TaskAttachment.destroy({
-                where: { task_id: taskId },
-                force: true,
-            });
-
-            await task.destroy({ force: true });
-        });
+        await deleteTask(task);
 
         res.json({ message: 'Task successfully deleted' });
     } catch (error) {
+        logError('Error deleting task:', error);
         res.status(400).json({
             error: 'There was a problem deleting the task.',
         });

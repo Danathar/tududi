@@ -145,6 +145,11 @@ async function resetDemo({ force = false } = {}) {
         await seedDemoData(user.id, models);
         await user.update({
             password_digest: await bcrypt.hash(demoConfig().password, 10),
+            // AI provider settings saved before the route guard existed
+            // would otherwise send every later visitor's AI requests there.
+            ai_api_key: null,
+            ai_base_url: null,
+            ai_model: null,
         });
         logInfo('Demo account reset');
         return { reset: true, at: new Date() };

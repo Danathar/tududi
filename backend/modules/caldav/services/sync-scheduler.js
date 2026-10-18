@@ -178,15 +178,32 @@ class SyncScheduler {
             );
         }
 
-        if (minutes === 1) {
-            return '* * * * *';
+        // This expression is only how often the scheduler wakes up to look
+        // for calendars that are due; each calendar has its own interval. So
+        // a value that does not divide evenly into an hour or a day wakes up
+        // at the nearest shorter interval that does, instead of producing an
+        // expression such as `0 */0 * * *` that node-cron rejects.
+        if (minutes < 60) {
+            const step = this._largestDivisorAtMost(60, minutes);
+            return step === 1 ? '* * * * *' : `*/${step} * * * *`;
         }
 
-        if (60 % minutes === 0) {
-            return `*/${minutes} * * * *`;
+        const hours = Math.floor(minutes / 60);
+        if (hours >= 24) {
+            return '0 0 * * *';
         }
 
-        return `0 */${Math.floor(minutes / 60)} * * *`;
+        const hourStep = this._largestDivisorAtMost(24, hours);
+        return hourStep === 1 ? '0 * * * *' : `0 */${hourStep} * * *`;
+    }
+
+    _largestDivisorAtMost(total, limit) {
+        for (let candidate = limit; candidate > 1; candidate--) {
+            if (total % candidate === 0) {
+                return candidate;
+            }
+        }
+        return 1;
     }
 
     async shutdown() {

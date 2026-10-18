@@ -24,6 +24,8 @@ const { Op } = require('sequelize');
 const { sequelize, Task, Project, Tag, Area } = require('../../../models');
 const {
     validateProjectAccess,
+    validateParentTaskAccess,
+    validateGoalAccess,
     validateDeferUntilAndDueDate,
     validateAreaAccess,
     validateAssignee,
@@ -44,6 +46,7 @@ const {
 const permissionsService = require('../../../services/permissionsService');
 const { resolveTagsForTransaction } = require('./tagResolver');
 const relationsService = require('../../tasks/relations/service');
+const { deleteTask } = require('../../tasks/operations/deletion');
 const {
     computeTaskMetrics,
 } = require('../../tasks/queries/metrics-computation');
@@ -111,6 +114,25 @@ const recurrenceInputSchemaProperties = {
         type: 'boolean',
         description:
             'If true, the next occurrence is scheduled from the completion date instead of the fixed schedule',
+    },
+};
+
+// Where a task sits. project_uid is the REST spelling of project_id; both
+// take an ID or a UID, as the web does.
+const placementInputSchemaProperties = {
+    project_uid: {
+        type: 'string',
+        description:
+            'Project UID to assign task to (alternative to project_id)',
+    },
+    parent_task_id: {
+        type: ['number', 'string'],
+        description:
+            'ID of the task this one is a subtask of (null to make it top-level)',
+    },
+    goal_id: {
+        type: ['number', 'string'],
+        description: 'Goal ID or UID to link the task to (null to unlink)',
     },
 };
 
@@ -423,6 +445,7 @@ function registerTaskTools(server, context, tools) {
                     type: 'number',
                     description: 'Area ID to assign task to directly',
                 },
+                ...placementInputSchemaProperties,
                 area_uid: {
                     type: 'string',
                     description:
@@ -445,10 +468,23 @@ function registerTaskTools(server, context, tools) {
         handler: async (params) => {
             const priorityMap = { low: 0, medium: 1, high: 2 };
 
+            if (typeof params.name !== 'string' || !params.name.trim()) {
+                throw new Error('Task name is required');
+            }
+
             // Validate project access before creating task
-            const resolvedProjectId = params.project_id
-                ? await validateProjectAccess(params.project_id, context.userId)
-                : null;
+            const resolvedProjectId = await validateProjectAccess(
+                params.project_uid || params.project_id,
+                context.userId
+            );
+            const resolvedParentId = await validateParentTaskAccess(
+                params.parent_task_id,
+                context.userId
+            );
+            const resolvedGoalId = await validateGoalAccess(
+                params.goal_id,
+                context.userId
+            );
             const resolvedAreaId = await validateAreaAccess(
                 params.area_uid || params.area_id,
                 context.userId
@@ -502,7 +538,7 @@ function registerTaskTools(server, context, tools) {
             const taskData = {
                 ...reminderAttrs,
                 user_id: context.userId,
-                name: params.name,
+                name: params.name.trim(),
                 note: params.note ?? params.description ?? '',
                 priority: params.priority ? priorityMap[params.priority] : 1,
                 status: 0, // pending
@@ -510,6 +546,8 @@ function registerTaskTools(server, context, tools) {
                 due_has_time: dueAttrs.due_has_time ?? false,
                 defer_until: deferUntil,
                 project_id: resolvedProjectId,
+                parent_task_id: resolvedParentId,
+                goal_id: resolvedGoalId,
                 area_id: resolvedAreaId,
                 assigned_to: assignedTo,
                 recurrence_type: recurrenceType,
@@ -656,6 +694,7 @@ function registerTaskTools(server, context, tools) {
             description:
                 'Project ID to assign task to (use null to remove project)',
         },
+        ...placementInputSchemaProperties,
         area_id: {
             type: 'number',
             description:
@@ -693,15 +732,6 @@ function registerTaskTools(server, context, tools) {
             required: ['id'],
         },
         handler: async (params) => {
-            const unsupportedFields = Object.keys(params).filter(
-                (key) => !(key in updateTaskProperties)
-            );
-            if (unsupportedFields.length > 0) {
-                throw new Error(
-                    `Unsupported field(s) for update_task: ${unsupportedFields.join(', ')}`
-                );
-            }
-
             const task = await findTaskByIdentifier(params.id);
 
             if (!task) {
@@ -724,7 +754,12 @@ function registerTaskTools(server, context, tools) {
             const oldValues = captureOldValues(task);
             const previousAssignedTo = task.assigned_to;
             const updates = {};
-            if (params.name !== undefined) updates.name = params.name;
+            if (params.name !== undefined) {
+                if (typeof params.name !== 'string' || !params.name.trim()) {
+                    throw new Error('Task name is required');
+                }
+                updates.name = params.name.trim();
+            }
             const incomingNote = params.note ?? params.description;
             if (incomingNote !== undefined) updates.note = incomingNote;
             if (params.priority) {
@@ -755,8 +790,39 @@ function registerTaskTools(server, context, tools) {
                 // Normalize to end-of-day in the user's timezone, matching
                 // PATCH /api/task/:uid, so a date-only due_date doesn't
                 // shift to the previous day for users behind UTC.
+                const effectiveRecurrenceType =
+                    params.recurrence_type !== undefined
+                        ? params.recurrence_type
+                        : task.recurrence_type;
+                const clearsDueDate =
+                    params.due_date === null || params.due_date === '';
+                const dueDateInput =
+                    clearsDueDate &&
+                    effectiveRecurrenceType &&
+                    effectiveRecurrenceType !== 'none'
+                        ? // A recurring task always has a due date: clearing
+                          // it picks the first occurrence, as PATCH /api/task/:uid
+                          calculateInitialDueDate(
+                              {
+                                  recurrence_type: effectiveRecurrenceType,
+                                  recurrence_month_day:
+                                      params.recurrence_month_day !== undefined
+                                          ? params.recurrence_month_day
+                                          : task.recurrence_month_day,
+                                  recurrence_weekday:
+                                      params.recurrence_weekday !== undefined
+                                          ? params.recurrence_weekday
+                                          : task.recurrence_weekday,
+                                  recurrence_weekdays:
+                                      params.recurrence_weekdays !== undefined
+                                          ? params.recurrence_weekdays
+                                          : task.recurrence_weekdays,
+                              },
+                              context.user.timezone
+                          )
+                        : params.due_date;
                 updates.due_date = processDueDateForStorage(
-                    params.due_date,
+                    dueDateInput,
                     context.user.timezone
                 );
             }
@@ -768,12 +834,31 @@ function registerTaskTools(server, context, tools) {
                     context.user.timezone
                 );
             }
-            if (params.project_id !== undefined) {
-                const validProjectId = await validateProjectAccess(
-                    params.project_id,
+            const projectIdentifier =
+                params.project_uid !== undefined
+                    ? params.project_uid
+                    : params.project_id;
+            if (projectIdentifier !== undefined) {
+                updates.project_id = await validateProjectAccess(
+                    projectIdentifier,
                     context.userId
                 );
-                updates.project_id = validProjectId;
+            }
+            if (params.parent_task_id !== undefined) {
+                const parentId = await validateParentTaskAccess(
+                    params.parent_task_id,
+                    context.userId
+                );
+                if (parentId !== null && Number(parentId) === task.id) {
+                    throw new Error('A task cannot be its own parent');
+                }
+                updates.parent_task_id = parentId;
+            }
+            if (params.goal_id !== undefined) {
+                updates.goal_id = await validateGoalAccess(
+                    params.goal_id,
+                    context.userId
+                );
             }
             const areaIdentifier =
                 params.area_uid !== undefined
@@ -1227,7 +1312,7 @@ function registerTaskTools(server, context, tools) {
                 throw new Error('Access denied');
             }
 
-            await task.destroy();
+            await deleteTask(task);
 
             return {
                 content: [

@@ -47,6 +47,7 @@ async function computeStalledProjects(userId) {
     const projects = await Project.findAll({
         where: {
             user_id: userId,
+            is_template: false,
             status: 'in_progress',
         },
         include: [{ model: Area, attributes: ['name'], required: false }],
@@ -86,7 +87,7 @@ async function computeStalledProjects(userId) {
 
 async function computeWaitingFor(userId) {
     const projects = await Project.findAll({
-        where: { user_id: userId, status: 'waiting' },
+        where: { user_id: userId, is_template: false, status: 'waiting' },
         include: [{ model: Area, attributes: ['name'], required: false }],
         attributes: ['id', 'name', 'updated_at', 'area_id'],
         order: [['updated_at', 'ASC']],
@@ -105,6 +106,7 @@ async function computeActionDebt(userId) {
     const projects = await Project.findAll({
         where: {
             user_id: userId,
+            is_template: false,
             status: { [Op.in]: ['in_progress', 'not_started', 'planned'] },
         },
         include: [{ model: Area, attributes: ['name'], required: false }],

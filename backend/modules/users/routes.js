@@ -132,6 +132,12 @@ router.put('/profile/today-settings', usersController.updateTodaySettings);
 router.put('/profile/sidebar-settings', usersController.updateSidebarSettings);
 router.put('/profile/ui-settings', usersController.updateUiSettings);
 router.get('/profile/ai-settings', usersController.getAiSettings);
-router.put('/profile/ai-settings', usersController.updateAiSettings);
+// Closed to the demo account: it is shared, so a base URL one visitor saved
+// would receive every later visitor's AI requests.
+router.put(
+    '/profile/ai-settings',
+    blockDemoUser,
+    usersController.updateAiSettings
+);
 
 module.exports = router;

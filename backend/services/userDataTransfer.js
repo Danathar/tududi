@@ -84,6 +84,7 @@ async function exportAttachments(attachments = []) {
             original_filename: a.original_filename,
             file_size: a.file_size,
             mime_type: a.mime_type,
+            inline: !!a.inline,
             data: await readAttachmentData(a),
         });
     }
@@ -815,6 +816,7 @@ async function importOwnData(
                         priority: toPriority(project.priority),
                         due_date_at: project.due_date_at,
                         image_url: imageUrl,
+                        clone_count: project.clone_count || 0,
                         color: project.color,
                         task_show_completed: project.task_show_completed,
                         task_sort_order: project.task_sort_order,
@@ -863,8 +865,10 @@ async function importOwnData(
                 async () => ({
                     name: task.name,
                     due_date: task.due_date,
+                    due_has_time: !!task.due_has_time,
                     defer_until: task.defer_until,
                     reminder_at: task.reminder_at,
+                    reminder_sent_at: task.reminder_sent_at ?? null,
                     estimated_minutes: task.estimated_minutes ?? null,
                     priority: toPriority(task.priority),
                     status: task.status,
@@ -946,6 +950,10 @@ async function importOwnData(
                 );
             }
             for (const attachment of task.attachments || []) {
+                // Images pasted into a comment are not listed with the task's
+                // files, and comments are not backed up, so nothing would
+                // point at them after a restore.
+                if (attachment.inline) continue;
                 const file = await writeAttachmentFile(attachment);
                 if (!file) continue;
                 writtenFiles.push({ dir: 'tasks', name: file.storedFilename });
@@ -1000,6 +1008,7 @@ async function importOwnData(
                     title: note.title,
                     content: note.content,
                     color: note.color,
+                    background: note.background ?? null,
                     project_id: await resolve(
                         Project,
                         note.project_uid,
@@ -1067,6 +1076,7 @@ async function importOwnData(
                 tags: view.tags,
                 extras: view.extras,
                 recurring: view.recurring,
+                task_status: view.task_status ?? null,
                 is_pinned: view.is_pinned,
             }));
         }

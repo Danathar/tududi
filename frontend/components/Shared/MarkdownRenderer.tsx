@@ -10,17 +10,16 @@ import hljs from 'highlight.js';
 import CalloutBlock from './CalloutBlock';
 import MermaidDiagram, { getMermaidSource } from './MermaidDiagram';
 import { detectCallout } from '../../utils/calloutParser';
-import { toggleTaskListItem } from '../../utils/markdownTaskList';
+import {
+    toggleTaskListItem,
+    toggleTaskListItemAtLine,
+} from '../../utils/markdownTaskList';
+import {
+    WIKILINK_PREFIX,
+    createRemarkTaskLines,
+    remarkWikilinks,
+} from '../../utils/remarkNoteExtensions';
 import { useStore } from '../../store/useStore';
-
-const WIKILINK_PREFIX = '/__wikilink__/';
-
-function preprocessWikilinks(content: string): string {
-    return content.replace(/\[\[([^\][\n]+?)\]\]/g, (_match, title: string) => {
-        const t = title.trim();
-        return `[${t}](${WIKILINK_PREFIX}${encodeURIComponent(t)})`;
-    });
-}
 
 function slugify(text: string): string {
     return text
@@ -175,9 +174,15 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         return map;
     }, [storeNotes]);
 
-    const processedContent = useMemo(
-        () => preprocessWikilinks(content),
-        [content]
+    // Source line of each checkbox the parser draws, in document order.
+    const taskLinesRef = useRef<number[]>([]);
+    const remarkPlugins = useMemo(
+        () => [
+            remarkGfm,
+            remarkWikilinks,
+            createRemarkTaskLines(taskLinesRef.current),
+        ],
+        []
     );
 
     // Determine text color based on background
@@ -234,14 +239,18 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
 
     const toggleCheckbox = (checkboxIndex: number) => {
         if (!onContentChange) return;
-        const next = toggleTaskListItem(content, checkboxIndex);
+        const line = taskLinesRef.current[checkboxIndex];
+        const next =
+            line === undefined
+                ? toggleTaskListItem(content, checkboxIndex)
+                : toggleTaskListItemAtLine(content, line);
         if (next !== content) onContentChange(next);
     };
 
     return (
         <div className={`markdown-content ${className}`}>
             <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
+                remarkPlugins={remarkPlugins}
                 rehypePlugins={[
                     [rehypeHighlight, { detect: true, ignoreMissing: true }],
                 ]}
@@ -663,7 +672,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                     },
                 }}
             >
-                {processedContent}
+                {content}
             </ReactMarkdown>
         </div>
     );

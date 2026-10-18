@@ -2,7 +2,6 @@ const request = require('supertest');
 const app = require('../../app');
 const { Task, sequelize } = require('../../models');
 const { createTestUser } = require('../helpers/testUtils');
-const { isPostgres } = require('../../utils/db-dialect');
 
 describe('Subtasks Completion Logic Integration', () => {
     let testUser;
@@ -409,8 +408,7 @@ describe('Subtasks Completion Logic Integration', () => {
             expect(updatedParent.status).toBe(Task.STATUS.NOT_STARTED);
         });
 
-        it('should handle deleted parent task gracefully (FK constraints disabled)', async () => {
-            // Create parent task
+        it('should delete subtasks when the parent is deleted through the API (#239)', async () => {
             const parentTask = await Task.create({
                 name: 'Parent Task',
                 user_id: testUser.id,
@@ -418,7 +416,6 @@ describe('Subtasks Completion Logic Integration', () => {
                 priority: Task.PRIORITY.MEDIUM,
             });
 
-            // Create subtask
             const subtask = await Task.create({
                 name: 'Subtask',
                 user_id: testUser.id,
@@ -427,20 +424,12 @@ describe('Subtasks Completion Logic Integration', () => {
                 priority: Task.PRIORITY.MEDIUM,
             });
 
-            // Delete parent task (in test environment, FK constraints are disabled)
-            await agent
-                .delete(`/api/task/${parentTask.uid}`)
+            await agent.delete(`/api/task/${parentTask.uid}`).expect(200);
 
-                .expect(200);
-
-            // Verify subtask remains (orphaned). With FK constraints disabled
-            // (SQLite tests) it still points at the deleted parent; PostgreSQL
-            // enforces ON DELETE SET NULL on parent_task_id.
+            // Previously the subtask survived with a dangling parent_task_id
+            // and disappeared from every list.
             const remainingSubtask = await Task.findByPk(subtask.id);
-            expect(remainingSubtask).not.toBeNull();
-            expect(remainingSubtask.parent_task_id).toBe(
-                isPostgres() ? null : parentTask.id
-            );
+            expect(remainingSubtask).toBeNull();
         });
     });
 
@@ -533,6 +522,67 @@ describe('Subtasks Completion Logic Integration', () => {
             // Active subtask should be cancelled
             const updatedActive = await Task.findByPk(subtaskActive.id);
             expect(updatedActive.status).toBe(Task.STATUS.CANCELLED);
+        });
+
+        it('should keep cancelled and archived subtasks when parent is completed (#243)', async () => {
+            const parentTask = await Task.create({
+                name: 'Parent Task',
+                user_id: testUser.id,
+                status: Task.STATUS.IN_PROGRESS,
+                priority: Task.PRIORITY.MEDIUM,
+            });
+
+            const subtaskOpen = await Task.create({
+                name: 'Open Subtask',
+                user_id: testUser.id,
+                parent_task_id: parentTask.id,
+                status: Task.STATUS.NOT_STARTED,
+                priority: Task.PRIORITY.MEDIUM,
+            });
+
+            const subtaskCancelled = await Task.create({
+                name: 'Cancelled Subtask',
+                user_id: testUser.id,
+                parent_task_id: parentTask.id,
+                status: Task.STATUS.CANCELLED,
+                priority: Task.PRIORITY.MEDIUM,
+            });
+
+            const subtaskArchived = await Task.create({
+                name: 'Archived Subtask',
+                user_id: testUser.id,
+                parent_task_id: parentTask.id,
+                status: Task.STATUS.ARCHIVED,
+                priority: Task.PRIORITY.MEDIUM,
+            });
+
+            const done = await agent
+                .patch(`/api/task/${parentTask.uid}`)
+                .send({ status: Task.STATUS.DONE });
+            expect(done.status).toBe(200);
+
+            expect((await Task.findByPk(subtaskOpen.id)).status).toBe(
+                Task.STATUS.DONE
+            );
+            expect((await Task.findByPk(subtaskCancelled.id)).status).toBe(
+                Task.STATUS.CANCELLED
+            );
+            expect((await Task.findByPk(subtaskArchived.id)).status).toBe(
+                Task.STATUS.ARCHIVED
+            );
+
+            // Reopening the parent restores only what completing it changed.
+            const reopened = await agent
+                .patch(`/api/task/${parentTask.uid}`)
+                .send({ status: Task.STATUS.NOT_STARTED });
+            expect(reopened.status).toBe(200);
+
+            expect((await Task.findByPk(subtaskOpen.id)).status).toBe(
+                Task.STATUS.NOT_STARTED
+            );
+            expect((await Task.findByPk(subtaskCancelled.id)).status).toBe(
+                Task.STATUS.CANCELLED
+            );
         });
 
         it('should restore cancelled subtasks when parent is uncancelled', async () => {

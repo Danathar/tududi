@@ -6,7 +6,7 @@ const { CALDAV_TASK_INCLUDES } = require('../task-includes');
 const vtodoSerializer = require('../icalendar/vtodo-serializer');
 const vtodoParser = require('../icalendar/vtodo-parser');
 const { resolveProjectIdForPut } = require('./projects');
-const { deleteTaskFromRemotes } = require('../services/task-deletion-service');
+const { deleteTask } = require('../../tasks/operations/deletion');
 const { canReadTask, canWriteTask } = require('../access');
 const { STATUS_TUDUDI_TO_ICAL } = require('../icalendar/field-mappings');
 const { buildHref } = require('./utils');
@@ -248,16 +248,10 @@ async function handleDeleteTask(req, res) {
             }
         }
 
-        // Same reason as the REST delete route: a task removed here must also be
-        // removed from any CalDAV server Tududi pulls it from, or the next sync
-        // re-creates it (#1371).
-        try {
-            await deleteTaskFromRemotes(task);
-        } catch (error) {
-            console.error('CalDAV remote delete error:', error);
-        }
-
-        await taskRepository.delete(task.id, task.user_id);
+        // The same cleanup as the REST delete route: subtasks, recurring
+        // instances, attachment files and the copies on any CalDAV server
+        // Tududi pulls from (#1371).
+        await deleteTask(task);
 
         res.status(204).end();
     } catch (error) {

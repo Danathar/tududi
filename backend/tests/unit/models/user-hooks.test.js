@@ -143,6 +143,20 @@ describe('User creation hooks', () => {
         expect(user.surname).toBe('Person');
     });
 
+    it('keeps a first name with a space when the profile is saved', async () => {
+        const user = await User.create({
+            email: 'hooks-space@example.com',
+            password: 'password123',
+            name: 'Before',
+        });
+        await user.update({ name: 'Mary Ann', surname: 'Smith' });
+        await user.reload();
+        expect(user.name).toBe('Mary Ann');
+        expect(user.surname).toBe('Smith');
+        const [person] = await selfPersonsOf(user);
+        expect(person.name).toBe('Mary Ann Smith');
+    });
+
     // Reproduces the scenario the old code comment warned about: another
     // connection holds the write lock while the hook opens its own
     // transaction. Costs a full busy_timeout, so it only runs on demand.

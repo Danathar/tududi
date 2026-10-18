@@ -12,6 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 import type { NotificationPreferences } from '../types';
 import { getCsrfToken } from '../../../utils/csrfService';
+import { getApiPath } from '../../../config/paths';
 import PushDeviceCard from './PushDeviceCard';
 import AppriseCard from './AppriseCard';
 import { PushState, countPushDevices } from '../../../utils/pushService';
@@ -203,7 +204,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
     // Fetch profile data to check telegram configuration
     React.useEffect(() => {
         if (isActive) {
-            fetch('/api/profile')
+            fetch(getApiPath('profile'))
                 .then((res) => res.json())
                 .then((data) => setProfile(data))
                 .catch((err) => console.error('Failed to fetch profile', err));
@@ -249,7 +250,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
         setTestingChannel(channel);
         setTestResult(null);
         try {
-            const response = await fetch('/api/test-notifications/trigger', {
+            const response = await fetch(getApiPath('test-notifications/trigger'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

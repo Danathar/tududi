@@ -10,6 +10,32 @@ const {
     syncProjectSharesFromContainer,
 } = require('../../../services/containerShareSync');
 const { resolveTagsForTransaction } = require('./tagResolver');
+const { validateName } = require('../../projects/validation');
+
+const colorInputProperty = {
+    type: 'string',
+    description: 'Hex color (e.g. #ff6b6b); empty string or null to remove',
+};
+
+// 0=low, 1=medium, 2=high; null leaves or clears it like the web does
+function assertValidPriority(priority) {
+    if (priority === undefined || priority === null) return;
+    if (!Number.isInteger(priority) || priority < 0 || priority > 2) {
+        throw new Error(
+            'priority must be a number: 0 (low), 1 (medium) or 2 (high)'
+        );
+    }
+}
+
+// Returns undefined when not passed, null to clear, or the date as sent.
+function parseProjectDueDate(value) {
+    if (value === undefined) return undefined;
+    if (value === null || value === '') return null;
+    if (typeof value !== 'string' || isNaN(new Date(value).getTime())) {
+        throw new Error('due_date_at must be a valid ISO 8601 date');
+    }
+    return value;
+}
 
 const goalInputProperties = {
     goal_id: {
@@ -262,6 +288,7 @@ function registerProjectTools(server, context, tools) {
                     type: 'string',
                     description: 'Due date (ISO 8601)',
                 },
+                color: colorInputProperty,
                 tags: {
                     type: 'array',
                     items: { type: 'string' },
@@ -279,14 +306,21 @@ function registerProjectTools(server, context, tools) {
         handler: async (params) => {
             const goalId = await resolveGoalId(params, context.userId);
             assertNotGoalAndMaintenance(params, goalId);
+            const name = validateName(params.name);
+            assertValidPriority(params.priority);
+            const dueDateAt = parseProjectDueDate(params.due_date_at);
             const projectData = {
                 user_id: context.userId,
-                name: params.name,
+                name,
                 description: params.description || '',
-                priority: params.priority !== undefined ? params.priority : 1,
+                priority:
+                    params.priority !== undefined && params.priority !== null
+                        ? params.priority
+                        : 1,
                 status: params.status || 'not_started',
                 area_id: params.area_id || null,
-                due_date_at: params.due_date_at || null,
+                due_date_at: dueDateAt || null,
+                color: params.color || null,
                 image_url: params.image_url || null,
                 goal_id: goalId || null,
                 is_maintenance: params.is_maintenance === true,
@@ -333,6 +367,7 @@ function registerProjectTools(server, context, tools) {
                     ? reloadedProject.Tags.map((t) => t.name)
                     : [],
                 due_date_at: reloadedProject.due_date_at,
+                color: reloadedProject.color,
                 created_at: reloadedProject.created_at,
             };
 
@@ -389,6 +424,18 @@ function registerProjectTools(server, context, tools) {
                     type: 'number',
                     description: 'New area ID',
                 },
+                due_date_at: {
+                    type: 'string',
+                    description:
+                        'New due date (ISO 8601); empty string or null to remove',
+                },
+                color: colorInputProperty,
+                tags: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description:
+                        'Array of tag names to assign (replaces existing tags)',
+                },
                 pinned: {
                     type: 'boolean',
                     description: 'Pin to sidebar',
@@ -425,11 +472,17 @@ function registerProjectTools(server, context, tools) {
             }
 
             const updates = {};
-            if (params.name !== undefined) updates.name = params.name;
+            if (params.name !== undefined)
+                updates.name = validateName(params.name);
             if (params.description !== undefined)
                 updates.description = params.description;
+            assertValidPriority(params.priority);
             if (params.priority !== undefined)
                 updates.priority = params.priority;
+            const dueDateAt = parseProjectDueDate(params.due_date_at);
+            if (dueDateAt !== undefined) updates.due_date_at = dueDateAt;
+            if (params.color !== undefined)
+                updates.color = params.color === '' ? null : params.color;
             if (params.status !== undefined) updates.status = params.status;
             if (params.area_id !== undefined) updates.area_id = params.area_id;
             if (params.pinned !== undefined)
@@ -456,7 +509,18 @@ function registerProjectTools(server, context, tools) {
                 throw new Error('Only the project owner can change its goal');
             }
 
-            await project.update(updates);
+            await sequelize.transaction(async (transaction) => {
+                await project.update(updates, { transaction });
+
+                const tagInstances = await resolveTagsForTransaction(
+                    params.tags,
+                    context.userId,
+                    transaction
+                );
+                if (tagInstances !== undefined) {
+                    await project.setTags(tagInstances, { transaction });
+                }
+            });
 
             if (
                 project.user_id === context.userId &&
@@ -483,6 +547,7 @@ function registerProjectTools(server, context, tools) {
                     ? reloadedProject.Tags.map((t) => t.name)
                     : [],
                 due_date_at: reloadedProject.due_date_at,
+                color: reloadedProject.color,
                 pin_to_sidebar: reloadedProject.pin_to_sidebar,
                 updated_at: reloadedProject.updated_at,
             };

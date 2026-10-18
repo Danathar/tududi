@@ -6,6 +6,8 @@ jest.mock('web-push', () => {
     };
 });
 
+const dns = require('dns');
+const https = require('https');
 const request = require('supertest');
 const webpush = require('web-push');
 const app = require('../../app');
@@ -13,6 +15,8 @@ const { Notification, PushSubscription, Setting } = require('../../models');
 const { createTestUser } = require('../helpers/testUtils');
 const { resetVapidCache } = require('../../modules/push/vapid');
 const pushService = require('../../modules/push/service');
+const pushRepository = require('../../modules/push/repository');
+const { publicOnlyLookup } = require('../../modules/url/ssrfGuard');
 
 const login = async (user) => {
     const agent = request.agent(app);
@@ -35,6 +39,12 @@ describe('Push notifications', () => {
     beforeEach(async () => {
         webpush.sendNotification.mockReset();
         webpush.sendNotification.mockResolvedValue({ statusCode: 201 });
+        // Endpoints go through the SSRF guard (DNS lookup + private-range
+        // check), so resolve every hostname to a public address rather than
+        // depend on real DNS.
+        jest.spyOn(dns.promises, 'lookup').mockResolvedValue([
+            { address: '93.184.216.34', family: 4 },
+        ]);
         await Setting.destroy({ where: { key: 'vapid_keys' } });
         resetVapidCache();
         user = await createTestUser({
@@ -124,6 +134,32 @@ describe('Push notifications', () => {
             expect(await PushSubscription.count()).toBe(0);
         });
 
+        it('rejects endpoints on internal addresses (SSRF)', async () => {
+            for (const endpoint of [
+                'https://127.0.0.1/push',
+                'https://169.254.169.254:8443/latest/meta-data',
+                'https://10.0.0.5/push',
+                'https://[::1]/push',
+            ]) {
+                const res = await agent
+                    .post('/api/push/subscriptions')
+                    .send(subscriptionBody({ endpoint }));
+                expect(res.status).toBe(400);
+            }
+
+            // A hostname that resolves to a private address is refused too.
+            dns.promises.lookup.mockResolvedValueOnce([
+                { address: '192.168.1.10', family: 4 },
+            ]);
+            const res = await agent.post('/api/push/subscriptions').send(
+                subscriptionBody({
+                    endpoint: 'https://internal.example.com/push',
+                })
+            );
+            expect(res.status).toBe(400);
+            expect(await PushSubscription.count()).toBe(0);
+        });
+
         it('rejects a subscription without keys', async () => {
             const res = await agent
                 .post('/api/push/subscriptions')
@@ -182,6 +218,36 @@ describe('Push notifications', () => {
                 url: '/',
             });
             expect(options.vapidDetails.subject).toMatch(/^(mailto:|https:)/);
+        });
+
+        it('pins delivery to public addresses', async () => {
+            await agent
+                .post('/api/push/subscriptions')
+                .send(subscriptionBody());
+
+            await pushService.sendToUser(user.id, { title: 't' });
+
+            const [, , options] = webpush.sendNotification.mock.calls[0];
+            expect(options.agent).toBeInstanceOf(https.Agent);
+            expect(options.agent.options.lookup).toBe(publicOnlyLookup);
+        });
+
+        it('never sends to an internal endpoint stored before the check', async () => {
+            await pushRepository.create({
+                user_id: user.id,
+                endpoint: 'https://169.254.169.254/latest/meta-data',
+                p256dh: 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA',
+                auth: 'tBHI',
+            });
+
+            const sent = await pushService.sendToUser(user.id, { title: 't' });
+
+            expect(sent).toBe(0);
+            expect(webpush.sendNotification).not.toHaveBeenCalled();
+            const row = await PushSubscription.findOne({
+                where: { user_id: user.id },
+            });
+            expect(row.failure_count).toBe(1);
         });
 
         it('forgets a device the push service says is gone', async () => {

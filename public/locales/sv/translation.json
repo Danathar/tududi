@@ -1095,6 +1095,7 @@
     "orUploadOwn": "Eller ladda upp din egen:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "Detta fält är obligatoriskt",
     "invalidEmail": "Ogiltig e-postadress",
     "projectCreationFailed": "Kunde inte skapa projekt.",
@@ -1481,6 +1482,7 @@
     "unpinFromSidebar": "Ta bort från sidofältet"
   },
   "areas": {
+    "toggleDropdownMenu": "Toggla rullgardinsmeny",
     "title": "Områden",
     "noAreasFound": "Inga områden hittades",
     "editAreaAriaLabel": "Ändra område {{name}}",
@@ -1507,6 +1509,7 @@
     "blankSlateProjects": "Gå till projekt"
   },
   "notes": {
+    "toggleDropdownMenu": "Toggla rullgardinsmeny",
     "loading": "Laddar anteckningar...",
     "error": "Fel vid inläsning av anteckningar",
     "searchPlaceholder": "Sök anteckningar...",

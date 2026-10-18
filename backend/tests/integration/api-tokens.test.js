@@ -72,6 +72,18 @@ describe('API Token Authentication', () => {
             );
         });
 
+        it('should reject an expiration date in the past', async () => {
+            const response = await agent.post('/api/profile/api-keys').send({
+                name: 'Already Expired',
+                expires_at: new Date(Date.now() - 60 * 1000).toISOString(),
+            });
+
+            expect(response.status).toBe(400);
+            expect(response.body.error).toBe(
+                'expires_at must be in the future.'
+            );
+        });
+
         it('should require authentication', async () => {
             const response = await request(app)
                 .post('/api/profile/api-keys')
@@ -281,6 +293,46 @@ describe('API Token Authentication', () => {
 
                 expect(response.status).toBe(200);
                 expect(response.body.appearance).toBe('dark');
+            });
+
+            it('should not let a Bearer token create another API key', async () => {
+                const response = await request(app)
+                    .post('/api/profile/api-keys')
+                    .set('Authorization', `Bearer ${rawToken}`)
+                    .send({ name: 'forever' });
+
+                expect(response.status).toBe(403);
+                expect(
+                    await ApiToken.count({ where: { name: 'forever' } })
+                ).toBe(0);
+            });
+
+            it('should not let a Bearer token change the password', async () => {
+                const response = await request(app)
+                    .post('/api/profile/change-password')
+                    .set('Authorization', `Bearer ${rawToken}`)
+                    .send({
+                        currentPassword: 'password123',
+                        newPassword: 'attackerpass1',
+                    });
+
+                expect(response.status).toBe(403);
+            });
+
+            it('should not let a Bearer token set a password on a passwordless account', async () => {
+                await User.update(
+                    { password_digest: null },
+                    { where: { id: user.id } }
+                );
+
+                const response = await request(app)
+                    .patch('/api/profile')
+                    .set('Authorization', `Bearer ${rawToken}`)
+                    .send({ newPassword: 'attackerpass1' });
+
+                expect(response.status).toBe(403);
+                const reloaded = await User.findByPk(user.id);
+                expect(reloaded.password_digest).toBeNull();
             });
         });
 

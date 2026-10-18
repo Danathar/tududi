@@ -243,6 +243,11 @@ function buildTaskAttributes(body, userId, timezone, isUpdate = false) {
 
     if (!isUpdate) {
         attrs.user_id = userId;
+        // A task created as done was completed now, so it counts in
+        // completed-today and the stats like one completed later.
+        if (attrs.status === Task.STATUS.DONE) {
+            attrs.completed_at = new Date();
+        }
     }
 
     if (body.estimated_minutes !== undefined) {

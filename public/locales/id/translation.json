@@ -1095,6 +1095,7 @@
     "orUploadOwn": "Atau unggah milik Anda sendiri:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "Kolom ini diperlukan",
     "invalidEmail": "Alamat email tidak valid",
     "projectCreationFailed": "Gagal membuat proyek.",
@@ -1481,6 +1482,7 @@
     "unpinFromSidebar": "Lepaskan dari sidebar"
   },
   "areas": {
+    "toggleDropdownMenu": "Alihkan menu dropdown",
     "title": "Area",
     "noAreasFound": "Tidak ada area ditemukan",
     "editAreaAriaLabel": "Edit area {{name}}",
@@ -1507,6 +1509,7 @@
     "blankSlateProjects": "Buka proyek"
   },
   "notes": {
+    "toggleDropdownMenu": "Alihkan menu dropdown",
     "loading": "Memuat catatan...",
     "error": "Kesalahan memuat catatan",
     "searchPlaceholder": "Cari catatan...",
