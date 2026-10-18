@@ -87,11 +87,9 @@ const usersController = {
             if (req.body?.newPassword) {
                 requireInteractiveSession(req);
             }
-            const profile = await usersService.updateProfile(
-                userId,
-                req.body,
-                { exceptSid: req.sessionID }
-            );
+            const profile = await usersService.updateProfile(userId, req.body, {
+                exceptSid: req.sessionID,
+            });
             res.json(profile);
         } catch (error) {
             next(error);

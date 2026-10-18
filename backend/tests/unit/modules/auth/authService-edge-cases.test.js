@@ -200,38 +200,33 @@ describe('authService edge cases', () => {
         it.each([
             ['an SSO account without a password', 'true'],
             ['an invited account without a password', undefined],
-        ])(
-            'answers %s like a wrong password',
-            async (_label, oidcEnabled) => {
-                jest.replaceProperty(process, 'env', {
-                    ...process.env,
-                    OIDC_ENABLED: oidcEnabled,
-                });
-                jest.spyOn(User, 'findOne').mockResolvedValue({
-                    password_digest: null,
-                });
-                const checkPassword = jest
-                    .spyOn(User, 'checkPassword')
-                    .mockResolvedValue(false);
+        ])('answers %s like a wrong password', async (_label, oidcEnabled) => {
+            jest.replaceProperty(process, 'env', {
+                ...process.env,
+                OIDC_ENABLED: oidcEnabled,
+            });
+            jest.spyOn(User, 'findOne').mockResolvedValue({
+                password_digest: null,
+            });
+            const checkPassword = jest
+                .spyOn(User, 'checkPassword')
+                .mockResolvedValue(false);
 
-                const attempt = authService.login(
-                    'nopass@example.com',
-                    'password123',
-                    {}
-                );
-                await expect(attempt).rejects.toBeInstanceOf(
-                    UnauthorizedError
-                );
-                await expect(attempt).rejects.toEqual(
-                    expect.objectContaining({
-                        message: 'Invalid credentials',
-                    })
-                );
-                // The same bcrypt work as a real check, so timing does not
-                // single these accounts out either.
-                expect(checkPassword).toHaveBeenCalled();
-            }
-        );
+            const attempt = authService.login(
+                'nopass@example.com',
+                'password123',
+                {}
+            );
+            await expect(attempt).rejects.toBeInstanceOf(UnauthorizedError);
+            await expect(attempt).rejects.toEqual(
+                expect.objectContaining({
+                    message: 'Invalid credentials',
+                })
+            );
+            // The same bcrypt work as a real check, so timing does not
+            // single these accounts out either.
+            expect(checkPassword).toHaveBeenCalled();
+        });
 
         it('does the same bcrypt work for an unknown email', async () => {
             jest.spyOn(User, 'findOne').mockResolvedValue(null);
