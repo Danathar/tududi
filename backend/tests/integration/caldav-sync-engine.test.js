@@ -11,6 +11,11 @@ const {
     CalDAVSyncState,
 } = require('../../models');
 const syncEngine = require('../../modules/caldav/sync/sync-engine');
+const MergePhase = require('../../modules/caldav/sync/merge-phase');
+const PullPhase = require('../../modules/caldav/sync/pull-phase');
+const syncScheduler = require('../../modules/caldav/services/sync-scheduler');
+const syncController = require('../../modules/caldav/api/sync-controller');
+const remoteCalendarController = require('../../modules/caldav/api/remote-calendar-controller');
 const encryptionService = require('../../modules/caldav/services/encryption-service');
 const {
     serializeTaskToVTODO,
@@ -669,6 +674,471 @@ END:VCALENDAR</cal:calendar-data>
 
             await task.reload();
             expect(task.name).toBe('Updated Local Version');
+        });
+    });
+
+    describe('Sync engine regressions', () => {
+        const HREF_BASE = '/calendars/test/tasks/';
+        const LONG_AGO = () => new Date(Date.now() - 60000);
+
+        const vcalendar = (uid, lines = []) =>
+            [
+                'BEGIN:VCALENDAR',
+                'VERSION:2.0',
+                'PRODID:-//Tududi//EN',
+                'BEGIN:VTODO',
+                `UID:${uid}`,
+                ...lines,
+                'END:VTODO',
+                'END:VCALENDAR',
+            ].join('\r\n');
+
+        const multistatus = (responses, syncToken = null) => {
+            const token = syncToken
+                ? `<d:sync-token>${syncToken}</d:sync-token>`
+                : '';
+            return `<?xml version="1.0" encoding="utf-8" ?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+${responses.join('\n')}
+${token}
+</d:multistatus>`;
+        };
+
+        const taskResponse = (uid, etag, lines) => {
+            return `<d:response>
+  <d:href>${HREF_BASE}${uid}.ics</d:href>
+  <d:propstat>
+    <d:prop>
+      <d:getetag>"${etag}"</d:getetag>
+      <cal:calendar-data>${vcalendar(uid, lines)}</cal:calendar-data>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+</d:response>`;
+        };
+
+        // A task synced with the remote copy at etag-<uid>. By default the
+        // last sync is later than the task's updated_at, so it counts as not
+        // edited locally; pass an earlier syncedAt to make it locally edited.
+        const syncedTask = async (uid, fields = {}, syncedAt = null) => {
+            const task = await Task.create({
+                uid,
+                user_id: testUser.id,
+                name: uid,
+                status: 0,
+                ...fields,
+            });
+            const lastSync = syncedAt || new Date(Date.now() + 60000);
+            await CalDAVSyncState.create({
+                task_id: task.id,
+                calendar_id: calendar.id,
+                etag: `etag-${uid}`,
+                remote_href: `${HREF_BASE}${uid}.ics`,
+                last_modified: lastSync,
+                last_synced_at: lastSync,
+                sync_status: 'synced',
+            });
+            return task;
+        };
+
+        const requestsBy = (method) =>
+            axios.mock.calls.filter(([config]) => config.method === method);
+
+        describe('pull: 404 propstats (#223)', () => {
+            test('a 404 propstat for one unsupported property does not delete the task', async () => {
+                await remoteCalendar.update({ server_sync_token: 'token-1' });
+                const task = await syncedTask('kept-task');
+
+                const partial404 = `<d:response>
+  <d:href>${HREF_BASE}kept-task.ics</d:href>
+  <d:propstat>
+    <d:prop><d:getetag>"etag-kept-task"</d:getetag></d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+  <d:propstat>
+    <d:prop><d:getcontenttype/></d:prop>
+    <d:status>HTTP/1.1 404 Not Found</d:status>
+  </d:propstat>
+</d:response>`;
+                const ics = vcalendar('kept-task', ['SUMMARY:kept-task']);
+
+                axios.mockImplementation((config) => {
+                    if (config.method === 'REPORT') {
+                        return Promise.resolve({
+                            status: 207,
+                            headers: {},
+                            data: multistatus([partial404], 'token-2'),
+                        });
+                    }
+                    if (config.method === 'GET') {
+                        return Promise.resolve({
+                            status: 200,
+                            headers: { etag: '"etag-kept-task"' },
+                            data: ics,
+                        });
+                    }
+                    return Promise.reject(
+                        new Error(`Unexpected ${config.method}`)
+                    );
+                });
+
+                const result = await syncEngine.syncCalendar(
+                    calendar.id,
+                    testUser.id,
+                    { direction: 'pull' }
+                );
+
+                expect(result.success).toBe(true);
+                expect(result.phases.merge.deleted).toHaveLength(0);
+                expect(await Task.findByPk(task.id)).not.toBeNull();
+            });
+
+            test('a response whose only propstat is 404 is still a deletion', async () => {
+                const gone = `<d:response>
+  <d:href>${HREF_BASE}gone.ics</d:href>
+  <d:propstat>
+    <d:prop><d:getetag/></d:prop>
+    <d:status>HTTP/1.1 404 Not Found</d:status>
+  </d:propstat>
+</d:response>`;
+
+                const pull = new PullPhase();
+                const changes = await pull._parseReportResponse(
+                    multistatus([gone]),
+                    remoteCalendar,
+                    calendar,
+                    'UTC'
+                );
+
+                expect(changes).toHaveLength(1);
+                expect(changes[0]).toMatchObject({
+                    action: 'delete',
+                    href: `${HREF_BASE}gone.ics`,
+                });
+            });
+        });
+
+        describe('sync direction and dry run (#224)', () => {
+            const mockRemote = (reportData = multistatus([])) =>
+                axios.mockImplementation((config) => {
+                    if (config.method === 'REPORT') {
+                        return Promise.resolve({
+                            status: 207,
+                            headers: {},
+                            data: reportData,
+                        });
+                    }
+                    if (config.method === 'PUT') {
+                        return Promise.resolve({
+                            status: 201,
+                            headers: { etag: '"pushed-etag"' },
+                        });
+                    }
+                    return Promise.reject(
+                        new Error(`Unexpected ${config.method}`)
+                    );
+                });
+
+            const createLocalTask = () =>
+                Task.create({
+                    uid: 'local-only',
+                    user_id: testUser.id,
+                    name: 'Local only',
+                    status: 0,
+                });
+
+            test('a scheduled sync of a pull_only calendar pulls and never pushes', async () => {
+                await calendar.update({ sync_direction: 'pull_only' });
+                await createLocalTask();
+                mockRemote();
+
+                const stored = await CalDAVCalendar.findByPk(calendar.id);
+                const result = await syncScheduler._syncCalendar(stored);
+
+                expect(result.success).toBe(true);
+                expect(result.phases.pull).toBeDefined();
+                expect(result.phases.push).toBeUndefined();
+                expect(requestsBy('REPORT')).toHaveLength(1);
+                expect(requestsBy('PUT')).toHaveLength(0);
+            });
+
+            test('a scheduled sync of a push_only calendar pushes and never pulls', async () => {
+                await calendar.update({ sync_direction: 'push_only' });
+                await createLocalTask();
+                mockRemote();
+
+                const stored = await CalDAVCalendar.findByPk(calendar.id);
+                const result = await syncScheduler._syncCalendar(stored);
+
+                expect(result.success).toBe(true);
+                expect(result.phases.pull).toBeUndefined();
+                expect(result.phases.push).toBeDefined();
+                expect(requestsBy('REPORT')).toHaveLength(0);
+                expect(requestsBy('PUT')).toHaveLength(1);
+            });
+
+            test('Sync now follows the calendar setting when no direction is given', async () => {
+                await calendar.update({ sync_direction: 'pull_only' });
+                await createLocalTask();
+                mockRemote();
+
+                const res = { json: jest.fn() };
+                const next = jest.fn();
+                await syncController.syncCalendar(
+                    {
+                        params: { id: calendar.id },
+                        currentUser: { id: testUser.id },
+                        body: { dryRun: false },
+                    },
+                    res,
+                    next
+                );
+
+                expect(next).not.toHaveBeenCalled();
+                const [[body]] = res.json.mock.calls;
+                expect(body.direction).toBe('pull');
+                expect(requestsBy('PUT')).toHaveLength(0);
+            });
+
+            test('sync of all calendars honours dryRun', async () => {
+                const remoteTask = taskResponse('dry-run-all', 'etag-dry', [
+                    'SUMMARY:Dry run',
+                ]);
+                mockRemote(multistatus([remoteTask]));
+
+                const result = await syncScheduler.syncUserCalendars(
+                    testUser.id,
+                    { dryRun: true }
+                );
+
+                expect(result.failedCalendars).toBe(0);
+                const created = await Task.findOne({
+                    where: { uid: 'dry-run-all' },
+                });
+                expect(created).toBeNull();
+                expect(requestsBy('PUT')).toHaveLength(0);
+            });
+
+            test('an unknown direction is an error, not a silent success', async () => {
+                await expect(
+                    syncEngine.syncCalendar(calendar.id, testUser.id, {
+                        direction: 'sideways',
+                    })
+                ).rejects.toThrow('Invalid sync direction');
+                expect(axios).not.toHaveBeenCalled();
+            });
+        });
+
+        describe('resolving a deleted-remotely conflict (#225)', () => {
+            const deleteConflict = async (uid) => {
+                await calendar.update({ conflict_resolution: 'manual' });
+                const task = await syncedTask(uid, {}, LONG_AGO());
+
+                const merge = await new MergePhase().execute(calendar, [
+                    { action: 'delete', href: `${HREF_BASE}${uid}.ics` },
+                ]);
+                expect(merge.conflicts).toHaveLength(1);
+
+                return task;
+            };
+
+            test('keep local keeps the task and recreates it on the server', async () => {
+                const task = await deleteConflict('keep-local');
+
+                const phase = new MergePhase();
+                await phase.resolveConflict(task.id, calendar.id, 'local');
+
+                const state = await CalDAVSyncState.findOne({
+                    where: { task_id: task.id, calendar_id: calendar.id },
+                });
+                expect(state.sync_status).toBe('pending');
+                expect(state.remote_href).toBeNull();
+                expect(state.etag).toBeFalsy();
+
+                // The next full listing (still without the resource) must not
+                // delete the task.
+                const pull = new PullPhase();
+                const deletions = await pull._findRemoteDeletions(calendar, []);
+                expect(deletions).toHaveLength(0);
+                expect(await Task.findByPk(task.id)).not.toBeNull();
+            });
+
+            test('keep remote deletes the task', async () => {
+                const task = await deleteConflict('keep-remote');
+
+                const phase = new MergePhase();
+                await phase.resolveConflict(task.id, calendar.id, 'remote');
+
+                expect(await Task.findByPk(task.id)).toBeNull();
+                const states = await CalDAVSyncState.count({
+                    where: { task_id: task.id },
+                });
+                expect(states).toBe(0);
+            });
+        });
+
+        describe('remote calendar location and sync token (#227)', () => {
+            const updateRemote = async (body) => {
+                const res = { json: jest.fn() };
+                const next = jest.fn();
+                await remoteCalendarController.updateRemoteCalendar(
+                    {
+                        params: { id: remoteCalendar.id },
+                        currentUser: { id: testUser.id },
+                        body,
+                    },
+                    res,
+                    next
+                );
+                expect(next).not.toHaveBeenCalled();
+            };
+
+            const syncStateCount = () =>
+                CalDAVSyncState.count({ where: { calendar_id: calendar.id } });
+
+            test('pointing the calendar at a new URL resets sync state without deleting tasks', async () => {
+                await remoteCalendar.update({ server_sync_token: 'old' });
+                const first = await syncedTask('moved-1');
+                const second = await syncedTask('moved-2');
+
+                await updateRemote({ server_url: 'https://new.example.com' });
+
+                await remoteCalendar.reload();
+                expect(remoteCalendar.server_url).toBe(
+                    'https://new.example.com'
+                );
+                expect(remoteCalendar.server_sync_token).toBeNull();
+                expect(await syncStateCount()).toBe(0);
+
+                axios.mockResolvedValue({
+                    status: 207,
+                    headers: {},
+                    data: multistatus([]),
+                });
+                const result = await syncEngine.syncCalendar(
+                    calendar.id,
+                    testUser.id,
+                    { direction: 'pull' }
+                );
+
+                expect(result.phases.merge.deleted).toHaveLength(0);
+                expect(await Task.findByPk(first.id)).not.toBeNull();
+                expect(await Task.findByPk(second.id)).not.toBeNull();
+            });
+
+            test('an update that keeps the URL keeps the sync state', async () => {
+                await remoteCalendar.update({ server_sync_token: 'kept' });
+                await syncedTask('unchanged');
+
+                await updateRemote({ name: 'Renamed' });
+
+                await remoteCalendar.reload();
+                expect(remoteCalendar.server_sync_token).toBe('kept');
+                expect(await syncStateCount()).toBe(1);
+            });
+
+            test('a rejected sync token falls back to a full listing', async () => {
+                await remoteCalendar.update({ server_sync_token: 'stale<&>' });
+                const remoteTask = taskResponse('after-reset', 'etag-reset', [
+                    'SUMMARY:After reset',
+                ]);
+
+                axios.mockImplementation((config) => {
+                    if (
+                        config.method === 'REPORT' &&
+                        config.data.includes('sync-collection')
+                    ) {
+                        return Promise.reject({
+                            response: { status: 403 },
+                            message: 'Forbidden',
+                        });
+                    }
+                    if (config.method === 'REPORT') {
+                        return Promise.resolve({
+                            status: 207,
+                            headers: {},
+                            data: multistatus([remoteTask]),
+                        });
+                    }
+                    return Promise.reject(
+                        new Error(`Unexpected ${config.method}`)
+                    );
+                });
+
+                const result = await syncEngine.syncCalendar(
+                    calendar.id,
+                    testUser.id,
+                    { direction: 'pull' }
+                );
+
+                expect(result.success).toBe(true);
+                const reports = requestsBy('REPORT');
+                expect(reports).toHaveLength(2);
+                expect(reports[0][0].data).toContain(
+                    '<D:sync-token>stale&lt;&amp;&gt;</D:sync-token>'
+                );
+                const created = await Task.findOne({
+                    where: { uid: 'after-reset' },
+                });
+                expect(created).not.toBeNull();
+
+                await remoteCalendar.reload();
+                expect(remoteCalendar.server_sync_token).toBeNull();
+            });
+        });
+
+        describe('statuses iCalendar cannot express (#228)', () => {
+            const pullUpdate = async (uid, lines) => {
+                axios.mockResolvedValue({
+                    status: 207,
+                    headers: {},
+                    data: multistatus([
+                        taskResponse(uid, `etag-${uid}-2`, lines),
+                    ]),
+                });
+                const result = await syncEngine.syncCalendar(
+                    calendar.id,
+                    testUser.id,
+                    { direction: 'pull' }
+                );
+                expect(result.success).toBe(true);
+            };
+
+            test.each([
+                ['waiting', 4, 'NEEDS-ACTION'],
+                ['planned', 6, 'NEEDS-ACTION'],
+                ['archived', 3, 'COMPLETED'],
+            ])(
+                'a remote rename keeps a %s task at its status',
+                async (label, status, icalStatus) => {
+                    const task = await syncedTask(`${label}-task`, {
+                        status,
+                    });
+
+                    await pullUpdate(`${label}-task`, [
+                        'SUMMARY:New title',
+                        `STATUS:${icalStatus}`,
+                    ]);
+
+                    await task.reload();
+                    expect(task.name).toBe('New title');
+                    expect(task.status).toBe(status);
+                }
+            );
+
+            test('a real remote status change still applies', async () => {
+                const task = await syncedTask('waiting-started', {
+                    status: 4,
+                });
+
+                await pullUpdate('waiting-started', [
+                    'SUMMARY:waiting-started',
+                    'STATUS:IN-PROCESS',
+                ]);
+
+                await task.reload();
+                expect(task.status).toBe(1);
+            });
         });
     });
 });
