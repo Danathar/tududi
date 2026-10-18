@@ -19,7 +19,10 @@ async function handleCompletionStatus(taskAttributes, status, task) {
         console.log('[handleCompletionStatus] Setting completed_at to NOW');
         taskAttributes.completed_at = new Date();
     } else if (
+        // Archiving a done task keeps its completion date; any other move
+        // away from done reopens it.
         newStatus !== Task.STATUS.DONE &&
+        newStatus !== Task.STATUS.ARCHIVED &&
         oldStatus === Task.STATUS.DONE
     ) {
         console.log('[handleCompletionStatus] Clearing completed_at to NULL');

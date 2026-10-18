@@ -1095,6 +1095,7 @@
     "orUploadOwn": "Ya da kendi afişinizi yükleyin:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "Bu alan gereklidir",
     "invalidEmail": "Geçersiz e-posta adresi",
     "projectCreationFailed": "Proje oluşturulamadı.",
@@ -1481,6 +1482,7 @@
     "unpinFromSidebar": "Yan Menüden Sıkıştırmayı Kaldır"
   },
   "areas": {
+    "toggleDropdownMenu": "Açılır menüyü aç/kapa",
     "title": "Alanlar",
     "noAreasFound": "Hiç alan bulunamadı",
     "editAreaAriaLabel": "Alanı düzenle {{name}}",
@@ -1507,6 +1509,7 @@
     "blankSlateProjects": "Projelere git"
   },
   "notes": {
+    "toggleDropdownMenu": "Açılır menüyü aç/kapa",
     "loading": "Notlar yükleniyor...",
     "error": "Notlar yüklenirken hata",
     "searchPlaceholder": "Notları ara...",

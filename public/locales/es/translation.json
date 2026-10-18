@@ -764,6 +764,7 @@
     "sidebarSectionDescription": "Mostrar la sección {{name}} en la barra lateral."
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "Este campo es obligatorio",
     "invalidEmail": "Por favor, introduce un correo electrónico válido",
     "passwordMismatch": "Las contraseñas no coinciden",
@@ -1414,6 +1415,7 @@
     "attachments": "Adjuntos"
   },
   "areas": {
+    "toggleDropdownMenu": "Alternar menú desplegable",
     "title": "Áreas",
     "noAreasFound": "No se encontraron áreas",
     "editAreaAriaLabel": "Editar área {{name}}",
@@ -1440,6 +1442,7 @@
     "blankSlateProjects": "Ir a proyectos"
   },
   "notes": {
+    "toggleDropdownMenu": "Alternar menú desplegable",
     "loading": "Cargando notas...",
     "error": "Error al cargar notas",
     "searchPlaceholder": "Buscar notas...",

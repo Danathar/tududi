@@ -1360,6 +1360,86 @@ describe('Universal Search Routes', () => {
             });
         });
 
+        describe('Regression: templates and combined filters', () => {
+            it('should not return project templates', async () => {
+                await Project.create({
+                    user_id: user.id,
+                    name: 'Searchable template',
+                    is_template: true,
+                });
+                await Project.create({
+                    user_id: user.id,
+                    name: 'Searchable project',
+                });
+
+                const response = await agent.get('/api/search').query({
+                    q: 'Searchable',
+                    filters: 'Project',
+                });
+
+                expect(response.status).toBe(200);
+                expect(response.body.results.map((r) => r.name)).toEqual([
+                    'Searchable project',
+                ]);
+            });
+
+            it('should apply the text query together with recurring=non_recurring', async () => {
+                await Task.create({
+                    user_id: user.id,
+                    name: 'alpha',
+                    status: 0,
+                });
+                await Task.create({
+                    user_id: user.id,
+                    name: 'beta',
+                    status: 0,
+                });
+                await Task.create({
+                    user_id: user.id,
+                    name: 'alpha recurring',
+                    status: 0,
+                    recurrence_type: 'daily',
+                });
+
+                const response = await agent.get('/api/search').query({
+                    q: 'alpha',
+                    filters: 'Task',
+                    recurring: 'non_recurring',
+                });
+
+                expect(response.status).toBe(200);
+                expect(response.body.results.map((r) => r.name)).toEqual([
+                    'alpha',
+                ]);
+            });
+
+            it('should return all tags of a task filtered by one tag', async () => {
+                const tagA = await Tag.create({ user_id: user.id, name: 'a' });
+                const tagB = await Tag.create({ user_id: user.id, name: 'b' });
+                const tagC = await Tag.create({ user_id: user.id, name: 'c' });
+                const task = await Task.create({
+                    user_id: user.id,
+                    name: 'Multi tagged',
+                    status: 0,
+                });
+                await task.addTag(tagA);
+                await task.addTag(tagB);
+                await task.addTag(tagC);
+
+                const response = await agent.get('/api/search').query({
+                    tags: 'a',
+                    filters: 'Task',
+                });
+
+                expect(response.status).toBe(200);
+                expect(response.body.results.length).toBe(1);
+                const tagNames = response.body.results[0].tags
+                    .map((t) => t.name)
+                    .sort();
+                expect(tagNames).toEqual(['a', 'b', 'c']);
+            });
+        });
+
         describe('Edge Cases', () => {
             it('should handle special characters in search query', async () => {
                 await Task.create({

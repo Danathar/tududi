@@ -1096,6 +1096,7 @@
     "orUploadOwn": "Eller last opp ditt eget:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "Dette feltet er påkrevd",
     "invalidEmail": "Ugyldig e-postadresse",
     "projectCreationFailed": "Kunne ikke opprette prosjekt.",
@@ -1482,6 +1483,7 @@
     "unpinFromSidebar": "Fjern festing fra sidepanelet"
   },
   "areas": {
+    "toggleDropdownMenu": "Veksle nedtrekksmeny",
     "title": "Områder",
     "noAreasFound": "Ingen områder funnet",
     "editAreaAriaLabel": "Rediger område {{name}}",
@@ -1508,6 +1510,7 @@
     "blankSlateProjects": "Gå til prosjekter"
   },
   "notes": {
+    "toggleDropdownMenu": "Veksle nedtrekksmeny",
     "loading": "Laster notater...",
     "error": "Feil ved lasting av notater",
     "searchPlaceholder": "Søk notater...",

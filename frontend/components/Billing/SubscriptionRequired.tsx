@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { CheckIcon } from '@heroicons/react/24/outline';
-import { getApiPath } from '../../config/paths';
+import { getApiPath, getAssetPath } from '../../config/paths';
 import { detachPushForLogout } from '../../utils/pushService';
 import {
     fetchBillingStatus,
@@ -92,7 +92,7 @@ const SubscriptionRequired: React.FC = () => {
                 credentials: 'include',
             });
         } finally {
-            window.location.href = '/login';
+            window.location.href = getAssetPath('login');
         }
     };
 

@@ -124,7 +124,7 @@ class AreasService {
         const updateData = {};
 
         if (name !== undefined) {
-            updateData.name = name;
+            updateData.name = validateName(name);
         }
         if (description !== undefined) {
             updateData.description = description;

@@ -260,6 +260,12 @@ class UsersService {
                 await entitlements.assertFeature(userId, 'telegram');
             }
             allowedUpdates.telegram_bot_token = telegram_bot_token;
+            // The stored chat belongs to the old bot. Keeping it would make
+            // the new bot drop every message until the chat id is cleared.
+            const tokenChanged =
+                (telegram_bot_token || null) !==
+                (user.telegram_bot_token || null);
+            if (tokenChanged) allowedUpdates.telegram_chat_id = null;
         }
         if (telegram_allowed_users !== undefined)
             allowedUpdates.telegram_allowed_users = telegram_allowed_users;
@@ -374,8 +380,8 @@ class UsersService {
 
         if (user.avatar_image) {
             const oldAvatarPath = path.join(
-                __dirname,
-                '../../uploads/avatars',
+                config.uploadPath,
+                'avatars',
                 path.basename(user.avatar_image)
             );
             await safeDeleteFile(oldAvatarPath);
@@ -402,8 +408,8 @@ class UsersService {
 
         if (user.avatar_image) {
             const avatarPath = path.join(
-                __dirname,
-                '../../uploads/avatars',
+                config.uploadPath,
+                'avatars',
                 path.basename(user.avatar_image)
             );
             await safeDeleteFile(avatarPath);

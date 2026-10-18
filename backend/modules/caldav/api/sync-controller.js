@@ -10,7 +10,7 @@ class SyncController {
         try {
             const { id } = req.params;
             const userId = req.currentUser.id;
-            const { direction = 'bidirectional', dryRun = false } = req.body;
+            const { dryRun = false } = req.body;
 
             const calendar = await CalendarRepository.findById(id);
 
@@ -21,6 +21,14 @@ class SyncController {
             if (calendar.user_id !== userId) {
                 throw new AppError('Unauthorized access to calendar', 403);
             }
+
+            // Sync now follows the calendar's own setting, so a pull-only
+            // calendar never pushes. A caller can still ask for one
+            // direction explicitly.
+            const direction =
+                req.body.direction ||
+                calendar.sync_direction ||
+                'bidirectional';
 
             const result = await syncEngine.syncCalendar(calendar.id, userId, {
                 direction,

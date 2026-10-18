@@ -43,6 +43,7 @@ import {
 import TaskAIInsights, { TaskAIInsightsHandle } from '../AI/TaskAIInsights';
 import TaskModal from './TaskModal';
 import { resolveTaskTokens, tokenChanges } from '../../utils/taskTokens';
+import { isDeferAfterDueDay } from '../../utils/dueDateTime';
 import {
     isTaskOverdueInTodayPlan,
     isTaskPastDue,
@@ -375,24 +376,19 @@ const TaskDetails: React.FC = () => {
             return;
         }
 
-        if (task.defer_until && editedDueDate) {
-            const deferDate = new Date(task.defer_until);
-            const dueDate = new Date(editedDueDate);
-
-            if (!isNaN(deferDate.getTime()) && !isNaN(dueDate.getTime())) {
-                // Due dates are date-only; allow defer until any time on the same calendar day
-                const dueDateEndOfDay = new Date(dueDate);
-                dueDateEndOfDay.setUTCHours(23, 59, 59, 999);
-                if (deferDate > dueDateEndOfDay) {
-                    showErrorToast(
-                        t(
-                            'task.dueDateBeforeDeferError',
-                            'Due date cannot be before the defer until date'
-                        )
-                    );
-                    return;
-                }
-            }
+        if (
+            task.defer_until &&
+            editedDueDate &&
+            // Due dates are date-only; allow defer until any time on the same calendar day
+            isDeferAfterDueDay(task.defer_until, editedDueDate)
+        ) {
+            showErrorToast(
+                t(
+                    'task.dueDateBeforeDeferError',
+                    'Due date cannot be before the defer until date'
+                )
+            );
+            return;
         }
 
         if (editedDueDate) {
@@ -467,28 +463,22 @@ const TaskDetails: React.FC = () => {
             return;
         }
 
-        if (editedDeferUntil && task.due_date) {
-            const deferDate = new Date(editedDeferUntil);
-            const dueDate = new Date(task.due_date);
-
-            if (!isNaN(deferDate.getTime()) && !isNaN(dueDate.getTime())) {
-                // For recurring instances, skip strict frontend validation
-                // Backend will validate against parent's recurrence_end_date
-                if (!task.recurring_parent_id) {
-                    // Due dates are date-only; allow any time on the same calendar day
-                    const dueDateEndOfDay = new Date(dueDate);
-                    dueDateEndOfDay.setUTCHours(23, 59, 59, 999);
-                    if (deferDate > dueDateEndOfDay) {
-                        showErrorToast(
-                            t(
-                                'task.deferAfterDueError',
-                                'Defer until date cannot be after the due date'
-                            )
-                        );
-                        return;
-                    }
-                }
-            }
+        // For recurring instances, skip strict frontend validation
+        // Backend will validate against parent's recurrence_end_date
+        if (
+            editedDeferUntil &&
+            task.due_date &&
+            !task.recurring_parent_id &&
+            // Due dates are date-only; allow any time on the same calendar day
+            isDeferAfterDueDay(editedDeferUntil, task.due_date)
+        ) {
+            showErrorToast(
+                t(
+                    'task.deferAfterDueError',
+                    'Defer until date cannot be after the due date'
+                )
+            );
+            return;
         }
 
         try {
