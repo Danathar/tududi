@@ -1440,6 +1440,159 @@ describe('Universal Search Routes', () => {
             });
         });
 
+        describe('Parameter validation and LIKE escaping', () => {
+            beforeEach(async () => {
+                await Task.create({
+                    user_id: user.id,
+                    name: 'Plain task',
+                    note: 'nothing special',
+                    status: 0,
+                });
+                await Task.create({
+                    user_id: user.id,
+                    name: '100% done',
+                    status: 0,
+                });
+                await Task.create({
+                    user_id: user.id,
+                    name: 'snake_case name',
+                    status: 0,
+                });
+                await Task.create({
+                    user_id: user.id,
+                    name: 'snakeXcase name',
+                    status: 0,
+                });
+                await Task.create({
+                    user_id: user.id,
+                    name: 'Wow! exclaim',
+                    status: 0,
+                });
+            });
+
+            const taskNames = (response) =>
+                response.body.results
+                    .filter((r) => r.type === 'Task')
+                    .map((r) => r.name)
+                    .sort();
+
+            it('should return 400 for a list-valued q', async () => {
+                const response = await agent.get('/api/search?q[]=a');
+                expect(response.status).toBe(400);
+            });
+
+            it('should return 400 for a repeated q param', async () => {
+                const response = await agent.get('/api/search?q=a&q=b');
+                expect(response.status).toBe(400);
+            });
+
+            it('should return 400 for a list-valued filters', async () => {
+                const response = await agent.get('/api/search?filters[]=Task');
+                expect(response.status).toBe(400);
+            });
+
+            it('should return 400 for a list-valued tags', async () => {
+                const response = await agent.get('/api/search?tags[]=a');
+                expect(response.status).toBe(400);
+            });
+
+            it('should return 400 for a negative limit', async () => {
+                const response = await agent.get('/api/search?limit=-1');
+                expect(response.status).toBe(400);
+            });
+
+            it('should return 400 for a zero limit', async () => {
+                const response = await agent.get('/api/search?limit=0');
+                expect(response.status).toBe(400);
+            });
+
+            it('should return 400 for a non-numeric limit', async () => {
+                const response = await agent.get('/api/search?limit=abc');
+                expect(response.status).toBe(400);
+            });
+
+            it('should return 400 for a list-valued limit', async () => {
+                const response = await agent.get('/api/search?limit[]=5');
+                expect(response.status).toBe(400);
+            });
+
+            it('should return 400 for a negative offset', async () => {
+                const response = await agent.get('/api/search?offset=-5');
+                expect(response.status).toBe(400);
+            });
+
+            it('should clamp an oversized limit to the maximum', async () => {
+                const response = await agent
+                    .get('/api/search')
+                    .query({ filters: 'Task', limit: '100000' });
+                expect(response.status).toBe(200);
+                expect(response.body.pagination.limit).toBe(100);
+            });
+
+            it('should treat % in the query as a literal character', async () => {
+                const response = await agent
+                    .get('/api/search')
+                    .query({ q: '%', filters: 'Task' });
+                expect(response.status).toBe(200);
+                expect(taskNames(response)).toEqual(['100% done']);
+            });
+
+            it('should treat _ in the query as a literal character', async () => {
+                const response = await agent
+                    .get('/api/search')
+                    .query({ q: 'snake_case', filters: 'Task' });
+                expect(response.status).toBe(200);
+                expect(taskNames(response)).toEqual(['snake_case name']);
+            });
+
+            it('should match the escape character literally', async () => {
+                const response = await agent
+                    .get('/api/search')
+                    .query({ q: 'wow!', filters: 'Task' });
+                expect(response.status).toBe(200);
+                expect(taskNames(response)).toEqual(['Wow! exclaim']);
+            });
+
+            it('should match a backslash literally without error', async () => {
+                const response = await agent
+                    .get('/api/search')
+                    .query({ q: 'a\\b', filters: 'Task' });
+                expect(response.status).toBe(200);
+                expect(taskNames(response)).toEqual([]);
+            });
+
+            it('should escape wildcards for projects, areas, notes and tags', async () => {
+                await Project.create({
+                    user_id: user.id,
+                    name: '50% project',
+                    state: 'active',
+                });
+                await Project.create({
+                    user_id: user.id,
+                    name: 'Other project',
+                    state: 'active',
+                });
+                await Area.create({ user_id: user.id, name: '50% area' });
+                await Area.create({ user_id: user.id, name: 'Other area' });
+                await Note.create({ user_id: user.id, title: '50% note' });
+                await Note.create({ user_id: user.id, title: 'Other note' });
+                await Tag.create({ user_id: user.id, name: '50% tag' });
+                await Tag.create({ user_id: user.id, name: 'Other tag' });
+
+                const response = await agent
+                    .get('/api/search')
+                    .query({ q: '50%' });
+                expect(response.status).toBe(200);
+                const names = response.body.results.map((r) => r.name).sort();
+                expect(names).toEqual([
+                    '50% area',
+                    '50% note',
+                    '50% project',
+                    '50% tag',
+                ]);
+            });
+        });
+
         describe('Edge Cases', () => {
             it('should handle special characters in search query', async () => {
                 await Task.create({
