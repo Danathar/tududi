@@ -69,6 +69,39 @@ describe('AI Assistant - resolveAIConfig precedence', () => {
         expect(resolved.baseUrlSource).toBe('env');
     });
 
+    it("never pairs the operator's env key with a user-set base URL", async () => {
+        const user = await createTestUser({
+            email: 'resolve-user-url@example.com',
+            ai_base_url: 'https://user.example.com/v1',
+        });
+
+        const resolved = await aiAssistantService.resolveAIConfig(user.id);
+
+        expect(resolved.apiKey).toBeNull();
+        expect(resolved.apiKeySource).toBeNull();
+        expect(resolved.baseURL).toBe('https://user.example.com/v1');
+        expect(resolved.baseUrlSource).toBe('user');
+        expect(await aiAssistantService.isAIConfigured(user.id)).toBe(false);
+        await expect(
+            aiAssistantService.getOpenAIClient(user.id)
+        ).rejects.toMatchObject({ code: 'AI_NOT_CONFIGURED' });
+    });
+
+    it("uses the user's own key with their own base URL", async () => {
+        const user = await createTestUser({
+            email: 'resolve-user-url-key@example.com',
+            ai_api_key: secretCipher.encrypt('user-key'),
+            ai_base_url: 'https://user.example.com/v1',
+        });
+
+        const resolved = await aiAssistantService.resolveAIConfig(user.id);
+
+        expect(resolved.apiKey).toBe('user-key');
+        expect(resolved.apiKeySource).toBe('user');
+        expect(resolved.baseURL).toBe('https://user.example.com/v1');
+        expect(resolved.baseUrlSource).toBe('user');
+    });
+
     it('resolves to defaults only with no user context and no env vars', async () => {
         delete process.env.LLM_API_KEY;
         delete process.env.LLM_BASE_URL;

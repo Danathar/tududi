@@ -58,9 +58,15 @@ async function resolveAIConfig(userId) {
     const envBaseUrl = process.env.LLM_BASE_URL || process.env.OPENAI_BASE_URL;
     const envModel = process.env.LLM_MODEL || process.env.TUDUDI_AI_MODEL;
 
+    // The operator's own key is only ever sent to the operator's own
+    // endpoint. A user who points the assistant at their own base URL must
+    // also bring their own key; otherwise any account could set a base URL
+    // it controls and collect LLM_API_KEY from the Authorization header.
+    const fallbackApiKey = dbBaseUrl ? null : envApiKey;
+
     return {
-        apiKey: dbApiKey || envApiKey || null,
-        apiKeySource: dbApiKey ? 'user' : envApiKey ? 'env' : null,
+        apiKey: dbApiKey || fallbackApiKey || null,
+        apiKeySource: dbApiKey ? 'user' : fallbackApiKey ? 'env' : null,
         baseURL: dbBaseUrl || envBaseUrl || null,
         baseUrlSource: dbBaseUrl ? 'user' : envBaseUrl ? 'env' : null,
         model: dbModel || envModel || 'gpt-4o-mini',
