@@ -99,6 +99,19 @@ describe('Habits Routes', () => {
         ).toBe(1);
     });
 
+    it('records one check-in when a simple daily habit is checked in at once', async () => {
+        const habit = await create({ name: 'Stretch' });
+        const responses = await Promise.all(
+            Array.from({ length: 5 }, () =>
+                agent.post(`/api/habits/${habit.uid}/complete`).send({})
+            )
+        );
+        responses.forEach((res) => expect(res.status).toBe(200));
+        expect(
+            await RecurringCompletion.count({ where: { task_id: habit.id } })
+        ).toBe(1);
+    });
+
     it('records amounts and notes for a measurable habit', async () => {
         const habit = await create({
             name: 'Pages',

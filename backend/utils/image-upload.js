@@ -22,8 +22,22 @@ const randomUploadName = (prefix, mimetype) =>
         IMAGE_MIME_EXTENSIONS[mimetype] || ''
     }`;
 
+// A project's image_url is free text: the owner can set it to anything. Only
+// the exact form an upload produces names a file of ours, so only that form is
+// ever deleted from disk. Another folder, `../`, a query string or an outside
+// URL gives null.
+const PROJECT_COVER_URL = /^\/api\/uploads\/projects\/([A-Za-z0-9._-]+)$/;
+
+const projectCoverFilename = (imageUrl) => {
+    if (typeof imageUrl !== 'string') return null;
+    const match = PROJECT_COVER_URL.exec(imageUrl);
+    if (!match || match[1] === '.' || match[1] === '..') return null;
+    return match[1];
+};
+
 module.exports = {
     IMAGE_MIME_EXTENSIONS,
     imageFileFilter,
     randomUploadName,
+    projectCoverFilename,
 };

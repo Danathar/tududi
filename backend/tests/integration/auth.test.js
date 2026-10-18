@@ -1,6 +1,6 @@
 const request = require('supertest');
 const app = require('../../app');
-require('../../models');
+const { User } = require('../../models');
 const { createTestUser } = require('../helpers/testUtils');
 
 describe('Auth Routes', () => {
@@ -80,6 +80,54 @@ describe('Auth Routes', () => {
 
             expect(response.status).toBe(401);
             expect(response.body.errors).toEqual(['Invalid credentials']);
+        });
+
+        it('answers a passwordless account like an unknown email', async () => {
+            await User.create({
+                email: 'nopw@example.com',
+                password_digest: null,
+            });
+
+            const response = await request(app).post('/api/login').send({
+                email: 'nopw@example.com',
+                password: 'whatever12',
+            });
+
+            expect(response.status).toBe(401);
+            expect(response.body.errors).toEqual(['Invalid credentials']);
+        });
+
+        it('issues a new session id at sign-in, so a planted one is never signed in', async () => {
+            const sessionCookie = (response) =>
+                (response.headers['set-cookie'] || [])
+                    .map((c) => c.split(';')[0])
+                    .find((c) => c.startsWith('connect.sid='));
+
+            const before = await request(app).get('/api/csrf-token');
+            const planted = sessionCookie(before);
+            expect(planted).toBeDefined();
+
+            const login = await request(app)
+                .post('/api/login')
+                .set('Cookie', planted)
+                .send({
+                    email: 'test@example.com',
+                    password: 'password123',
+                });
+            expect(login.status).toBe(200);
+            const issued = sessionCookie(login);
+            expect(issued).toBeDefined();
+            expect(issued).not.toBe(planted);
+
+            const withPlanted = await request(app)
+                .get('/api/profile')
+                .set('Cookie', planted);
+            expect(withPlanted.status).toBe(401);
+
+            const withIssued = await request(app)
+                .get('/api/profile')
+                .set('Cookie', issued);
+            expect(withIssued.status).toBe(200);
         });
     });
 

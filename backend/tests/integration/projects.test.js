@@ -1,6 +1,9 @@
 const request = require('supertest');
+const path = require('path');
+const fs = require('fs');
 const app = require('../../app');
 const { Project, User, Area, Task, Note } = require('../../models');
+const { getConfig } = require('../../config/config');
 const { createTestUser } = require('../helpers/testUtils');
 
 describe('Projects Routes', () => {
@@ -366,6 +369,69 @@ describe('Projects Routes', () => {
             // Verify project is deleted
             const deletedProject = await Project.findByPk(project.id);
             expect(deletedProject).toBeNull();
+        });
+
+        describe('cover image file', () => {
+            const uploadPath = getConfig().uploadPath;
+            const writeUpload = (dir, name) => {
+                fs.mkdirSync(path.join(uploadPath, dir), { recursive: true });
+                const file = path.join(uploadPath, dir, name);
+                fs.writeFileSync(file, 'x');
+                return file;
+            };
+
+            it('deletes the cover when no other project uses it', async () => {
+                const name = `project-own-${Date.now()}.png`;
+                const file = writeUpload('projects', name);
+                await project.update({
+                    image_url: `/api/uploads/projects/${name}`,
+                });
+
+                const response = await agent.delete(
+                    `/api/project/${project.uid}`
+                );
+
+                expect(response.status).toBe(200);
+                expect(fs.existsSync(file)).toBe(false);
+            });
+
+            it('keeps a cover another user’s project still shows', async () => {
+                const name = `project-theirs-${Date.now()}.png`;
+                const file = writeUpload('projects', name);
+                const otherUser = await createTestUser({
+                    email: 'cover-owner@example.com',
+                });
+                await Project.create({
+                    name: 'Their Project',
+                    user_id: otherUser.id,
+                    image_url: `/api/uploads/projects/${name}`,
+                });
+                await project.update({
+                    image_url: `/api/uploads/projects/${name}`,
+                });
+
+                const response = await agent.delete(
+                    `/api/project/${project.uid}`
+                );
+
+                expect(response.status).toBe(200);
+                expect(fs.existsSync(file)).toBe(true);
+            });
+
+            it('never deletes a file outside the project covers folder', async () => {
+                const name = `${Date.now()}-someone-elses-attachment.pdf`;
+                const file = writeUpload('tasks', name);
+                await project.update({
+                    image_url: `/api/uploads/projects/../tasks/${name}`,
+                });
+
+                const response = await agent.delete(
+                    `/api/project/${project.uid}`
+                );
+
+                expect(response.status).toBe(200);
+                expect(fs.existsSync(file)).toBe(true);
+            });
         });
 
         it('should return 404 for non-existent project', async () => {

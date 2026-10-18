@@ -99,7 +99,16 @@ async function getEveryoneDashboard(userId, timezone) {
         ...Object.keys(personUidAlias),
     ];
     if (assigneeUids.length > 0) {
-        orConditions.push({ assigned_to: { [Op.in]: assigneeUids } });
+        // Assignment alone does not grant read access: a collaborator's
+        // private task assigned to themselves must stay hidden, as on the
+        // group board.
+        const readable = await permissionsService.ownershipOrPermissionWhere(
+            'task',
+            userId
+        );
+        orConditions.push({
+            [Op.and]: [{ assigned_to: { [Op.in]: assigneeUids } }, readable],
+        });
     }
 
     let tasks = [];
