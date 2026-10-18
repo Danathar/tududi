@@ -19,8 +19,15 @@ async function setTagsAndTouch(task, tags) {
     }
 }
 
-async function updateTaskTags(task, tagsData, userId) {
-    if (!tagsData) return;
+// Checks the shape and names of a tags payload without touching the
+// database, and returns the distinct valid names. Routes call it before they
+// write the task, so a bad payload is refused with nothing saved (#245).
+function validateTagsInput(tagsData) {
+    if (!tagsData) return [];
+
+    if (!Array.isArray(tagsData)) {
+        throw new Error('Tags must be an array of tag names.');
+    }
 
     const normalizedTags = tagsData.map((tag) =>
         typeof tag === 'string' ? { name: tag } : tag
@@ -30,6 +37,13 @@ async function updateTaskTags(task, tagsData, userId) {
     const invalidTags = [];
 
     for (const tag of normalizedTags) {
+        if (!tag || typeof tag.name !== 'string') {
+            invalidTags.push({
+                name: tag && tag.name !== undefined ? tag.name : tag,
+                error: 'Tag name must be a string',
+            });
+            continue;
+        }
         const validation = validateTagName(tag.name);
         if (validation.valid) {
             if (!validTagNames.includes(validation.name)) {
@@ -45,6 +59,14 @@ async function updateTaskTags(task, tagsData, userId) {
             `Invalid tag names: ${invalidTags.map((t) => `"${t.name}" (${t.error})`).join(', ')}`
         );
     }
+
+    return validTagNames;
+}
+
+async function updateTaskTags(task, tagsData, userId) {
+    if (!tagsData) return;
+
+    const validTagNames = validateTagsInput(tagsData);
 
     if (validTagNames.length === 0) {
         await setTagsAndTouch(task, []);
@@ -69,5 +91,6 @@ async function updateTaskTags(task, tagsData, userId) {
 }
 
 module.exports = {
+    validateTagsInput,
     updateTaskTags,
 };

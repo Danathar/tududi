@@ -1095,6 +1095,7 @@
     "orUploadOwn": "Tai lataa oma:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "Tämä kenttä on pakollinen",
     "invalidEmail": "Virheellinen sähköpostiosoite",
     "projectCreationFailed": "Projektin luominen epäonnistui.",
@@ -1481,6 +1482,7 @@
     "unpinFromSidebar": "Poista kiinnitys sivupalkista"
   },
   "areas": {
+    "toggleDropdownMenu": "Vaihda avattavaa valikkoa",
     "title": "Alueet",
     "noAreasFound": "Alueita ei löytynyt",
     "editAreaAriaLabel": "Muokkaa aluetta {{name}}",
@@ -1507,6 +1509,7 @@
     "blankSlateProjects": "Siirry projekteihin"
   },
   "notes": {
+    "toggleDropdownMenu": "Vaihda avattavaa valikkoa",
     "loading": "Ladataan muistiinpanoja...",
     "error": "Virhe muistiinpanojen lataamisessa",
     "searchPlaceholder": "Etsi muistiinpanoja...",

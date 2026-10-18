@@ -177,7 +177,9 @@ describe('VTODO Serializer', () => {
             ],
         };
         const vtodoString = await serializeTaskToVTODO(task);
-        expect(vtodoString).toContain('CATEGORIES:work\\,urgent');
+        // #232: one value per tag, not one escaped string.
+        expect(vtodoString).toContain('CATEGORIES:work,urgent');
+        expect(vtodoString).not.toContain('CATEGORIES:work\\,urgent');
         expect(vtodoString).toContain('X-TUDUDI-TAG-UIDS:tag-1,tag-2');
     });
 

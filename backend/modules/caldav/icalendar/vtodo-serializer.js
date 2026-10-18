@@ -122,8 +122,11 @@ function serializeTaskToVTODO(task, options = {}) {
     }
 
     if (task.Tags && task.Tags.length > 0) {
-        const tagNames = task.Tags.map((t) => t.name).join(',');
-        vtodo.addPropertyWithValue('categories', tagNames);
+        // One value per tag. Joining the names into one string makes ical.js
+        // escape the commas, and clients then read a single category.
+        const categories = new ICAL.Property('categories');
+        categories.setValues(task.Tags.map((t) => t.name));
+        vtodo.addProperty(categories);
 
         const tagUids = task.Tags.map((t) => t.uid).join(',');
         vtodo.addPropertyWithValue('x-tududi-tag-uids', tagUids);

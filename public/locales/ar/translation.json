@@ -1095,6 +1095,7 @@
     "orUploadOwn": "أو قم بتحميل لافتتك الخاصة:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "هذا الحقل مطلوب",
     "invalidEmail": "عنوان البريد الإلكتروني غير صالح",
     "projectCreationFailed": "فشل في إنشاء المشروع.",
@@ -1481,6 +1482,7 @@
     "unpinFromSidebar": "إلغاء تثبيت من الشريط الجانبي"
   },
   "areas": {
+    "toggleDropdownMenu": "تبديل قائمة السحب",
     "title": "المناطق",
     "noAreasFound": "لم يتم العثور على مناطق",
     "editAreaAriaLabel": "تعديل المنطقة {{name}}",
@@ -1507,6 +1509,7 @@
     "blankSlateProjects": "الانتقال إلى المشاريع"
   },
   "notes": {
+    "toggleDropdownMenu": "تبديل قائمة السحب",
     "loading": "جارٍ تحميل الملاحظات...",
     "error": "خطأ في تحميل الملاحظات",
     "searchPlaceholder": "ابحث في الملاحظات...",

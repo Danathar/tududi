@@ -4,6 +4,7 @@ import {
     broadcastPlanLimit,
 } from './planLimits';
 import { getCsrfToken } from './csrfService';
+import { getAssetPath } from '../config/paths';
 
 export const getDefaultHeaders = (): Record<string, string> => {
     return {
@@ -58,10 +59,13 @@ export const handleAuthResponse = async (
     }
     if (!response.ok) {
         if (response.status === 401) {
-            if (window.location.pathname !== '/login' && !isRedirecting) {
+            if (
+                window.location.pathname !== getAssetPath('login') &&
+                !isRedirecting
+            ) {
                 isRedirecting = true;
                 setTimeout(() => {
-                    window.location.href = '/login';
+                    window.location.href = getAssetPath('login');
                 }, 100);
             }
             throw new Error('Authentication required');
@@ -81,12 +85,15 @@ export const handleAuthResponse = async (
             // browser goes to the page that sells one.
             if (detail.code === 'SUBSCRIPTION_REQUIRED') {
                 if (
-                    window.location.pathname !== '/subscription/new' &&
+                    window.location.pathname !==
+                        getAssetPath('subscription/new') &&
                     !isRedirecting
                 ) {
                     isRedirecting = true;
                     setTimeout(() => {
-                        window.location.href = '/subscription/new';
+                        window.location.href = getAssetPath(
+                            'subscription/new'
+                        );
                     }, 100);
                 }
                 throw new PlanLimitError(detail);

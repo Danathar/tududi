@@ -37,6 +37,7 @@ describe('POST /api/inbox/analyze-text: ~area', () => {
             .body;
         await ownerAgent.post('/api/areas').send({ name: 'Home Office' });
         await otherAgent.post('/api/areas').send({ name: 'Secret' });
+        await ownerAgent.post('/api/areas').send({ name: 'Écoles' });
     });
 
     afterAll(async () => {
@@ -52,6 +53,13 @@ describe('POST /api/inbox/analyze-text: ~area', () => {
             name: 'work',
         });
         expect(response.body.cleaned_content).toBe('Prepare offsite');
+    });
+
+    it('matches a non-ASCII area name ignoring case', async () => {
+        const response = await analyze('visit ~écoles tomorrow');
+
+        expect(response.body.parsed_area.uid).not.toBeNull();
+        expect(response.body.parsed_area.name).toBe('écoles');
     });
 
     it('resolves a quoted name with spaces', async () => {

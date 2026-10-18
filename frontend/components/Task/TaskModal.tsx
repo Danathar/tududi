@@ -7,6 +7,7 @@ import { useToast } from '../Shared/ToastContext';
 import TagInput from '../Tag/TagInput';
 import QuickCaptureInput from '../Inbox/QuickCaptureInput';
 import { resolveTaskTokens } from '../../utils/taskTokens';
+import { InboxRecurrence } from '../../utils/inboxService';
 import PriorityDropdown from '../Shared/PriorityDropdown';
 import AreaDropdown from '../Shared/AreaDropdown';
 import DateTimePicker from '../Shared/DateTimePicker';
@@ -64,6 +65,9 @@ interface TaskFormState {
     dueDate: string;
     dueTime: string;
     tags: string[];
+    // Set only by a recurrence phrase typed into the name ("every monday");
+    // the recurrence fields themselves are edited on the task page.
+    recurrence: InboxRecurrence | null;
 }
 
 const toFormState = (task: Task): TaskFormState => ({
@@ -76,6 +80,7 @@ const toFormState = (task: Task): TaskFormState => ({
     dueDate: task.due_date ? String(task.due_date).split('T')[0] : '',
     dueTime: task.due_has_time ? (task.due_time ?? '') : '',
     tags: task.tags?.map((tag) => tag.name) ?? [],
+    recurrence: null,
 });
 
 // Edits the core fields of a task in the side panel. Recurrence, relations,
@@ -140,7 +145,11 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task }) => {
         const next = { ...current, name: resolved.name, tags: resolved.tags };
         if (resolved.projectId !== null) next.projectId = resolved.projectId;
         if (resolved.areaId !== null) next.areaId = resolved.areaId;
-        if (resolved.dueDate) next.dueDate = resolved.dueDate;
+        if (resolved.dueDate) {
+            next.dueDate = resolved.dueDate;
+            if (resolved.dueTime) next.dueTime = resolved.dueTime;
+        }
+        if (resolved.recurrence) next.recurrence = resolved.recurrence;
         return next;
     };
 
@@ -171,6 +180,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task }) => {
             changes.due_time =
                 form.dueDate && form.dueTime ? form.dueTime : null;
         }
+        if (form.recurrence) Object.assign(changes, form.recurrence);
         if (JSON.stringify(form.tags) !== JSON.stringify(original.tags)) {
             const existing = tagsStore.tags?.map((tag: any) => tag.name) ?? [];
             const newNames = form.tags.filter(

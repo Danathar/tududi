@@ -35,18 +35,33 @@ class BillingRepository {
         });
     }
 
-    // Returns null when the event was seen before (unique violation).
+    // Returns { record, duplicate }. `duplicate` is true only when the event was
+    // already handled (processed or skipped). A row left `failed` or `received`
+    // by an earlier attempt is handed back for processing again, because the
+    // provider redelivers the same event id after a 500.
     async recordEvent(providerEventId, type) {
         try {
-            return await BillingEvent.create({
+            const record = await BillingEvent.create({
                 provider_event_id: providerEventId,
                 type,
                 status: 'received',
             });
+            return { record, duplicate: false };
         } catch (error) {
-            if (error.name === 'SequelizeUniqueConstraintError') return null;
-            throw error;
+            if (error.name !== 'SequelizeUniqueConstraintError') throw error;
         }
+        const existing = await BillingEvent.findOne({
+            where: { provider_event_id: providerEventId },
+        });
+        if (!existing) {
+            // Row vanished between the insert and the lookup; try again.
+            return this.recordEvent(providerEventId, type);
+        }
+        if (existing.status === 'processed' || existing.status === 'skipped') {
+            return { record: existing, duplicate: true };
+        }
+        await existing.update({ status: 'received', error: null });
+        return { record: existing, duplicate: false };
     }
 
     // Accounts whose trial is still running: not paying and not comped.

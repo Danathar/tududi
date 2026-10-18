@@ -105,6 +105,22 @@ describe('Projects Routes', () => {
             );
         });
 
+        it('should not list project templates', async () => {
+            await Project.create({
+                name: 'Template project',
+                user_id: user.id,
+                is_template: true,
+            });
+
+            const response = await agent.get('/api/projects');
+
+            expect(response.status).toBe(200);
+            expect(response.body.projects.length).toBe(2);
+            expect(response.body.projects.map((p) => p.name)).not.toContain(
+                'Template project'
+            );
+        });
+
         it('should include area information', async () => {
             const response = await agent.get('/api/projects');
 

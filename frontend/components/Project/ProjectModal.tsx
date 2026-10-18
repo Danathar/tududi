@@ -190,7 +190,9 @@ const ProjectModal: React.FC<ProjectModalProps> = ({
                 onClose();
             } catch (err) {
                 console.error('Error deleting project:', err);
-                showErrorToast(t('errors.failedToDeleteProject'));
+                showErrorToast(
+                    t('errors.failedToDeleteProject', 'Failed to delete project.')
+                );
             }
         }
     };

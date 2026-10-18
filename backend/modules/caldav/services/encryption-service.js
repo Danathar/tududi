@@ -21,7 +21,19 @@ function getEncryptionKey() {
         );
     }
 
-    return Buffer.from(key, 'utf-8').slice(0, 32);
+    const raw = Buffer.from(key, 'utf-8');
+
+    // AES-256 needs exactly 32 bytes. A key of 32 bytes or more keeps being
+    // truncated, as before, so passwords already stored under it still
+    // decrypt. A shorter key (the .env.example placeholder is 27 bytes) used
+    // to make every encrypt fail with "Invalid key length"; it is stretched
+    // with SHA-256 instead. Nothing could have been stored under a short key,
+    // so no existing ciphertext is affected.
+    if (raw.length < 32) {
+        return crypto.createHash('sha256').update(raw).digest();
+    }
+
+    return raw.slice(0, 32);
 }
 
 function encrypt(text) {

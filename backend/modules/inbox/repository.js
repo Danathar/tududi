@@ -1,6 +1,6 @@
 'use strict';
 
-const { Op, fn, col, where } = require('sequelize');
+const { Op } = require('sequelize');
 const { Area, InboxItem, Project } = require('../../models');
 const {
     getAccess,
@@ -84,36 +84,36 @@ class InboxRepository extends BaseRepository {
     }
 
     // A project the user owns or has been shared, matched by name the way
-    // the +project token matches it (case-insensitive).
+    // the +project token matches it (case-insensitive). Names are compared
+    // in JS because SQLite lower() only lowercases ASCII letters.
     async findAccessibleProjectUidByName(userId, name) {
         const accessWhere = await ownershipOrPermissionWhere('project', userId);
-        const project = await Project.findOne({
-            where: {
-                [Op.and]: [
-                    accessWhere,
-                    where(fn('lower', col('name')), name.toLowerCase()),
-                ],
-            },
-            attributes: ['uid'],
+        const projects = await Project.findAll({
+            where: { [Op.and]: [accessWhere] },
+            attributes: ['uid', 'name'],
             raw: true,
         });
+        const wanted = name.toLowerCase();
+        const project = projects.find(
+            (candidate) => candidate.name?.toLowerCase() === wanted
+        );
         return project ? project.uid : null;
     }
 
     // An area the user can add tasks to (own or shared read-write), matched
-    // by name the way the ~area token matches it (case-insensitive).
+    // by name the way the ~area token matches it (case-insensitive). Names
+    // are compared in JS because SQLite lower() only lowercases ASCII.
     async findWritableAreaByName(userId, name) {
         const accessWhere = await ownershipOrPermissionWhere('area', userId);
-        const areas = await Area.findAll({
-            where: {
-                [Op.and]: [
-                    accessWhere,
-                    where(fn('lower', col('name')), name.toLowerCase()),
-                ],
-            },
+        const candidates = await Area.findAll({
+            where: { [Op.and]: [accessWhere] },
             attributes: ['uid', 'name'],
             raw: true,
         });
+        const wanted = name.toLowerCase();
+        const areas = candidates.filter(
+            (candidate) => candidate.name?.toLowerCase() === wanted
+        );
         for (const area of areas) {
             const access = await getAccess(userId, 'area', area.uid);
             if (access === 'rw' || access === 'admin') {

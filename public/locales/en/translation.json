@@ -1183,6 +1183,7 @@
     "fewerFiles": "Show fewer"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "This field is required",
     "invalidEmail": "Invalid email address",
     "projectCreationFailed": "Failed to create project.",
@@ -1590,6 +1591,7 @@
     "unpinFromSidebar": "Unpin from sidebar"
   },
   "areas": {
+    "toggleDropdownMenu": "Toggle dropdown menu",
     "title": "Areas",
     "noAreasFound": "No areas found",
     "new": "New Area",
@@ -1621,6 +1623,7 @@
     "presetFamily": "Family"
   },
   "notes": {
+    "toggleDropdownMenu": "Toggle dropdown menu",
     "addNote": "Add Note",
     "backgroundImage": "Background",
     "noBackground": "No background",

@@ -42,6 +42,40 @@ describe('Tasks Routes', () => {
             expect(response.body.user_id).toBe(user.id);
         });
 
+        it('should set completed_at when a task is created as done (#243)', async () => {
+            const response = await agent
+                .post('/api/task')
+                .send({ name: 'born-done', status: Task.STATUS.DONE });
+
+            expect(response.status).toBe(201);
+            expect(response.body.completed_at).not.toBeNull();
+
+            const saved = await Task.findByPk(response.body.id);
+            expect(saved.completed_at).not.toBeNull();
+        });
+
+        it('should save nothing when the tags payload is invalid (#245)', async () => {
+            const response = await agent
+                .post('/api/task')
+                .send({ name: 'partial-create', tags: 'abc' });
+
+            expect(response.status).toBe(400);
+            expect(
+                await Task.count({ where: { name: 'partial-create' } })
+            ).toBe(0);
+        });
+
+        it('should save nothing when a subtask entry is invalid (#245)', async () => {
+            const response = await agent
+                .post('/api/task')
+                .send({ name: 'partial-subtasks', subtasks: [null] });
+
+            expect(response.status).toBe(400);
+            expect(
+                await Task.count({ where: { name: 'partial-subtasks' } })
+            ).toBe(0);
+        });
+
         it('should accept description as an alias for note', async () => {
             const response = await agent
                 .post('/api/task')
@@ -175,6 +209,16 @@ describe('Tasks Routes', () => {
             expect(single.body.Project.Area.name).toBe('Work');
         });
 
+        it('should return an empty page for a tag with no tasks (#242)', async () => {
+            const response = await agent.get(
+                '/api/tasks?type=all&tag=nonexistent&limit=10'
+            );
+
+            expect(response.status).toBe(200);
+            expect(response.body.tasks).toEqual([]);
+            expect(response.body.pagination.total).toBe(0);
+        });
+
         it('should require authentication', async () => {
             const response = await request(app).get('/api/tasks');
 
@@ -305,6 +349,92 @@ describe('Tasks Routes', () => {
         });
     });
 
+    describe('PATCH /api/task/:id parent and status edge cases', () => {
+        it('should refuse to make a task its own parent (#241)', async () => {
+            const task = await Task.create({ name: 't', user_id: user.id });
+
+            const response = await agent
+                .patch(`/api/task/${task.uid}`)
+                .send({ parent_task_id: task.id });
+
+            expect(response.status).toBe(400);
+            await task.reload();
+            expect(task.parent_task_id).toBeNull();
+        });
+
+        it('should refuse to make a task a child of its own subtask (#241)', async () => {
+            const task = await Task.create({ name: 't', user_id: user.id });
+            const subtask = await Task.create({
+                name: 's',
+                user_id: user.id,
+                parent_task_id: task.id,
+            });
+            const grandchild = await Task.create({
+                name: 'g',
+                user_id: user.id,
+                parent_task_id: subtask.id,
+            });
+
+            for (const parent of [subtask, grandchild]) {
+                const response = await agent
+                    .patch(`/api/task/${task.uid}`)
+                    .send({ parent_task_id: parent.id });
+
+                expect(response.status).toBe(400);
+            }
+
+            await task.reload();
+            expect(task.parent_task_id).toBeNull();
+        });
+
+        it('should still allow moving a task under an unrelated task (#241)', async () => {
+            const task = await Task.create({ name: 't', user_id: user.id });
+            const other = await Task.create({ name: 'o', user_id: user.id });
+
+            const response = await agent
+                .patch(`/api/task/${task.uid}`)
+                .send({ parent_task_id: other.id });
+
+            expect(response.status).toBe(200);
+            await task.reload();
+            expect(task.parent_task_id).toBe(other.id);
+        });
+
+        it('should keep completed_at when a done task is archived (#243)', async () => {
+            const task = await Task.create({ name: 'arch', user_id: user.id });
+
+            const done = await agent
+                .patch(`/api/task/${task.uid}`)
+                .send({ status: Task.STATUS.DONE });
+            expect(done.status).toBe(200);
+            expect(done.body.completed_at).not.toBeNull();
+
+            const archived = await agent
+                .patch(`/api/task/${task.uid}`)
+                .send({ status: Task.STATUS.ARCHIVED });
+            expect(archived.status).toBe(200);
+            expect(archived.body.completed_at).not.toBeNull();
+
+            await task.reload();
+            expect(task.completed_at).not.toBeNull();
+        });
+
+        it('should leave the task unchanged when the tags payload is invalid (#245)', async () => {
+            const task = await Task.create({
+                name: 'original',
+                user_id: user.id,
+            });
+
+            const response = await agent
+                .patch(`/api/task/${task.uid}`)
+                .send({ name: 'renamed', tags: 'abc' });
+
+            expect(response.status).toBe(400);
+            await task.reload();
+            expect(task.name).toBe('original');
+        });
+    });
+
     describe('DELETE /api/task/:id', () => {
         let task;
 
@@ -325,6 +455,26 @@ describe('Tasks Routes', () => {
             const deletedTask = await Task.findByPk(task.id);
             expect(deletedTask).toBeNull();
         }, 10000); // 10 second timeout for DELETE operations
+
+        it('should delete subtasks along with their parent (#239)', async () => {
+            const subtask = await Task.create({
+                name: 'Subtask',
+                user_id: user.id,
+                parent_task_id: task.id,
+            });
+            const nested = await Task.create({
+                name: 'Nested subtask',
+                user_id: user.id,
+                parent_task_id: subtask.id,
+            });
+
+            const response = await agent.delete(`/api/task/${task.uid}`);
+
+            expect(response.status).toBe(200);
+            expect(await Task.findByPk(task.id)).toBeNull();
+            expect(await Task.findByPk(subtask.id)).toBeNull();
+            expect(await Task.findByPk(nested.id)).toBeNull();
+        }, 10000);
 
         it('should return 404 for non-existent task', async () => {
             const response = await agent.delete(

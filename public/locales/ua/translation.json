@@ -504,6 +504,7 @@
     "updateGoal": "Оновити ціль"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "noteTitleRequired": "Заголовок нотатки обов'язковий.",
     "failedToLoadTags": "Не вдалося завантажити доступні теги.",
     "failedToSaveNote": "Не вдалося зберегти нотатку.",
@@ -562,6 +563,7 @@
     "tagDeleted": "Тег видалено!"
   },
   "notes": {
+    "toggleDropdownMenu": "Перемкнути випадаюче меню",
     "loading": "Завантаження нотаток...",
     "error": "Помилка завантаження нотаток",
     "searchPlaceholder": "Пошук нотаток...",
@@ -1618,6 +1620,7 @@
     "createError": "Не вдалося створити нотатку"
   },
   "areas": {
+    "toggleDropdownMenu": "Перемкнути випадаюче меню",
     "title": "Області",
     "noAreasFound": "Областей не знайдено",
     "editAreaAriaLabel": "Редагувати область {{name}}",

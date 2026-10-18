@@ -1095,6 +1095,7 @@
     "orUploadOwn": "Ali naložite svojega:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "To polje je obvezno",
     "invalidEmail": "Neveljavna e-poštna naslov",
     "projectCreationFailed": "Ustvarjanje projekta ni uspelo.",
@@ -1481,6 +1482,7 @@
     "unpinFromSidebar": "Odpripni s stranske vrstice"
   },
   "areas": {
+    "toggleDropdownMenu": "Preklopi spustni meni",
     "title": "Območja",
     "noAreasFound": "Nobena območja niso bila najdena",
     "editAreaAriaLabel": "Uredi območje {{name}}",
@@ -1507,6 +1509,7 @@
     "blankSlateProjects": "Pojdi na projekte"
   },
   "notes": {
+    "toggleDropdownMenu": "Preklopi spustni meni",
     "loading": "Nalaganje opomb...",
     "error": "Napaka pri nalaganju opomb",
     "searchPlaceholder": "Išči opombe...",

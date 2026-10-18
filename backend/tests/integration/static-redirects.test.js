@@ -58,4 +58,16 @@ describe('Static file redirects (GHSA-m2j3-rgfr-57pq)', () => {
         const res = await rawGet(server, '/api/health?q=%5C');
         expect(res.statusCode).toBe(200);
     });
+
+    it.each([
+        '/locales/xx/translation.json',
+        '/locales/xx/',
+        '/nope.woff2',
+        '/bundle.js.map',
+        '/nope.js',
+    ])('answers 404 for the missing file %s', async (path) => {
+        const res = await rawGet(server, path);
+        expect(res.statusCode).toBe(404);
+        expect(res.headers['content-type']).not.toMatch(/text\/html/);
+    });
 });

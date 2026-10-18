@@ -51,10 +51,10 @@ const Register: React.FC = () => {
         const checkStatus = async () => {
             try {
                 const [passwordAuthRes, registrationRes] = await Promise.all([
-                    fetch('/api/password-auth-status', {
+                    fetch(getApiPath('password-auth-status'), {
                         credentials: 'include',
                     }),
-                    fetch('/api/registration-status', {
+                    fetch(getApiPath('registration-status'), {
                         credentials: 'include',
                     }),
                 ]);
@@ -106,7 +106,7 @@ const Register: React.FC = () => {
         }
 
         try {
-            const response = await fetch('/api/register', {
+            const response = await fetch(getApiPath('register'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
