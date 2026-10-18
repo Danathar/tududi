@@ -1,22 +1,29 @@
 'use strict';
 
+const https = require('https');
 const webpush = require('web-push');
 const repository = require('./repository');
 const { getVapidKeys } = require('./vapid');
 const { ValidationError } = require('../../shared/errors');
 const { logError } = require('../../services/logService');
+const { assertSafeUrl, publicOnlyLookup } = require('../url/ssrfGuard');
 
 const MAX_SUBSCRIPTIONS_PER_USER = 20;
 const MAX_FAILURES = 5;
 const PUSH_TTL_SECONDS = 24 * 60 * 60;
 const MAX_BODY_LENGTH = 300;
 
+// web-push makes the request itself, so the connection is pinned the same
+// way the link-preview fetch pins its own: the host is re-resolved when the
+// socket opens and a private address is refused (DNS rebinding).
+const publicOnlyAgent = new https.Agent({ lookup: publicOnlyLookup });
+
 const clip = (value, max) =>
     typeof value === 'string' && value.length > max
         ? `${value.slice(0, max - 1)}…`
         : value;
 
-function parseSubscription(body) {
+async function parseSubscription(body) {
     const endpoint = body?.endpoint;
     const p256dh = body?.keys?.p256dh;
     const auth = body?.keys?.auth;
@@ -28,6 +35,13 @@ function parseSubscription(body) {
         endpoint.length > 2048 ||
         !/^https:\/\/[^\s]+$/.test(endpoint)
     ) {
+        throw new ValidationError('Invalid push endpoint');
+    }
+    // The server itself POSTs to this URL, so it must not reach loopback,
+    // private, link-local or cloud-metadata addresses (SSRF).
+    try {
+        await assertSafeUrl(endpoint);
+    } catch {
         throw new ValidationError('Invalid push endpoint');
     }
     if (
@@ -77,7 +91,7 @@ class PushService {
     }
 
     async subscribe(userId, body, userAgent) {
-        const { endpoint, p256dh, auth } = parseSubscription(body);
+        const { endpoint, p256dh, auth } = await parseSubscription(body);
         const agent = userAgent ? String(userAgent).slice(0, 512) : null;
         const existing = await repository.findByEndpoint(endpoint);
 
@@ -148,19 +162,25 @@ class PushService {
                 TTL: PUSH_TTL_SECONDS,
                 urgency: 'normal',
                 vapidDetails: { subject, publicKey, privateKey },
+                agent: publicOnlyAgent,
             };
 
+            // Rows saved before endpoints were checked at subscribe time are
+            // checked again here; an IP-literal host never goes through the
+            // agent's lookup, so the agent alone would not refuse it. A
+            // refused endpoint counts as a failed delivery.
             const results = await Promise.allSettled(
-                subscriptions.map((sub) =>
-                    webpush.sendNotification(
+                subscriptions.map(async (sub) => {
+                    await assertSafeUrl(sub.endpoint);
+                    return webpush.sendNotification(
                         {
                             endpoint: sub.endpoint,
                             keys: { p256dh: sub.p256dh, auth: sub.auth },
                         },
                         payload,
                         options
-                    )
-                )
+                    );
+                })
             );
 
             let delivered = 0;

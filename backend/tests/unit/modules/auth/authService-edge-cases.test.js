@@ -197,32 +197,20 @@ describe('authService edge cases', () => {
     });
 
     describe('login', () => {
-        it('points an SSO account without a password to its provider', async () => {
+        it.each([
+            ['an SSO account without a password', 'true'],
+            ['an invited account without a password', undefined],
+        ])('answers %s like a wrong password', async (_label, oidcEnabled) => {
             jest.replaceProperty(process, 'env', {
                 ...process.env,
-                OIDC_ENABLED: 'true',
+                OIDC_ENABLED: oidcEnabled,
             });
             jest.spyOn(User, 'findOne').mockResolvedValue({
                 password_digest: null,
             });
-
-            await expect(
-                authService.login('sso@example.com', 'password123', {})
-            ).rejects.toEqual(
-                expect.objectContaining({
-                    message: expect.stringMatching(/SSO provider/),
-                })
-            );
-        });
-
-        it('points an account without a password to password recovery', async () => {
-            jest.replaceProperty(process, 'env', {
-                ...process.env,
-                OIDC_ENABLED: undefined,
-            });
-            jest.spyOn(User, 'findOne').mockResolvedValue({
-                password_digest: null,
-            });
+            const checkPassword = jest
+                .spyOn(User, 'checkPassword')
+                .mockResolvedValue(false);
 
             const attempt = authService.login(
                 'nopass@example.com',
@@ -232,9 +220,50 @@ describe('authService edge cases', () => {
             await expect(attempt).rejects.toBeInstanceOf(UnauthorizedError);
             await expect(attempt).rejects.toEqual(
                 expect.objectContaining({
-                    message: expect.stringMatching(/Forgot password/),
+                    message: 'Invalid credentials',
                 })
             );
+            // The same bcrypt work as a real check, so timing does not
+            // single these accounts out either.
+            expect(checkPassword).toHaveBeenCalled();
+        });
+
+        it('does the same bcrypt work for an unknown email', async () => {
+            jest.spyOn(User, 'findOne').mockResolvedValue(null);
+            const checkPassword = jest
+                .spyOn(User, 'checkPassword')
+                .mockResolvedValue(false);
+
+            await expect(
+                authService.login('nobody@example.com', 'password123', {})
+            ).rejects.toEqual(
+                expect.objectContaining({ message: 'Invalid credentials' })
+            );
+            expect(checkPassword).toHaveBeenCalled();
+        });
+
+        it('signs in on a regenerated session', async () => {
+            jest.spyOn(User, 'findOne').mockResolvedValue({
+                id: 1,
+                password_digest: 'hash',
+                email_verified: true,
+            });
+            jest.spyOn(User, 'checkPassword').mockResolvedValue(true);
+            jest.spyOn(authService, 'buildLoginResult').mockResolvedValue({});
+            const req = {};
+            const planted = { save: jest.fn() };
+            const fresh = { save: (callback) => callback() };
+            planted.regenerate = jest.fn((callback) => {
+                req.session = fresh;
+                callback();
+            });
+            req.session = planted;
+
+            await authService.login('a@example.com', 'password123', req);
+
+            expect(planted.regenerate).toHaveBeenCalled();
+            expect(planted.userId).toBeUndefined();
+            expect(fresh.userId).toBe(1);
         });
 
         it('fails when the session cannot be saved', async () => {
@@ -244,12 +273,15 @@ describe('authService edge cases', () => {
                 email_verified: true,
             });
             jest.spyOn(User, 'checkPassword').mockResolvedValue(true);
-            const session = {
-                save: (callback) => callback(new Error('store down')),
+            const req = {
+                session: {
+                    regenerate: (callback) => callback(),
+                    save: (callback) => callback(new Error('store down')),
+                },
             };
 
             await expect(
-                authService.login('a@example.com', 'password123', session)
+                authService.login('a@example.com', 'password123', req)
             ).rejects.toThrow('store down');
         });
     });

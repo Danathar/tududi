@@ -6,7 +6,7 @@ const OpenAI = require('openai');
 const request = require('supertest');
 const moment = require('moment-timezone');
 const app = require('../../app');
-const { Task, User, DailyPlan } = require('../../models');
+const { Task, User, DailyPlan, RecurringCompletion } = require('../../models');
 const { createTestUser } = require('../helpers/testUtils');
 const dailyPlanAi = require('../../modules/daily-plan/ai');
 const calendarFeedsService = require('../../modules/calendar-feeds/service');
@@ -234,5 +234,38 @@ describe('Daily plan AI routes', () => {
             task_uid: open.uid,
             start_minute: null,
         });
+    });
+
+    it('treats a habit checked in today as done and does not carry it over', async () => {
+        const habit = await dueToday('Meditate', { habit_mode: true });
+        await RecurringCompletion.create({
+            task_id: habit.id,
+            completed_at: new Date(),
+            original_due_date: new Date(),
+            skipped: false,
+        });
+        await agent.put(`/api/daily-plan/${today}`).send({
+            items: [
+                { task_uid: habit.uid, start_minute: 0, duration_minutes: 5 },
+            ],
+        });
+        mockCreate.mockResolvedValue(
+            reply({
+                summary: 'Habit kept',
+                wins: [],
+                carry_over: [{ task_uid: habit.uid, reason: 'Again' }],
+                pattern: '',
+            })
+        );
+
+        const res = await agent.post(`/api/daily-plan/${today}/ai/wrap-up`);
+
+        expect(res.status).toBe(200);
+        const sent = mockCreate.mock.calls[0][0].messages
+            .map((m) => m.content)
+            .join('\n');
+        expect(sent).toContain('"state":"done"');
+        expect(sent).not.toContain('missed its slot');
+        expect(res.body.wrap_up.carry_over).toEqual([]);
     });
 });

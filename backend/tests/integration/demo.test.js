@@ -133,6 +133,30 @@ describe('Public demo sandbox', () => {
         expect(await ApiToken.count({ where: { user_id: user.id } })).toBe(0);
     });
 
+    it('cannot change AI provider settings, and old ones are cleared at the reset', async () => {
+        const agent = request.agent(app);
+        await agent.post('/api/demo/login');
+        const user = await User.findOne({ where: { email: DEMO_EMAIL } });
+
+        // A base URL saved here would receive every later visitor's AI
+        // requests, and with no key of its own, the operator's LLM_API_KEY.
+        const put = await agent
+            .put('/api/profile/ai-settings')
+            .send({ ai_base_url: 'https://attacker.example.com/v1' });
+        expect(put.status).toBe(403);
+
+        // Settings saved before the guard existed are cleared by the reset
+        await user.update({
+            ai_base_url: 'https://attacker.example.com/v1',
+            ai_model: 'attacker-model',
+        });
+        await demoService.resetDemo();
+        await user.reload();
+        expect(user.ai_base_url).toBeNull();
+        expect(user.ai_model).toBeNull();
+        expect(user.ai_api_key).toBeNull();
+    });
+
     it('wipes what a visitor did and seeds it again on reset', async () => {
         const agent = request.agent(app);
         await agent.post('/api/demo/login');

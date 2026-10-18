@@ -21,6 +21,7 @@ const {
     deleteFileFromDisk,
     deleteAttachmentFiles,
 } = require('../../utils/attachment-utils');
+const { projectCoverFilename } = require('../../utils/image-upload');
 const path = require('path');
 const { getConfig } = require('../../config/config');
 const { logError } = require('../../services/logService');
@@ -346,20 +347,22 @@ class ProjectsRepository extends BaseRepository {
             }
         );
 
-        // Delete project cover image if it exists
-        if (project.image_url) {
-            // Extract filename from URL like /api/uploads/projects/filename.jpg
-            const urlMatch = project.image_url.match(
-                /\/api\/uploads\/projects\/(.+)$/
-            );
-            if (urlMatch) {
-                const filename = urlMatch[1];
-                const imagePath = path.join(
-                    config.uploadPath,
-                    'projects',
-                    filename
+        // Delete the project cover image, unless another project still shows
+        // it: image_url is set by the owner, so it can name someone else's
+        // cover.
+        const coverFilename = projectCoverFilename(project.image_url);
+        if (coverFilename) {
+            const stillUsed = await Project.count({
+                where: {
+                    image_url: project.image_url,
+                    id: { [Op.ne]: project.id },
+                },
+                transaction,
+            });
+            if (stillUsed === 0) {
+                await deleteFileFromDisk(
+                    path.join(config.uploadPath, 'projects', coverFilename)
                 );
-                await deleteFileFromDisk(imagePath);
             }
         }
 

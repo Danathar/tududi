@@ -70,6 +70,7 @@ const {
     deleteApiToken,
     serializeApiToken,
 } = require('./apiTokenService');
+const { destroyUserSessions } = require('../../services/sessionService');
 const taskSummaryService = require('../tasks/taskSummaryService');
 const { logError } = require('../../services/logService');
 const fs = require('fs').promises;
@@ -212,7 +213,7 @@ class UsersService {
     /**
      * Update user profile.
      */
-    async updateProfile(userId, data) {
+    async updateProfile(userId, data, { exceptSid = null } = {}) {
         const user = await usersRepository.findByIdWithPassword(userId);
         if (!user) {
             throw new NotFoundError('Profile not found.');
@@ -343,6 +344,11 @@ class UsersService {
         }
 
         await usersRepository.update(user, allowedUpdates);
+        if (allowedUpdates.password_digest) {
+            // A new password signs out every other session, as a reset
+            // does, in case one of them is why the password changed.
+            await destroyUserSessions(user.id, { exceptSid });
+        }
         const updated = await usersRepository.findUpdatedProfile(user.id);
         if (updated) {
             if (typeof updated.features === 'string') {
@@ -472,7 +478,12 @@ class UsersService {
         return { success: true };
     }
 
-    async changePassword(userId, currentPassword, newPassword) {
+    async changePassword(
+        userId,
+        currentPassword,
+        newPassword,
+        { exceptSid = null } = {}
+    ) {
         if (!newPassword) {
             throw new ValidationError('New password is required');
         }
@@ -507,6 +518,8 @@ class UsersService {
         await usersRepository.update(user, {
             password_digest: hashedNewPassword,
         });
+        // Sign out every other session, as a password reset does.
+        await destroyUserSessions(user.id, { exceptSid });
 
         return { message: 'Password changed successfully' };
     }
