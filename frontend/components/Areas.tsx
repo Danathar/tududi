@@ -509,7 +509,8 @@ const Areas: React.FC = () => {
                                                         }}
                                                         className="focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600"
                                                         aria-label={t(
-                                                            'areas.toggleDropdownMenu'
+                                                            'areas.toggleDropdownMenu',
+                                                            'Toggle dropdown menu'
                                                         )}
                                                         data-testid={`area-dropdown-${area.uid}`}
                                                     >
