@@ -9,6 +9,7 @@ import { Tag } from '../../entities/Tag';
 import TaskItem from '../Task/TaskItem';
 import { getCsrfToken } from '../../utils/csrfService';
 import { isQueuedOfflineResponse } from '../../utils/authUtils';
+import { useToast } from '../Shared/ToastContext';
 import { TASK_SHEET_CLASS } from '../Task/taskSheet';
 
 const COLUMN_STATUS: Record<string, number> = {
@@ -129,6 +130,7 @@ const COL_CONFIG: Record<
 
 const KanbanBoard: React.FC = () => {
     const { t } = useTranslation();
+    const { showErrorToast } = useToast();
     const projects: Project[] = useStore((state: any) => state.projectsStore.projects);
 
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -200,7 +202,10 @@ const KanbanBoard: React.FC = () => {
         return result;
     }, [tasks]);
 
-    const handleTaskUpdate = async (updatedTask: Task) => {
+    // Saves the task and merges the server's copy. Returns false when the
+    // server rejected the change or could not be reached, so a caller that
+    // moved the task optimistically can put it back.
+    const saveTask = async (updatedTask: Task): Promise<boolean> => {
         try {
             const res = await fetch(getApiPath(`task/${updatedTask.uid}`), {
                 method: 'PATCH',
@@ -214,17 +219,22 @@ const KanbanBoard: React.FC = () => {
                 // Queued for background sync (see public/sw.js) - the body
                 // is a placeholder, not the updated task, so leave local
                 // state as-is rather than merging it in.
-                return;
+                return true;
             }
-            if (res.ok) {
-                const saved = await res.json();
-                setTasks((prev) =>
-                    prev.map((t) => (t.id === updatedTask.id ? { ...t, ...saved } : t))
-                );
-            }
+            if (!res.ok) return false;
+            const saved = await res.json();
+            setTasks((prev) =>
+                prev.map((t) => (t.id === updatedTask.id ? { ...t, ...saved } : t))
+            );
+            return true;
         } catch (e) {
             console.error('Error updating task:', e);
+            return false;
         }
+    };
+
+    const handleTaskUpdate = async (updatedTask: Task) => {
+        await saveTask(updatedTask);
     };
 
     const handleTaskCompletionToggle = (updatedTask: Task) => {
@@ -253,7 +263,11 @@ const KanbanBoard: React.FC = () => {
         const { subtasks: _subtasks, ...taskWithoutSubtasks } = task;
         const updatedTask: Task = { ...taskWithoutSubtasks, name: task.original_name || task.name, status: newStatus };
         setTasks((prev) => prev.map((t) => (t.id === task.id ? updatedTask : t)));
-        await handleTaskUpdate(updatedTask);
+        if (!(await saveTask(updatedTask))) {
+            // Put the card back where the server still has it.
+            setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)));
+            showErrorToast(t('errors.taskUpdate', 'Failed to update task.'));
+        }
     };
 
     const onDragStart = (e: React.DragEvent, task: Task) => {

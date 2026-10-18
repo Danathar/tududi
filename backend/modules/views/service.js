@@ -73,7 +73,7 @@ class ViewsService {
         } = data;
 
         const updates = {};
-        if (name !== undefined) updates.name = name.trim();
+        if (name !== undefined) updates.name = validateName(name);
         if (search_query !== undefined) updates.search_query = search_query;
         if (filters !== undefined) updates.filters = filters;
         if (priority !== undefined) updates.priority = priority;

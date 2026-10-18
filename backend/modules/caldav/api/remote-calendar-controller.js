@@ -1,11 +1,13 @@
 const { AppError } = require('../../../shared/errors');
 const RemoteCalendarRepository = require('../repositories/remote-calendar-repository');
 const CalendarRepository = require('../repositories/calendar-repository');
+const SyncStateRepository = require('../repositories/sync-state-repository');
 const encryptionService = require('../services/encryption-service');
 const {
     assertSafeCalDavUrl,
     safeRequest,
 } = require('../services/safe-request');
+const { withRemoteAuth } = require('../services/remote-auth');
 
 class RemoteCalendarController {
     async listRemoteCalendars(req, res, next) {
@@ -185,6 +187,7 @@ class RemoteCalendarController {
             } = req.body;
 
             const updates = {};
+            let locationChanged = false;
 
             if (name !== undefined) updates.name = name;
 
@@ -208,6 +211,18 @@ class RemoteCalendarController {
 
                 if (newServerUrl) updates.server_url = newServerUrl;
                 if (newCalendarPath) updates.calendar_path = newCalendarPath;
+
+                // The sync token and every recorded href and etag belong to
+                // the old collection. Kept, the next full listing of the new
+                // one would list none of those hrefs and every unmodified
+                // local task would be deleted as "removed on the remote".
+                locationChanged =
+                    finalServerUrl !== remoteCalendar.server_url ||
+                    finalCalendarPath !== remoteCalendar.calendar_path;
+                if (locationChanged) {
+                    updates.server_sync_token = null;
+                    updates.server_ctag = null;
+                }
             }
 
             if (username !== undefined) updates.username = username;
@@ -245,6 +260,12 @@ class RemoteCalendarController {
                 remoteCalendar,
                 updates
             );
+
+            if (locationChanged && remoteCalendar.local_calendar_id) {
+                await SyncStateRepository.deleteByCalendarId(
+                    remoteCalendar.local_calendar_id
+                );
+            }
 
             const json = updatedRemoteCalendar.toJSON();
             delete json.password_encrypted;
@@ -304,25 +325,23 @@ class RemoteCalendarController {
                 await assertSafeCalDavUrl(testUrl, { requireHttps: true })
             ).href;
 
-            const authConfig =
-                auth_type === 'bearer'
-                    ? { headers: { Authorization: `Bearer ${password}` } }
-                    : { auth: { username, password } };
-
             // lgtm[js/request-forgery]
             // The URL is checked by assertSafeCalDavUrl before the request and
             // for every redirect hop, and the socket address is re-checked at
             // connect time (see services/safe-request.js).
             const response = await safeRequest(
-                {
-                    method: 'OPTIONS',
-                    url: validatedUrl,
-                    ...authConfig,
-                    timeout: parseInt(
-                        process.env.CALDAV_REQUEST_TIMEOUT || '30000',
-                        10
-                    ),
-                },
+                withRemoteAuth(
+                    {
+                        method: 'OPTIONS',
+                        url: validatedUrl,
+                        timeout: parseInt(
+                            process.env.CALDAV_REQUEST_TIMEOUT || '30000',
+                            10
+                        ),
+                    },
+                    { auth_type, username },
+                    password
+                ),
                 { requireHttps: true }
             );
 

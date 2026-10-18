@@ -218,8 +218,11 @@ class BillingService {
         const provider = this.provider();
         const event = await provider.parseWebhook(rawBody, headers);
 
-        const record = await repository.recordEvent(event.id, event.rawType);
-        if (!record) {
+        const { record, duplicate } = await repository.recordEvent(
+            event.id,
+            event.rawType
+        );
+        if (duplicate) {
             return { duplicate: true, type: event.rawType };
         }
 

@@ -38,6 +38,7 @@ import CalendarDayView from './Calendar/CalendarDayView';
 import { getApiPath } from '../config/paths';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { parseDateString } from '../utils/dateUtils';
+import { buildEventDropChanges } from '../utils/dueDateTime';
 
 const getLocale = (language: string) => {
     switch (language) {
@@ -336,26 +337,31 @@ const Calendar: React.FC = () => {
         const task = allTasks.find((t) => t.id.toString() === taskId);
         if (!task?.uid) return;
 
+        const isDeferEvent = eventId.startsWith('task-defer-');
         const newDateTime = new Date(newDate);
         if (newHour !== undefined) {
             newDateTime.setHours(newHour, 0, 0, 0);
         } else {
-            if (task.due_date) {
-                const originalTime = parseDateString(task.due_date);
-                newDateTime.setHours(
-                    originalTime ? originalTime.getHours() : 0,
-                    originalTime ? originalTime.getMinutes() : 0,
-                    0,
-                    0
-                );
-            } else {
-                newDateTime.setHours(0, 0, 0, 0);
-            }
+            // A defer-until keeps its time of day; due dates are shown at
+            // the start of the day (their time is kept in due_time).
+            const originalTime =
+                isDeferEvent && task.defer_until
+                    ? new Date(task.defer_until)
+                    : null;
+            newDateTime.setHours(
+                originalTime && !isNaN(originalTime.getTime())
+                    ? originalTime.getHours()
+                    : 0,
+                originalTime && !isNaN(originalTime.getTime())
+                    ? originalTime.getMinutes()
+                    : 0,
+                0,
+                0
+            );
         }
 
-        const isDeferEvent = eventId.startsWith('task-defer-');
-        const fieldToUpdate = isDeferEvent ? 'defer_until' : 'due_date';
-        const updatedTask = { ...task, [fieldToUpdate]: newDateTime.toISOString() };
+        const changes = buildEventDropChanges(task, newDateTime, isDeferEvent);
+        const updatedTask = { ...task, ...changes };
 
         setAllTasks((prev) => prev.map((t) => (t.id === task.id ? updatedTask : t)));
         setEvents((prevEvents) =>
@@ -367,7 +373,7 @@ const Calendar: React.FC = () => {
         );
 
         try {
-            await updateTask(task.uid, { [fieldToUpdate]: newDateTime.toISOString() });
+            await updateTask(task.uid, changes as Partial<Task>);
         } catch (error) {
             console.error('Error updating task:', error);
             await loadTasks();

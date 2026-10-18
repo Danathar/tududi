@@ -1095,6 +1095,7 @@
     "orUploadOwn": "Eller upload dit eget:"
   },
   "errors": {
+    "failedToDeleteProject": "Failed to delete project.",
     "required": "Dette felt er påkrævet",
     "invalidEmail": "Ugyldig e-mailadresse",
     "projectCreationFailed": "Oprettelse af projekt fejlede.",
@@ -1481,6 +1482,7 @@
     "unpinFromSidebar": "Fjern fastgørelse fra sidepanelet"
   },
   "areas": {
+    "toggleDropdownMenu": "Skift dropdown-menu",
     "title": "Områder",
     "noAreasFound": "Ingen områder fundet",
     "editAreaAriaLabel": "Rediger område {{name}}",
@@ -1507,6 +1509,7 @@
     "blankSlateProjects": "Gå til projekter"
   },
   "notes": {
+    "toggleDropdownMenu": "Skift dropdown-menu",
     "loading": "Indlæser noter...",
     "error": "Fejl ved indlæsning af noter",
     "searchPlaceholder": "Søg noter...",

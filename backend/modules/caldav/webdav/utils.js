@@ -13,6 +13,31 @@ const xmlParser = new xml2js.Parser({
     xmlns: true,
 });
 
+// XML 1.0 cannot carry most C0 control characters, U+FFFE/U+FFFF or a lone
+// surrogate, not even escaped, and the builder throws on them. Task names and
+// notes saved through the REST API may contain them, and one such task would
+// fail the whole multistatus, so drop them from every string first.
+const INVALID_XML_CHARS =
+    // eslint-disable-next-line no-control-regex
+    /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+function stripInvalidXmlChars(value) {
+    if (typeof value === 'string') {
+        return value.replace(INVALID_XML_CHARS, '');
+    }
+    if (Array.isArray(value)) {
+        return value.map(stripInvalidXmlChars);
+    }
+    if (value && Object.getPrototypeOf(value) === Object.prototype) {
+        const result = {};
+        for (const [key, inner] of Object.entries(value)) {
+            result[key] = stripInvalidXmlChars(inner);
+        }
+        return result;
+    }
+    return value;
+}
+
 function buildMultistatus(responses) {
     const multistatus = {
         'D:multistatus': {
@@ -23,7 +48,7 @@ function buildMultistatus(responses) {
                 // where Tasks.org, DAVx5, Thunderbird and Apple clients look.
                 'xmlns:CS': 'http://calendarserver.org/ns/',
             },
-            'D:response': responses,
+            'D:response': stripInvalidXmlChars(responses),
         },
     };
 
@@ -261,4 +286,5 @@ module.exports = {
     parseCalendarQuery,
     parsePropfind,
     escapeXml,
+    stripInvalidXmlChars,
 };

@@ -184,4 +184,79 @@ describe('errorHandler middleware', () => {
 
         expect(res.status).toHaveBeenCalledWith(500);
     });
+
+    // --- Client errors from Express / body-parser ---
+
+    it('should keep the message and use INVALID_JSON for a body-parser parse error', () => {
+        const err = new SyntaxError('Expected property name');
+        err.statusCode = 400;
+        err.type = 'entity.parse.failed';
+        errorHandler(err, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({
+            error: 'Expected property name',
+            code: 'INVALID_JSON',
+        });
+    });
+
+    it('should use PAYLOAD_TOO_LARGE for an oversized body', () => {
+        const err = new Error('request entity too large');
+        err.statusCode = 413;
+        err.type = 'entity.too.large';
+        errorHandler(err, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(413);
+        expect(res.json).toHaveBeenCalledWith({
+            error: 'request entity too large',
+            code: 'PAYLOAD_TOO_LARGE',
+        });
+    });
+
+    it('should not mask a 4xx message in production', () => {
+        const originalEnv = process.env.NODE_ENV;
+        process.env.NODE_ENV = 'production';
+
+        const err = new SyntaxError('Unexpected token');
+        err.status = 400;
+        err.type = 'entity.parse.failed';
+        errorHandler(err, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({
+            error: 'Unexpected token',
+            code: 'INVALID_JSON',
+        });
+
+        process.env.NODE_ENV = originalEnv;
+    });
+
+    it('should fall back to BAD_REQUEST for other 4xx errors', () => {
+        const err = new Error('Teapot');
+        err.statusCode = 418;
+        errorHandler(err, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(418);
+        expect(res.json).toHaveBeenCalledWith({
+            error: 'Teapot',
+            code: 'BAD_REQUEST',
+        });
+    });
+
+    it('should still mask 5xx messages in production', () => {
+        const originalEnv = process.env.NODE_ENV;
+        process.env.NODE_ENV = 'production';
+
+        const err = new Error('Upstream exploded');
+        err.statusCode = 502;
+        errorHandler(err, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(502);
+        expect(res.json).toHaveBeenCalledWith({
+            error: 'Internal server error',
+            code: 'INTERNAL_ERROR',
+        });
+
+        process.env.NODE_ENV = originalEnv;
+    });
 });

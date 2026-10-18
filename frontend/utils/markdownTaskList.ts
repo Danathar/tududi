@@ -41,3 +41,19 @@ export const toggleTaskListItem = (content: string, index: number): string => {
 
     return content;
 };
+
+// Flips the task list checkbox on a given 1-based source line, as reported
+// by the markdown parser. Returns the content unchanged when that line is
+// not a task list item.
+export const toggleTaskListItemAtLine = (
+    content: string,
+    line: number
+): string => {
+    const lines = content.split('\n');
+    const text = lines[line - 1];
+    if (text === undefined) return content;
+    const match = text.match(TASK_ITEM);
+    if (!match) return content;
+    lines[line - 1] = `${match[1]}${match[2] === ' ' ? 'x' : ' '}${match[3]}`;
+    return lines.join('\n');
+};

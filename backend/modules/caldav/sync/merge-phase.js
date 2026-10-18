@@ -6,6 +6,7 @@ const CalendarRepository = require('../repositories/calendar-repository');
 const ConflictResolver = require('./conflict-resolver');
 const { uid: generateUid } = require('../../../utils/uid');
 const { normalizeHref, extractUidFromHref } = require('../utils/href-utils');
+const { STATUS_TUDUDI_TO_ICAL } = require('../icalendar/field-mappings');
 
 class MergePhase {
     async execute(calendar, changedTasks, options = {}) {
@@ -190,11 +191,43 @@ class MergePhase {
             );
         }
 
-        const existingTask = await Task.findOne({
+        let existingTask = await Task.findOne({
             where: { uid: remoteTask.uid, user_id: calendar.user_id },
         });
 
         if (!existingTask) {
+            // A task whose local uid differs from the remote UID (see below)
+            // is found again through the href recorded when it was pulled.
+            const hrefState = await SyncStateRepository.findByCalendarAndHref(
+                calendar.id,
+                href
+            );
+            if (hrefState) {
+                existingTask = await Task.findOne({
+                    where: {
+                        id: hrefState.task_id,
+                        user_id: calendar.user_id,
+                    },
+                });
+            }
+        }
+
+        if (!existingTask) {
+            // Task.uid is unique across all users. When another user already
+            // holds this UID (two accounts syncing the same shared calendar),
+            // creating the task would fail on every sync, so give the local
+            // copy its own uid.
+            const uidTaken = await Task.findOne({
+                where: { uid: remoteTask.uid },
+            });
+            if (uidTaken) {
+                const localUid = generateUid();
+                logger.logInfo(
+                    `Remote task UID ${remoteTask.uid} belongs to another user; assigned ${localUid}`
+                );
+                remoteTask.uid = localUid;
+            }
+
             await this._createNewTask(
                 remoteTask,
                 calendar,
@@ -349,6 +382,29 @@ class MergePhase {
         };
     }
 
+    // iCalendar has fewer statuses than Tududi: planned and waiting go out as
+    // NEEDS-ACTION and archived as COMPLETED. When the remote status is the one
+    // the local status maps to, the remote side did not change it, so keep the
+    // Tududi status instead of resetting a waiting task to "not started" or
+    // bringing an archived task back as done. Same rule as the CalDAV PUT
+    // handler (webdav/task-handlers.js).
+    _remoteTaskData(existingTask, remoteTask) {
+        const taskData = this._sanitizeRemoteTask(remoteTask);
+
+        if (
+            existingTask &&
+            STATUS_TUDUDI_TO_ICAL[existingTask.status] ===
+                STATUS_TUDUDI_TO_ICAL[taskData.status]
+        ) {
+            taskData.status = existingTask.status;
+            if (!taskData.completed_at) {
+                taskData.completed_at = existingTask.completed_at;
+            }
+        }
+
+        return taskData;
+    }
+
     async _createNewTask(
         remoteTask,
         calendar,
@@ -367,7 +423,7 @@ class MergePhase {
             return;
         }
 
-        const taskData = this._sanitizeRemoteTask(remoteTask);
+        const taskData = this._remoteTaskData(existingTask, remoteTask);
 
         let task;
         if (existingTask) {
@@ -425,7 +481,7 @@ class MergePhase {
         }
 
         await existingTask.update({
-            ...this._sanitizeRemoteTask(remoteTask),
+            ...this._remoteTaskData(existingTask, remoteTask),
             id: existingTask.id,
             uid: existingTask.uid,
             user_id: existingTask.user_id,
@@ -513,7 +569,7 @@ class MergePhase {
                 );
             } else {
                 await existingTask.update({
-                    ...this._sanitizeRemoteTask(remoteTask),
+                    ...this._remoteTaskData(existingTask, remoteTask),
                     id: existingTask.id,
                     uid: existingTask.uid,
                     user_id: existingTask.user_id,
@@ -563,14 +619,24 @@ class MergePhase {
             throw new AppError('Task not found', 404);
         }
 
-        let taskData;
-        if (resolution === 'local') {
-            taskData = conflict.conflict_local_version;
-        } else if (resolution === 'remote') {
-            taskData = conflict.conflict_remote_version;
-        } else {
+        if (resolution !== 'local' && resolution !== 'remote') {
             throw new AppError('Invalid resolution strategy', 400);
         }
+
+        // A conflict with no remote version is one where the remote copy was
+        // deleted while the task was edited locally (_handleDeletion).
+        if (!conflict.conflict_remote_version) {
+            return this._resolveDeletedRemotelyConflict(
+                task,
+                calendarId,
+                resolution
+            );
+        }
+
+        const taskData =
+            resolution === 'local'
+                ? conflict.conflict_local_version
+                : conflict.conflict_remote_version;
 
         await task.update(taskData);
 
@@ -580,6 +646,37 @@ class MergePhase {
             `Conflict resolved for task ${taskId} using ${resolution} version`
         );
 
+        return task;
+    }
+
+    async _resolveDeletedRemotelyConflict(task, calendarId, resolution) {
+        if (resolution === 'remote') {
+            // The remote side deleted the task, and the user chose that.
+            await task.destroy();
+            await SyncStateRepository.deleteByTaskId(task.id);
+
+            logger.logInfo(
+                `Conflict resolved for task ${task.id}: deleted, as on the remote`
+            );
+            return task;
+        }
+
+        // Keep the local task and recreate it on the server. With the old
+        // href and etag left in place the push phase would not recreate the
+        // resource and the next pull would delete the task. This is what
+        // _handleDeletion does when the conflict is not left to the user.
+        await SyncStateRepository.createOrUpdate(task.id, calendarId, {
+            etag: '',
+            remote_href: null,
+            sync_status: 'pending',
+            conflict_local_version: null,
+            conflict_remote_version: null,
+            conflict_detected_at: null,
+        });
+
+        logger.logInfo(
+            `Conflict resolved for task ${task.id}: kept locally, will be pushed again`
+        );
         return task;
     }
 }

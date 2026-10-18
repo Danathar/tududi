@@ -201,6 +201,43 @@ describe('Account erasure', () => {
         await expectFullyErased(seeded);
     });
 
+    it('also removes project cover images and files other users attached', async () => {
+        const projectsDir = path.join(config.uploadPath, 'projects');
+        const tasksDir = path.join(config.uploadPath, 'tasks');
+        await fs.mkdir(projectsDir, { recursive: true });
+        await fs.mkdir(tasksDir, { recursive: true });
+        const coverName = `project-erase-${Date.now()}.png`;
+        const theirsName = `erase-theirs-${Date.now()}.txt`;
+        await fs.writeFile(path.join(projectsDir, coverName), 'cover');
+        await fs.writeFile(path.join(tasksDir, theirsName), 'theirs');
+        const project = await Project.create({
+            name: 'With cover',
+            user_id: user.id,
+            image_url: `/api/uploads/projects/${coverName}`,
+        });
+        const task = await Task.create({
+            name: 'Shared task',
+            user_id: user.id,
+            project_id: project.id,
+        });
+        await TaskAttachment.create({
+            task_id: task.id,
+            user_id: other.id,
+            original_filename: 'theirs.txt',
+            stored_filename: theirsName,
+            file_path: `tasks/${theirsName}`,
+            file_size: 6,
+            mime_type: 'text/plain',
+        });
+        const adminAgent = await login(admin);
+
+        const res = await adminAgent.delete(`/api/admin/users/${user.id}`);
+        expect(res.status).toBe(204);
+
+        expect(await exists(path.join(projectsDir, coverName))).toBe(false);
+        expect(await exists(path.join(tasksDir, theirsName))).toBe(false);
+    });
+
     it('self-service deletion requires the password and ends the session', async () => {
         const seeded = await seedEverything(user, other);
         const agent = await login(user);
