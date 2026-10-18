@@ -5,7 +5,7 @@ const OpenAI = require('openai');
 const moment = require('moment-timezone');
 const { User, Goal, Project, Area } = require('../../models');
 const { computeTaskMetrics } = require('../tasks/queries/metrics-computation');
-const { AppError } = require('../../shared/errors');
+const { AppError, ValidationError } = require('../../shared/errors');
 const { logError } = require('../../services/logService');
 const secretCipher = require('../../shared/crypto/secretCipher');
 const { assertSafeUrl } = require('../url/ssrfGuard');
@@ -656,7 +656,73 @@ async function updateTaskInsightsDismissed(taskUid, userId, dismissed) {
     return updated;
 }
 
+const TASK_INSIGHTS_STRING_FIELDS = [
+    'taskUid',
+    'taskName',
+    'taskNote',
+    'taskDueDate',
+    'projectName',
+    'projectDescription',
+    'projectStatus',
+    'projectGoal',
+    'projectArea',
+];
+
+// The request body is untrusted JSON: a number or object where text is
+// expected would otherwise blow up on a string method (`.slice`, `.join`)
+// after the credit was already spent. Check the shape up front so a bad
+// request is a 400 that costs nothing.
+function validateTaskInsightsInput(taskContext) {
+    if (
+        !taskContext ||
+        typeof taskContext !== 'object' ||
+        Array.isArray(taskContext)
+    ) {
+        throw new ValidationError('Request body must be a JSON object.');
+    }
+    for (const field of TASK_INSIGHTS_STRING_FIELDS) {
+        const value = taskContext[field];
+        if (
+            value !== undefined &&
+            value !== null &&
+            typeof value !== 'string'
+        ) {
+            throw new ValidationError(`${field} must be a string.`);
+        }
+    }
+    const { taskTags, subtaskCount, taskStatus, taskPriority } = taskContext;
+    if (
+        taskTags !== undefined &&
+        taskTags !== null &&
+        (!Array.isArray(taskTags) ||
+            taskTags.some((tag) => typeof tag !== 'string'))
+    ) {
+        throw new ValidationError('taskTags must be an array of strings.');
+    }
+    if (
+        subtaskCount !== undefined &&
+        subtaskCount !== null &&
+        typeof subtaskCount !== 'number'
+    ) {
+        throw new ValidationError('subtaskCount must be a number.');
+    }
+    for (const [field, value] of [
+        ['taskStatus', taskStatus],
+        ['taskPriority', taskPriority],
+    ]) {
+        if (
+            value !== undefined &&
+            value !== null &&
+            typeof value !== 'string' &&
+            typeof value !== 'number'
+        ) {
+            throw new ValidationError(`${field} must be a string or number.`);
+        }
+    }
+}
+
 async function generateTaskInsights(taskContext, userId) {
+    validateTaskInsightsInput(taskContext);
     const client = await getOpenAIClient(userId);
     await entitlements.consumeUsages(userId, ['ai_requests', 'ai_credits']);
 
