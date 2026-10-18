@@ -393,4 +393,8 @@ class PeopleService {
     }
 }
 
-module.exports = new PeopleService();
+const peopleService = new PeopleService();
+// the MCP tools list the same relationship types in their input schema
+peopleService.VALID_RELATIONSHIP_TYPES = VALID_RELATIONSHIP_TYPES;
+
+module.exports = peopleService;

@@ -1,6 +1,7 @@
 'use strict';
 
 const controller = require('../../../../modules/mcp/controller');
+const { registerAllTools } = require('../../../../modules/mcp/toolRegistry');
 
 // Mock dependencies
 jest.mock('../../../../modules/mcp/httpTransport', () => ({
@@ -107,7 +108,7 @@ describe('MCP Controller', () => {
             await controller.listMcpTools({}, res);
 
             const result = res.json.mock.calls[0][0];
-            expect(result.tools).toHaveLength(9);
+            expect(result.tools).toHaveLength(12);
 
             const categories = result.tools.map((t) => t.category);
             expect(categories).toContain('Tasks');
@@ -119,6 +120,32 @@ describe('MCP Controller', () => {
             expect(categories).toContain('Notes');
             expect(categories).toContain('Tags');
             expect(categories).toContain('Misc');
+            expect(categories).toContain('Views');
+            expect(categories).toContain('People');
+            expect(categories).toContain('Goals');
+        });
+
+        it('should list exactly the tools the server registers', async () => {
+            const res = { json: jest.fn() };
+            await controller.listMcpTools({}, res);
+
+            const listed = res.json.mock.calls[0][0].tools.flatMap(
+                (category) => category.tools
+            );
+            const registered = [];
+            registerAllTools(null, {}, registered);
+
+            expect(listed.sort()).toEqual(
+                registered.map((tool) => tool.name).sort()
+            );
+            expect(listed).toEqual(
+                expect.arrayContaining([
+                    'create_task_relation',
+                    'list_views',
+                    'list_people',
+                    'list_goals',
+                ])
+            );
         });
 
         it('should list task tools', async () => {
@@ -131,7 +158,7 @@ describe('MCP Controller', () => {
             );
 
             expect(taskCategory).toBeDefined();
-            expect(taskCategory.count).toBe(9);
+            expect(taskCategory.count).toBe(12);
             expect(taskCategory.tools).toContain('list_tasks');
             expect(taskCategory.tools).toContain('get_task');
             expect(taskCategory.tools).toContain('create_task');
@@ -141,6 +168,9 @@ describe('MCP Controller', () => {
             expect(taskCategory.tools).toContain('delete_task');
             expect(taskCategory.tools).toContain('add_subtask');
             expect(taskCategory.tools).toContain('get_task_metrics');
+            expect(taskCategory.tools).toContain('create_task_relation');
+            expect(taskCategory.tools).toContain('list_task_relations');
+            expect(taskCategory.tools).toContain('remove_task_relation');
         });
 
         it('should list comment tools', async () => {

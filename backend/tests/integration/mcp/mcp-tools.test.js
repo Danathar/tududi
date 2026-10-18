@@ -4043,6 +4043,446 @@ describe('MCP Tools Integration', () => {
         });
     });
 
+    describe('Argument validation', () => {
+        const run = async (tool, args) =>
+            getToolContent(await callMcpTool(apiTokenValue, tool, args));
+
+        describe('write tools do not drop fields silently', () => {
+            it('create_task rejects fields it does not support', async () => {
+                const { content, isError } = await run('create_task', {
+                    name: 'Typo field',
+                    project_uuid: 'abc',
+                });
+
+                expect(isError).toBe(true);
+                expect(content._rawError).toContain('project_uuid');
+                expect(await Task.count({ where: { user_id: user.id } })).toBe(
+                    0
+                );
+            });
+
+            it('create_task places the task by project_uid, parent_task_id and goal_id', async () => {
+                const project = await Project.create({
+                    user_id: user.id,
+                    name: 'Placement project',
+                });
+                const parent = await Task.create({
+                    user_id: user.id,
+                    name: 'Parent',
+                    status: 0,
+                });
+                const goal = await Goal.create({
+                    user_id: user.id,
+                    title: 'Placement goal',
+                });
+
+                const { content, isError } = await run('create_task', {
+                    name: 'Placed',
+                    project_uid: project.uid,
+                    parent_task_id: parent.id,
+                    goal_id: goal.id,
+                });
+
+                expect(isError).toBe(false);
+                const stored = await Task.findOne({
+                    where: { name: 'Placed' },
+                });
+                expect(content.message).toBe('Task created successfully');
+                expect(stored.project_id).toBe(project.id);
+                expect(stored.parent_task_id).toBe(parent.id);
+                expect(stored.goal_id).toBe(goal.id);
+            });
+
+            it('create_task refuses a parent task or goal the user cannot use', async () => {
+                const other = await createTestUser({
+                    email: `mcp_other_${Date.now()}@example.com`,
+                });
+                const foreignTask = await Task.create({
+                    user_id: other.id,
+                    name: 'Not yours',
+                    status: 0,
+                });
+                const foreignGoal = await Goal.create({
+                    user_id: other.id,
+                    title: 'Not yours either',
+                });
+
+                const parent = await run('create_task', {
+                    name: 'Bad parent',
+                    parent_task_id: foreignTask.id,
+                });
+                const goal = await run('create_task', {
+                    name: 'Bad goal',
+                    goal_id: foreignGoal.id,
+                });
+
+                expect(parent.isError).toBe(true);
+                expect(goal.isError).toBe(true);
+                expect(
+                    await Task.count({
+                        where: { name: ['Bad parent', 'Bad goal'] },
+                    })
+                ).toBe(0);
+            });
+
+            it('update_task moves a task by project_uid and links a goal', async () => {
+                const project = await Project.create({
+                    user_id: user.id,
+                    name: 'Target project',
+                });
+                const goal = await Goal.create({
+                    user_id: user.id,
+                    title: 'Target goal',
+                });
+                const task = await Task.create({
+                    user_id: user.id,
+                    name: 'Mover',
+                    status: 0,
+                });
+
+                const { isError } = await run('update_task', {
+                    id: task.id,
+                    project_uid: project.uid,
+                    goal_id: goal.id,
+                });
+
+                expect(isError).toBe(false);
+                await task.reload();
+                expect(task.project_id).toBe(project.id);
+                expect(task.goal_id).toBe(goal.id);
+            });
+
+            it('update_task refuses to make a task its own parent', async () => {
+                const task = await Task.create({
+                    user_id: user.id,
+                    name: 'Loop',
+                    status: 0,
+                });
+
+                const { isError } = await run('update_task', {
+                    id: task.id,
+                    parent_task_id: task.id,
+                });
+
+                expect(isError).toBe(true);
+                await task.reload();
+                expect(task.parent_task_id).toBeNull();
+            });
+
+            it('update_task picks the first occurrence when a recurring due date is cleared', async () => {
+                const task = await Task.create({
+                    user_id: user.id,
+                    name: 'Daily chore',
+                    status: 0,
+                    recurrence_type: 'daily',
+                    due_date: new Date('2030-01-01T23:59:59.000Z'),
+                });
+
+                const { isError } = await run('update_task', {
+                    id: task.id,
+                    due_date: '',
+                });
+
+                expect(isError).toBe(false);
+                await task.reload();
+                expect(task.due_date).not.toBeNull();
+            });
+
+            it('update_task still clears the due date of a one-off task', async () => {
+                const task = await Task.create({
+                    user_id: user.id,
+                    name: 'One off',
+                    status: 0,
+                    due_date: new Date('2030-01-01T23:59:59.000Z'),
+                });
+
+                const { isError } = await run('update_task', {
+                    id: task.id,
+                    due_date: '',
+                });
+
+                expect(isError).toBe(false);
+                await task.reload();
+                expect(task.due_date).toBeNull();
+            });
+
+            it('update_project applies color, due_date_at and tags', async () => {
+                const project = await Project.create({
+                    user_id: user.id,
+                    name: 'Colorful',
+                });
+
+                const { content, isError } = await run('update_project', {
+                    uid: project.uid,
+                    color: '#ff0000',
+                    due_date_at: '2030-06-01',
+                    tags: ['alpha', 'beta'],
+                });
+
+                expect(isError).toBe(false);
+                expect(content.project.color).toBe('#ff0000');
+                expect(content.project.tags.sort()).toEqual(['alpha', 'beta']);
+                await project.reload();
+                expect(project.color).toBe('#ff0000');
+                expect(project.due_date_at).not.toBeNull();
+            });
+
+            it('update_project clears color and due date with empty values', async () => {
+                const project = await Project.create({
+                    user_id: user.id,
+                    name: 'To clear',
+                    color: '#00ff00',
+                    due_date_at: new Date('2030-06-01T00:00:00.000Z'),
+                });
+
+                const { isError } = await run('update_project', {
+                    uid: project.uid,
+                    color: '',
+                    due_date_at: '',
+                });
+
+                expect(isError).toBe(false);
+                await project.reload();
+                expect(project.color).toBeNull();
+                expect(project.due_date_at).toBeNull();
+            });
+
+            it('update_project rejects fields it does not support', async () => {
+                const project = await Project.create({
+                    user_id: user.id,
+                    name: 'Strict',
+                });
+
+                const { content, isError } = await run('update_project', {
+                    uid: project.uid,
+                    colour: '#ff0000',
+                });
+
+                expect(isError).toBe(true);
+                expect(content._rawError).toContain('colour');
+            });
+        });
+
+        describe('the same validation as the web', () => {
+            it('create_task and update_task reject a blank name', async () => {
+                const task = await Task.create({
+                    user_id: user.id,
+                    name: 'Named',
+                    status: 0,
+                });
+
+                const created = await run('create_task', { name: '   ' });
+                const updated = await run('update_task', {
+                    id: task.id,
+                    name: '',
+                });
+
+                expect(created.isError).toBe(true);
+                expect(updated.isError).toBe(true);
+                expect(await Task.count({ where: { user_id: user.id } })).toBe(
+                    1
+                );
+                await task.reload();
+                expect(task.name).toBe('Named');
+            });
+
+            it('rejects a missing required field', async () => {
+                const { content, isError } = await run('create_task', {});
+
+                expect(isError).toBe(true);
+                expect(content._rawError).toContain('name');
+            });
+
+            it('rejects a value outside an enum', async () => {
+                const project = await run('create_project', {
+                    name: 'Bogus',
+                    status: 'bogus',
+                });
+                const list = await run('list_tasks', { status: 'bogus' });
+
+                expect(project.isError).toBe(true);
+                expect(project.content._rawError).toContain('status');
+                expect(await Project.count({ where: { name: 'Bogus' } })).toBe(
+                    0
+                );
+                expect(list.isError).toBe(true);
+                expect(list.content._rawError).toContain('Invalid value');
+            });
+
+            it('rejects a string where a number is expected for project priority', async () => {
+                const { content, isError } = await run('create_project', {
+                    name: 'Priority text',
+                    priority: 'high',
+                });
+
+                expect(isError).toBe(true);
+                expect(content._rawError).toContain('priority');
+                expect(
+                    await Project.count({ where: { name: 'Priority text' } })
+                ).toBe(0);
+            });
+
+            it('rejects a blank project or area name', async () => {
+                const project = await Project.create({
+                    user_id: user.id,
+                    name: 'Keep me',
+                });
+
+                const createdProject = await run('create_project', {
+                    name: '  ',
+                });
+                const renamedProject = await run('update_project', {
+                    uid: project.uid,
+                    name: '',
+                });
+                const createdArea = await run('create_area', { name: '  ' });
+
+                expect(createdProject.isError).toBe(true);
+                expect(renamedProject.isError).toBe(true);
+                expect(createdArea.isError).toBe(true);
+                await project.reload();
+                expect(project.name).toBe('Keep me');
+            });
+
+            it('rejects an invalid project due date', async () => {
+                const { isError } = await run('create_project', {
+                    name: 'Bad date',
+                    due_date_at: 'next tuesday-ish',
+                });
+
+                expect(isError).toBe(true);
+                expect(
+                    await Project.count({ where: { name: 'Bad date' } })
+                ).toBe(0);
+            });
+
+            it('create_goal refuses an area the user does not own', async () => {
+                const other = await createTestUser({
+                    email: `mcp_goal_other_${Date.now()}@example.com`,
+                });
+                const foreignArea = await Area.create({
+                    user_id: other.id,
+                    name: 'Foreign',
+                });
+
+                const { isError } = await run('create_goal', {
+                    title: 'Sneaky',
+                    area_id: foreignArea.id,
+                });
+
+                expect(isError).toBe(true);
+                expect(await Goal.count({ where: { title: 'Sneaky' } })).toBe(
+                    0
+                );
+            });
+
+            it('rejects a blank goal title', async () => {
+                const area = await Area.create({
+                    user_id: user.id,
+                    name: 'Goal home',
+                });
+                const goal = await Goal.create({
+                    user_id: user.id,
+                    area_id: area.id,
+                    title: 'Keep title',
+                });
+
+                const created = await run('create_goal', {
+                    title: ' ',
+                    area_id: area.id,
+                });
+                const renamed = await run('update_goal', {
+                    uid: goal.uid,
+                    title: '',
+                });
+
+                expect(created.isError).toBe(true);
+                expect(renamed.isError).toBe(true);
+                await goal.reload();
+                expect(goal.title).toBe('Keep title');
+            });
+        });
+
+        describe('people', () => {
+            it('delete_person refuses the person standing for the user', async () => {
+                await peopleService.createSelfPerson(user);
+                const self = await Person.findOne({
+                    where: { user_id: user.id, linked_user_id: user.id },
+                });
+
+                const { content, isError } = await run('delete_person', {
+                    uid: self.uid,
+                });
+
+                expect(isError).toBe(true);
+                expect(content._rawError).toContain('your account');
+                expect(await Person.findByPk(self.id)).not.toBeNull();
+            });
+
+            it('delete_person still deletes a contact', async () => {
+                const contact = await Person.create({
+                    user_id: user.id,
+                    name: 'Plumber',
+                });
+
+                const { isError } = await run('delete_person', {
+                    uid: contact.uid,
+                });
+
+                expect(isError).toBe(false);
+                expect(await Person.findByPk(contact.id)).toBeNull();
+            });
+
+            it('update_person rejects an empty name and an unknown relationship type', async () => {
+                const contact = await Person.create({
+                    user_id: user.id,
+                    name: 'Electrician',
+                });
+
+                const emptyName = await run('update_person', {
+                    uid: contact.uid,
+                    name: '  ',
+                });
+                const badType = await run('update_person', {
+                    uid: contact.uid,
+                    relationship_type: 'bogus',
+                });
+
+                expect(emptyName.isError).toBe(true);
+                expect(badType.isError).toBe(true);
+                await contact.reload();
+                expect(contact.name).toBe('Electrician');
+                expect(contact.relationship_type).not.toBe('bogus');
+            });
+
+            it('create_person rejects an unknown relationship type and a duplicate name', async () => {
+                await Person.create({ user_id: user.id, name: 'Neighbour' });
+                const before = await Person.count({
+                    where: { user_id: user.id },
+                });
+
+                const badType = await run('create_person', {
+                    name: 'Carpenter',
+                    relationship_type: 'colleague',
+                });
+                const duplicate = await run('create_person', {
+                    name: 'Neighbour',
+                });
+                const blank = await run('create_person', { name: '  ' });
+
+                expect(badType.isError).toBe(true);
+                expect(duplicate.isError).toBe(true);
+                expect(blank.isError).toBe(true);
+                expect(
+                    await Person.count({ where: { user_id: user.id } })
+                ).toBe(before);
+                expect(
+                    await Person.count({ where: { name: 'Carpenter' } })
+                ).toBe(0);
+            });
+        });
+    });
+
     describe('Tool listing via MCP protocol', () => {
         it('should list available tools via tools/list method', async () => {
             const response = await request(app)

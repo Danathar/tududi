@@ -2,7 +2,7 @@
 
 const request = require('supertest');
 const app = require('../../../app');
-const { Project, Person } = require('../../../models');
+const { Project, Person, Area, Goal } = require('../../../models');
 const { createTestUser } = require('../../helpers/testUtils');
 const rolesService = require('../../../services/rolesService');
 const {
@@ -116,5 +116,55 @@ describe('MCP tools respect the account role', () => {
 
         expect(project.isError).toBe(true);
         expect(person.isError).toBe(false);
+    });
+
+    it('refuses an area and a goal when create_projects is taken away', async () => {
+        const area = await Area.create({ user_id: member.id, name: 'Home' });
+        await rolesService.setCapabilities(member.id, {
+            create_projects: false,
+        });
+
+        const newArea = getToolResult(
+            await callTool(memberToken, 'create_area', { name: 'Garage' })
+        );
+        const newGoal = getToolResult(
+            await callTool(memberToken, 'create_goal', {
+                title: 'Tidy up',
+                area_id: area.id,
+            })
+        );
+
+        expect(newArea.isError).toBe(true);
+        expect(newArea.text).toMatch(/role does not allow/i);
+        expect(newGoal.isError).toBe(true);
+        expect(newGoal.text).toMatch(/role does not allow/i);
+        expect(await Area.count({ where: { name: 'Garage' } })).toBe(0);
+        expect(await Goal.count({ where: { user_id: member.id } })).toBe(0);
+    });
+
+    it('lets a user create an area and a goal while they have the capability', async () => {
+        const newArea = getToolResult(
+            await callTool(memberToken, 'create_area', { name: 'Garage' })
+        );
+        const area = await Area.findOne({ where: { name: 'Garage' } });
+        const newGoal = getToolResult(
+            await callTool(memberToken, 'create_goal', {
+                title: 'Tidy up',
+                area_id: area.id,
+            })
+        );
+
+        expect(newArea.isError).toBe(false);
+        expect(newGoal.isError).toBe(false);
+        expect(await Goal.count({ where: { user_id: member.id } })).toBe(1);
+    });
+
+    it('refuses a guest a new area and goal', async () => {
+        const area = getToolResult(
+            await callTool(guestToken, 'create_area', { name: 'Garage' })
+        );
+
+        expect(area.isError).toBe(true);
+        expect(await Area.count({ where: { name: 'Garage' } })).toBe(0);
     });
 });
