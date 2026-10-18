@@ -87,6 +87,65 @@ describe('Notification Telegram Rate Limiting', () => {
         });
     });
 
+    describe('Failed Telegram delivery', () => {
+        it('should NOT mark telegram as sent when the send fails', async () => {
+            sendTelegramSpy.mockResolvedValue({
+                success: false,
+                error: 'Telegram error 502',
+            });
+
+            const notification = await Notification.createNotification({
+                userId: user.id,
+                type: 'task_due_soon',
+                title: 'Task Due Soon',
+                message: 'Your task is due tomorrow',
+                sources: ['telegram'],
+                level: 'info',
+            });
+
+            expect(sendTelegramSpy).toHaveBeenCalledTimes(1);
+
+            await notification.reload();
+
+            expect(notification.channel_sent_at?.telegram).toBeUndefined();
+            expect(notification.wasChannelRecentlySent('telegram')).toBe(false);
+        });
+
+        it('should retry Telegram after a failed send', async () => {
+            sendTelegramSpy.mockResolvedValueOnce({
+                success: false,
+                error: 'Telegram error 502',
+            });
+
+            const failed = await Notification.createNotification({
+                userId: user.id,
+                type: 'task_due_soon',
+                title: 'Task Due Soon',
+                message: 'Your task is due tomorrow',
+                sources: ['telegram'],
+                level: 'info',
+            });
+            const failedChannelSentAt = failed.channel_sent_at;
+            await failed.destroy();
+
+            const retried = await Notification.createNotification({
+                userId: user.id,
+                type: 'task_due_soon',
+                title: 'Task Due Soon',
+                message: 'Your task is due tomorrow',
+                sources: ['telegram'],
+                level: 'info',
+                channel_sent_at: failedChannelSentAt,
+            });
+
+            expect(sendTelegramSpy).toHaveBeenCalledTimes(2);
+
+            await retried.reload();
+
+            expect(retried.channel_sent_at.telegram).toBeDefined();
+        });
+    });
+
     describe('Delete and recreate pattern (navbar pile-up fix)', () => {
         it('should NOT resend Telegram when notification recreated within 24 hours', async () => {
             // Create initial notification
