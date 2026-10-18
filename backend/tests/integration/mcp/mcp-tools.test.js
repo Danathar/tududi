@@ -4371,9 +4371,9 @@ describe('MCP Tools Integration', () => {
                 });
 
                 expect(isError).toBe(true);
-                expect(
-                    await Goal.count({ where: { title: 'Sneaky' } })
-                ).toBe(0);
+                expect(await Goal.count({ where: { title: 'Sneaky' } })).toBe(
+                    0
+                );
             });
 
             it('rejects a blank goal title', async () => {
@@ -4457,6 +4457,9 @@ describe('MCP Tools Integration', () => {
 
             it('create_person rejects an unknown relationship type and a duplicate name', async () => {
                 await Person.create({ user_id: user.id, name: 'Neighbour' });
+                const before = await Person.count({
+                    where: { user_id: user.id },
+                });
 
                 const badType = await run('create_person', {
                     name: 'Carpenter',
@@ -4472,7 +4475,10 @@ describe('MCP Tools Integration', () => {
                 expect(blank.isError).toBe(true);
                 expect(
                     await Person.count({ where: { user_id: user.id } })
-                ).toBe(1);
+                ).toBe(before);
+                expect(
+                    await Person.count({ where: { name: 'Carpenter' } })
+                ).toBe(0);
             });
         });
     });
