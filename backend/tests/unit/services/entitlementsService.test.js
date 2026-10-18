@@ -229,6 +229,9 @@ describe('consumeMonthlyUsage', () => {
         const user = await createTestUser({
             email: `credits_race_${Date.now()}@example.com`,
         });
+        // Create the billing account first: this test is about the usage
+        // counter, not the first-request account setup.
+        await entitlements.getEntitlements(user.id);
 
         const results = await Promise.allSettled(
             Array.from({ length: 6 }, () =>
@@ -236,9 +239,7 @@ describe('consumeMonthlyUsage', () => {
             )
         );
 
-        expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(
-            2
-        );
+        expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(2);
         expect(
             results
                 .filter((r) => r.status === 'rejected')

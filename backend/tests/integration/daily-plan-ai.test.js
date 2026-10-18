@@ -6,12 +6,7 @@ const OpenAI = require('openai');
 const request = require('supertest');
 const moment = require('moment-timezone');
 const app = require('../../app');
-const {
-    Task,
-    User,
-    DailyPlan,
-    RecurringCompletion,
-} = require('../../models');
+const { Task, User, DailyPlan, RecurringCompletion } = require('../../models');
 const { createTestUser } = require('../helpers/testUtils');
 const dailyPlanAi = require('../../modules/daily-plan/ai');
 const calendarFeedsService = require('../../modules/calendar-feeds/service');

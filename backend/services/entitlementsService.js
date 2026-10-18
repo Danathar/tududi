@@ -415,16 +415,12 @@ function monthKey(now = new Date()) {
 async function incrementWithinLimit(userId, metric, period, n, limit) {
     const { UsageCounter } = models();
     const where = { user_id: userId, metric, period_key: period };
-    try {
-        await UsageCounter.findOrCreate({
-            where,
-            defaults: { ...where, count: 0 },
-        });
-    } catch (err) {
-        // Two first calls of the month can both miss the row; the unique
-        // index lets one create it, and the loser only needs it to exist.
-        if (err?.name !== 'SequelizeUniqueConstraintError') throw err;
-    }
+    // Make sure the row exists. A single INSERT that skips on the unique
+    // index (no findOrCreate transaction, which deadlocks on SQLite when
+    // several first calls of the month race) lets one caller create it.
+    await UsageCounter.bulkCreate([{ ...where, count: 0 }], {
+        ignoreDuplicates: true,
+    });
 
     const amount = Number(n);
     if (!Number.isInteger(amount) || amount < 0) {

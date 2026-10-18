@@ -484,8 +484,7 @@ const isDone = (task) => task?.status === 2 || task?.status === 'done';
 
 // Habits stay open after a check-in and recurring tasks reopen, so a plan
 // item also counts as done when the plan marks its occurrence done.
-const isItemDone = (item) =>
-    item.occurrence_done === true || isDone(item.task);
+const isItemDone = (item) => item.occurrence_done === true || isDone(item.task);
 
 async function wrapUpDay(userId, date) {
     const user = await assertAiEnabled(userId);
