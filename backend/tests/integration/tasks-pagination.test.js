@@ -213,3 +213,68 @@ describe('GET /api/tasks database pagination', () => {
         expect(today.body.tasks.length).toBeLessThanOrEqual(2);
     });
 });
+
+describe('malformed list params', () => {
+    let user, agent;
+
+    beforeEach(async () => {
+        user = await createTestUser({
+            email: `listparams_${Date.now()}@example.com`,
+        });
+        agent = request.agent(app);
+        await agent
+            .post('/api/login')
+            .send({ email: user.email, password: 'password123' });
+    });
+
+    it.each([
+        ['order_by', 'name:sideways'],
+        ['order_by', 'bogus:asc'],
+        ['order_by', 'name:asc:desc'],
+        ['limit', 'abc'],
+        ['limit', '0'],
+        ['limit', '-5'],
+        ['limit', '10001'],
+        ['offset', 'abc'],
+        ['offset', '-1'],
+    ])('GET /api/tasks rejects %s=%s with 400', async (key, value) => {
+        const response = await agent
+            .get('/api/tasks')
+            .query({ type: 'all', [key]: value });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toBeDefined();
+    });
+
+    it('GET /api/tasks defaults the direction when only a column is given', async () => {
+        for (const name of ['b', 'a', 'c']) {
+            await Task.create({ user_id: user.id, name, status: 0 });
+        }
+
+        const response = await agent
+            .get('/api/tasks')
+            .query({ type: 'all', order_by: 'name' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.tasks.map((t) => t.name)).toEqual(['a', 'b', 'c']);
+    });
+
+    it.each([['abc'], ['0'], ['501'], ['-1']])(
+        'GET /api/tasks/completion-analytics rejects limit=%s with 400',
+        async (limit) => {
+            const response = await agent
+                .get('/api/tasks/completion-analytics')
+                .query({ limit });
+
+            expect(response.status).toBe(400);
+        }
+    );
+
+    it('GET /api/tasks/completion-analytics accepts a valid limit', async () => {
+        const response = await agent
+            .get('/api/tasks/completion-analytics')
+            .query({ limit: 10, offset: 0 });
+
+        expect(response.status).toBe(200);
+    });
+});
