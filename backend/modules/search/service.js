@@ -5,11 +5,32 @@ const moment = require('moment-timezone');
 const { Task, Tag, Project, sequelize } = require('../../models');
 const searchRepository = require('./repository');
 const scopeService = require('../../services/scopeService');
-const { parseSearchParams, priorityToInt } = require('./validation');
+const {
+    parseSearchParams,
+    priorityToInt,
+    escapeLike,
+    LIKE_ESCAPE_CHAR,
+} = require('./validation');
 const { serializeTasks } = require('../tasks/core/serializers');
 const { UnauthorizedError } = require('../../shared/errors');
 
 class SearchService {
+    /**
+     * Case-insensitive "contains" match on a column. The search text is
+     * escaped so %, _ and the escape char match literally, and the ESCAPE
+     * clause is explicit because SQLite has no default escape character.
+     */
+    likeContains(columnName, lowerQuery) {
+        const pattern = `%${escapeLike(lowerQuery)}%`;
+        return sequelize.where(
+            sequelize.fn('LOWER', sequelize.col(columnName)),
+            'LIKE',
+            sequelize.literal(
+                `${sequelize.escape(pattern)} ESCAPE '${LIKE_ESCAPE_CHAR}'`
+            )
+        );
+    }
+
     /**
      * Task statuses considered "completed" for the active/completed status filter.
      */
@@ -101,18 +122,8 @@ class SearchService {
             // as the non_recurring filter, cannot overwrite the text match.
             extraConditions.push({
                 [Op.or]: [
-                    sequelize.where(
-                        sequelize.fn('LOWER', sequelize.col('Task.name')),
-                        {
-                            [Op.like]: `%${lowerQuery}%`,
-                        }
-                    ),
-                    sequelize.where(
-                        sequelize.fn('LOWER', sequelize.col('Task.note')),
-                        {
-                            [Op.like]: `%${lowerQuery}%`,
-                        }
-                    ),
+                    this.likeContains('Task.name', lowerQuery),
+                    this.likeContains('Task.note', lowerQuery),
                 ],
             });
         }
@@ -339,18 +350,8 @@ class SearchService {
         if (searchQuery) {
             const lowerQuery = searchQuery.toLowerCase();
             conditions[Op.or] = [
-                sequelize.where(
-                    sequelize.fn('LOWER', sequelize.col('Project.name')),
-                    {
-                        [Op.like]: `%${lowerQuery}%`,
-                    }
-                ),
-                sequelize.where(
-                    sequelize.fn('LOWER', sequelize.col('Project.description')),
-                    {
-                        [Op.like]: `%${lowerQuery}%`,
-                    }
-                ),
+                this.likeContains('Project.name', lowerQuery),
+                this.likeContains('Project.description', lowerQuery),
             ];
         }
 
@@ -445,18 +446,8 @@ class SearchService {
         if (searchQuery) {
             const lowerQuery = searchQuery.toLowerCase();
             conditions[Op.or] = [
-                sequelize.where(
-                    sequelize.fn('LOWER', sequelize.col('Area.name')),
-                    {
-                        [Op.like]: `%${lowerQuery}%`,
-                    }
-                ),
-                sequelize.where(
-                    sequelize.fn('LOWER', sequelize.col('Area.description')),
-                    {
-                        [Op.like]: `%${lowerQuery}%`,
-                    }
-                ),
+                this.likeContains('Area.name', lowerQuery),
+                this.likeContains('Area.description', lowerQuery),
             ];
         }
 
@@ -509,18 +500,8 @@ class SearchService {
         if (searchQuery) {
             const lowerQuery = searchQuery.toLowerCase();
             conditions[Op.or] = [
-                sequelize.where(
-                    sequelize.fn('LOWER', sequelize.col('Note.title')),
-                    {
-                        [Op.like]: `%${lowerQuery}%`,
-                    }
-                ),
-                sequelize.where(
-                    sequelize.fn('LOWER', sequelize.col('Note.content')),
-                    {
-                        [Op.like]: `%${lowerQuery}%`,
-                    }
-                ),
+                this.likeContains('Note.title', lowerQuery),
+                this.likeContains('Note.content', lowerQuery),
             ];
         }
 
@@ -574,14 +555,7 @@ class SearchService {
 
         if (searchQuery) {
             const lowerQuery = searchQuery.toLowerCase();
-            conditions[Op.and] = [
-                sequelize.where(
-                    sequelize.fn('LOWER', sequelize.col('Tag.name')),
-                    {
-                        [Op.like]: `%${lowerQuery}%`,
-                    }
-                ),
-            ];
+            conditions[Op.and] = [this.likeContains('Tag.name', lowerQuery)];
         }
 
         let count = 0;

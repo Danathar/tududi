@@ -1,5 +1,10 @@
 'use strict';
 
+const { ValidationError } = require('../../shared/errors');
+
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 100;
+
 const VALID_TASK_STATUS_FILTERS = ['active', 'completed', 'all'];
 
 // Specific task statuses a search or view can be narrowed to, mapped to the
@@ -13,6 +18,46 @@ const TASK_STATUS_FILTERS = {
     cancelled: 5,
     planned: 6,
 };
+
+/**
+ * Return the value when it is a string (or absent); otherwise reject it.
+ * Express parses repeated or bracketed params (q[]=a, q=a&q=b) into arrays
+ * and objects, which would crash the string handling below.
+ */
+function requireStringParam(value, name) {
+    if (value !== undefined && typeof value !== 'string') {
+        throw new ValidationError(`${name} must be a string`);
+    }
+    return value;
+}
+
+/**
+ * Parse an integer pagination param. Empty or absent values fall back to the
+ * default; anything else must be an integer of at least `min`.
+ */
+function parseIntegerParam(value, name, fallback, min) {
+    if (value === undefined) return fallback;
+    requireStringParam(value, name);
+    const trimmed = value.trim();
+    if (trimmed === '') return fallback;
+    const parsed = Number(trimmed);
+    if (!Number.isInteger(parsed) || parsed < min) {
+        throw new ValidationError(
+            `${name} must be an integer greater than or equal to ${min}`
+        );
+    }
+    return parsed;
+}
+
+/**
+ * Escape LIKE wildcards so user text matches literally. Use together with an
+ * ESCAPE clause naming LIKE_ESCAPE_CHAR (SQLite has no default escape char).
+ */
+const LIKE_ESCAPE_CHAR = '!';
+
+function escapeLike(text) {
+    return text.replace(/[!%_]/g, (char) => LIKE_ESCAPE_CHAR + char);
+}
 
 /**
  * Parse and validate search query parameters.
@@ -35,6 +80,10 @@ function parseSearchParams(query) {
         area_uid: areaUid,
         project_uid: projectUid,
     } = query;
+
+    requireStringParam(q, 'q');
+    requireStringParam(filters, 'filters');
+    requireStringParam(tagsParam, 'tags');
 
     const searchQuery = q ? q.trim() : '';
 
@@ -64,8 +113,11 @@ function parseSearchParams(query) {
             : [];
 
     const hasPagination = limitParam !== undefined || offsetParam !== undefined;
-    const limit = hasPagination ? parseInt(limitParam, 10) || 20 : 20;
-    const offset = hasPagination ? parseInt(offsetParam, 10) || 0 : 0;
+    const limit = Math.min(
+        parseIntegerParam(limitParam, 'limit', DEFAULT_LIMIT, 1),
+        MAX_LIMIT
+    );
+    const offset = parseIntegerParam(offsetParam, 'offset', 0, 0);
 
     return {
         searchQuery,
@@ -102,6 +154,10 @@ function priorityToInt(priorityStr) {
 }
 
 module.exports = {
+    DEFAULT_LIMIT,
+    MAX_LIMIT,
+    LIKE_ESCAPE_CHAR,
+    escapeLike,
     TASK_STATUS_FILTERS,
     parseSearchParams,
     priorityToInt,
