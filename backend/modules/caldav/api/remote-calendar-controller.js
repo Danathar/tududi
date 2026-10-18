@@ -6,6 +6,7 @@ const {
     assertSafeCalDavUrl,
     safeRequest,
 } = require('../services/safe-request');
+const { withRemoteAuth } = require('../services/remote-auth');
 
 class RemoteCalendarController {
     async listRemoteCalendars(req, res, next) {
@@ -304,25 +305,23 @@ class RemoteCalendarController {
                 await assertSafeCalDavUrl(testUrl, { requireHttps: true })
             ).href;
 
-            const authConfig =
-                auth_type === 'bearer'
-                    ? { headers: { Authorization: `Bearer ${password}` } }
-                    : { auth: { username, password } };
-
             // lgtm[js/request-forgery]
             // The URL is checked by assertSafeCalDavUrl before the request and
             // for every redirect hop, and the socket address is re-checked at
             // connect time (see services/safe-request.js).
             const response = await safeRequest(
-                {
-                    method: 'OPTIONS',
-                    url: validatedUrl,
-                    ...authConfig,
-                    timeout: parseInt(
-                        process.env.CALDAV_REQUEST_TIMEOUT || '30000',
-                        10
-                    ),
-                },
+                withRemoteAuth(
+                    {
+                        method: 'OPTIONS',
+                        url: validatedUrl,
+                        timeout: parseInt(
+                            process.env.CALDAV_REQUEST_TIMEOUT || '30000',
+                            10
+                        ),
+                    },
+                    { auth_type, username },
+                    password
+                ),
                 { requireHttps: true }
             );
 

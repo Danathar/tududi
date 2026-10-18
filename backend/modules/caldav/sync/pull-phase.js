@@ -1,4 +1,5 @@
 const { safeRequest } = require('../services/safe-request');
+const { withRemoteAuth } = require('../services/remote-auth');
 const { parseStringPromise } = require('xml2js');
 const { AppError } = require('../../../shared/errors');
 const logger = require('../../../services/logService');
@@ -94,23 +95,25 @@ class PullPhase {
         }
 
         try {
-            const response = await safeRequest({
-                method: 'REPORT',
-                url: calendarUrl,
-                headers: {
-                    'Content-Type': 'application/xml; charset=utf-8',
-                    Depth: '1',
-                },
-                auth: {
-                    username: remoteCalendar.username,
-                    password: password,
-                },
-                data: reportBody,
-                timeout: parseInt(
-                    process.env.CALDAV_REQUEST_TIMEOUT || '30000',
-                    10
-                ),
-            });
+            const response = await safeRequest(
+                withRemoteAuth(
+                    {
+                        method: 'REPORT',
+                        url: calendarUrl,
+                        headers: {
+                            'Content-Type': 'application/xml; charset=utf-8',
+                            Depth: '1',
+                        },
+                        data: reportBody,
+                        timeout: parseInt(
+                            process.env.CALDAV_REQUEST_TIMEOUT || '30000',
+                            10
+                        ),
+                    },
+                    remoteCalendar,
+                    password
+                )
+            );
 
             // Date-only DUE/DTSTART values are stored as the end of that day in
             // the user's timezone, the same as the web app and the CalDAV
@@ -307,18 +310,20 @@ class PullPhase {
                 remoteCalendar.password_encrypted
             );
 
-            const response = await safeRequest({
-                method: 'GET',
-                url: taskUrl,
-                auth: {
-                    username: remoteCalendar.username,
-                    password: password,
-                },
-                timeout: parseInt(
-                    process.env.CALDAV_REQUEST_TIMEOUT || '30000',
-                    10
-                ),
-            });
+            const response = await safeRequest(
+                withRemoteAuth(
+                    {
+                        method: 'GET',
+                        url: taskUrl,
+                        timeout: parseInt(
+                            process.env.CALDAV_REQUEST_TIMEOUT || '30000',
+                            10
+                        ),
+                    },
+                    remoteCalendar,
+                    password
+                )
+            );
 
             const etag = response.headers.etag?.replace(/^"|"$/g, '');
             const taskData = await parseVTODOToTask(

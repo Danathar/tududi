@@ -190,11 +190,43 @@ class MergePhase {
             );
         }
 
-        const existingTask = await Task.findOne({
+        let existingTask = await Task.findOne({
             where: { uid: remoteTask.uid, user_id: calendar.user_id },
         });
 
         if (!existingTask) {
+            // A task whose local uid differs from the remote UID (see below)
+            // is found again through the href recorded when it was pulled.
+            const hrefState = await SyncStateRepository.findByCalendarAndHref(
+                calendar.id,
+                href
+            );
+            if (hrefState) {
+                existingTask = await Task.findOne({
+                    where: {
+                        id: hrefState.task_id,
+                        user_id: calendar.user_id,
+                    },
+                });
+            }
+        }
+
+        if (!existingTask) {
+            // Task.uid is unique across all users. When another user already
+            // holds this UID (two accounts syncing the same shared calendar),
+            // creating the task would fail on every sync, so give the local
+            // copy its own uid.
+            const uidTaken = await Task.findOne({
+                where: { uid: remoteTask.uid },
+            });
+            if (uidTaken) {
+                const localUid = generateUid();
+                logger.logInfo(
+                    `Remote task UID ${remoteTask.uid} belongs to another user; assigned ${localUid}`
+                );
+                remoteTask.uid = localUid;
+            }
+
             await this._createNewTask(
                 remoteTask,
                 calendar,
