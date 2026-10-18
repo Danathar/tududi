@@ -10,7 +10,11 @@ const {
     validatePriority,
     formatDate,
 } = require('./validation');
-const { NotFoundError, ValidationError } = require('../../shared/errors');
+const {
+    NotFoundError,
+    ValidationError,
+    ForbiddenError,
+} = require('../../shared/errors');
 const { validateTagName } = require('../tags/tagsService');
 const permissionsService = require('../../services/permissionsService');
 const scopeService = require('../../services/scopeService');
@@ -26,10 +30,36 @@ const { extractUidFromSlug } = require('../../utils/slug-utils');
 const { logError } = require('../../services/logService');
 const {
     syncProjectSharesFromContainer,
+    revokeProjectContainerShares,
 } = require('../../services/containerShareSync');
+const {
+    validateAreaAccess,
+    validateGoalAccess,
+} = require('../tasks/utils/validation');
 const { Project } = require('../../models');
 
 const PROJECT_STATUSES = Project.rawAttributes.status.values;
+
+// A project can only be filed under an area or goal the caller owns or can
+// edit. Missing and inaccessible ids get the same error, so ids cannot be
+// probed and another user's area or goal name never comes back in the
+// response. Keeping the value the project already has is always allowed.
+async function resolveContainerId(validate, value, userId, label, current) {
+    if (value === undefined) return undefined;
+    if (value === null || value === '') return null;
+    if (
+        current !== undefined &&
+        current !== null &&
+        `${value}` === `${current}`
+    ) {
+        return current;
+    }
+    try {
+        return await validate(value, userId);
+    } catch {
+        throw new ValidationError(`Invalid ${label}.`);
+    }
+}
 const MAX_REORDER_PROJECTS = 5000;
 
 /**
@@ -395,13 +425,25 @@ class ProjectsService {
         const validatedName = validateName(name);
         const tagsData = tags || Tags;
         const projectUid = generateUid();
+        const resolvedAreaId = await resolveContainerId(
+            validateAreaAccess,
+            area_id,
+            userId,
+            'area'
+        );
+        const resolvedGoalId = await resolveContainerId(
+            validateGoalAccess,
+            goal_id,
+            userId,
+            'goal'
+        );
 
         const projectData = {
             uid: projectUid,
             name: validatedName,
             description: description || '',
-            area_id: area_id || null,
-            goal_id: goal_id || null,
+            area_id: resolvedAreaId || null,
+            goal_id: resolvedGoalId || null,
             is_maintenance: is_maintenance || false,
             pin_to_sidebar: false,
             priority: priority || null,
@@ -470,9 +512,27 @@ class ProjectsService {
 
         if (name !== undefined) updateData.name = validateName(name);
         if (description !== undefined) updateData.description = description;
-        if (goal_id !== undefined)
-            updateData.goal_id =
-                goal_id === '' || goal_id === null ? null : goal_id;
+        if (goal_id !== undefined) {
+            const resolvedGoalId = await resolveContainerId(
+                validateGoalAccess,
+                goal_id,
+                userId,
+                'goal',
+                project.goal_id
+            );
+            if (isOwner) {
+                updateData.goal_id = resolvedGoalId;
+            } else if (
+                `${resolvedGoalId ?? ''}` !== `${project.goal_id ?? ''}`
+            ) {
+                // The goal is shared state for every collaborator, so only
+                // the owner can change it. Re-sending the current goal (the
+                // form does on every save) is a no-op.
+                throw new ForbiddenError(
+                    'Only the project owner can change its goal.'
+                );
+            }
+        }
         if (is_maintenance !== undefined)
             updateData.is_maintenance = is_maintenance;
         if (pin_to_sidebar !== undefined)
@@ -490,7 +550,13 @@ class ProjectsService {
             updateData.status = validateStatus(state, PROJECT_STATUSES);
 
         if (area_id !== undefined) {
-            const resolvedAreaId = area_id === '' ? null : area_id;
+            const resolvedAreaId = await resolveContainerId(
+                validateAreaAccess,
+                area_id,
+                userId,
+                'area',
+                project.area_id
+            );
             if (isOwner) {
                 // Owner controls the canonical area for all users
                 updateData.area_id = resolvedAreaId;
@@ -504,11 +570,32 @@ class ProjectsService {
             }
         }
 
-        await projectsRepository.update(project, updateData);
-        await updateProjectTags(project, tagsData, userId);
+        // The area and goal the project is leaving, if any.
+        const leftContainer = {
+            area_id:
+                updateData.area_id !== undefined &&
+                `${updateData.area_id}` !== `${project.area_id}`
+                    ? project.area_id
+                    : null,
+            goal_id:
+                updateData.goal_id !== undefined &&
+                `${updateData.goal_id}` !== `${project.goal_id}`
+                    ? project.goal_id
+                    : null,
+        };
 
-        // Moving the project into a (possibly shared) area or goal mirrors that
-        // container's collaborators onto the project.
+        await projectsRepository.update(project, updateData);
+        // Tags belong to the project's owner, so a collaborator's edit
+        // resolves names in the owner's tag list instead of swapping the
+        // owner's tags for the collaborator's own.
+        await updateProjectTags(project, tagsData, project.user_id);
+
+        // Moving the project out of a shared area or goal takes away the
+        // access that container's collaborators had to it; moving it into
+        // one mirrors that container's collaborators onto the project.
+        if (leftContainer.area_id || leftContainer.goal_id) {
+            await revokeProjectContainerShares(project.id, leftContainer);
+        }
         if (
             isOwner &&
             (updateData.area_id !== undefined ||

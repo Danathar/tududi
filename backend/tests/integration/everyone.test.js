@@ -174,6 +174,35 @@ describe('GET /api/everyone', () => {
         ).toBeUndefined();
     });
 
+    it("does not expose a collaborator's private task assigned to themselves", async () => {
+        await Task.create({
+            name: 'Mate private assigned',
+            user_id: mate.id,
+            assigned_to: mateSelf.uid,
+            due_date: new Date(),
+        });
+
+        const res = await ownerAgent.get('/api/everyone');
+        expect(res.status).toBe(200);
+        const allTasks = res.body.columns.flatMap((c) => [
+            ...c.overdue,
+            ...c.today,
+            ...c.tomorrow,
+            ...c.upcoming,
+            ...c.no_date,
+        ]);
+        expect(
+            allTasks.find((t) => t.name === 'Mate private assigned')
+        ).toBeUndefined();
+
+        // The collaborator still sees their own task.
+        const mateRes = await mateAgent.get('/api/everyone');
+        const mateCol = mateRes.body.columns.find((c) => c.is_self);
+        expect(
+            mateCol.today.find((t) => t.name === 'Mate private assigned')
+        ).toBeDefined();
+    });
+
     it('buckets tasks by due date in the viewer timezone', async () => {
         const mk = (name, due) =>
             Task.create({

@@ -535,7 +535,7 @@ describe('Sharing a resource with a group', () => {
             expect(await GroupShare.count()).toBe(0);
         });
 
-        it('lets an admin share a resource they do not own', async () => {
+        it('rejects an admin sharing a resource they do not own', async () => {
             await Role.create({ user_id: outsider.id, is_admin: true });
             const res = await outsiderAgent.post('/api/shares').send({
                 resource_type: 'project',
@@ -543,8 +543,8 @@ describe('Sharing a resource with a group', () => {
                 target_group_uid: group.uid,
                 access_level: 'rw',
             });
-            expect(res.status).toBe(204);
-            expect(await GroupShare.count()).toBe(1);
+            expect(res.status).toBe(403);
+            expect(await GroupShare.count()).toBe(0);
         });
 
         it('rejects giving both a user and a group, or neither', async () => {

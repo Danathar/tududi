@@ -34,6 +34,9 @@ const {
     getUpcomingRangeInUTC,
 } = require('../../utils/timezone-utils');
 const permissionsService = require('../../services/permissionsService');
+const {
+    revokeProjectSharesForItem,
+} = require('../../services/containerShareSync');
 const habitService = require('../habits/habitService');
 
 const {
@@ -678,6 +681,7 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
 
         const oldValues = captureOldValues(task);
         const oldStatus = task.status;
+        const oldProjectId = task.project_id;
 
         if (update_parent_recurrence && task.recurring_parent_id) {
             const parentTask = await taskRepository.findByIdAndUser(
@@ -926,6 +930,17 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res) => {
 
         await updateTaskTags(task, tagsData, req.currentUser.id);
         await updateSubtasks(task.id, subtasks, req.currentUser.id);
+
+        // Moving the task out of a shared project takes away the access that
+        // project's (or its area's or goal's) collaborators had to it.
+        if (
+            taskAttributes.project_id !== undefined &&
+            oldProjectId &&
+            taskAttributes.project_id !== oldProjectId
+        ) {
+            await revokeProjectSharesForItem('task', task.id, oldProjectId);
+        }
+
         await logTaskChanges(
             task,
             oldValues,

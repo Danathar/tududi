@@ -8,7 +8,9 @@ const permissionsService = require('../../../services/permissionsService');
 const rolesService = require('../../../services/rolesService');
 const {
     syncProjectSharesFromContainer,
+    revokeProjectContainerShares,
 } = require('../../../services/containerShareSync');
+const { validateAreaAccess } = require('../../tasks/utils/validation');
 const { resolveTagsForTransaction } = require('./tagResolver');
 const { validateName } = require('../../projects/validation');
 
@@ -306,6 +308,12 @@ function registerProjectTools(server, context, tools) {
         handler: async (params) => {
             const goalId = await resolveGoalId(params, context.userId);
             assertNotGoalAndMaintenance(params, goalId);
+            // Only an area the caller owns or can edit; anything else would
+            // echo another user's area name back.
+            const areaId = await validateAreaAccess(
+                params.area_id,
+                context.userId
+            );
             const name = validateName(params.name);
             assertValidPriority(params.priority);
             const dueDateAt = parseProjectDueDate(params.due_date_at);
@@ -318,7 +326,7 @@ function registerProjectTools(server, context, tools) {
                         ? params.priority
                         : 1,
                 status: params.status || 'not_started',
-                area_id: params.area_id || null,
+                area_id: areaId || null,
                 due_date_at: dueDateAt || null,
                 color: params.color || null,
                 image_url: params.image_url || null,
@@ -484,7 +492,23 @@ function registerProjectTools(server, context, tools) {
             if (params.color !== undefined)
                 updates.color = params.color === '' ? null : params.color;
             if (params.status !== undefined) updates.status = params.status;
-            if (params.area_id !== undefined) updates.area_id = params.area_id;
+            let userAreaPlacement;
+            if (params.area_id !== undefined) {
+                const resolvedAreaId =
+                    `${params.area_id}` === `${project.area_id}`
+                        ? project.area_id
+                        : await validateAreaAccess(
+                              params.area_id,
+                              context.userId
+                          );
+                if (project.user_id === context.userId) {
+                    updates.area_id = resolvedAreaId;
+                } else {
+                    // Non-owners only choose their own placement; the
+                    // canonical area stays the owner's (as in the REST API).
+                    userAreaPlacement = resolvedAreaId;
+                }
+            }
             if (params.pinned !== undefined)
                 updates.pin_to_sidebar = params.pinned;
             if (params.image_url !== undefined)
@@ -509,6 +533,20 @@ function registerProjectTools(server, context, tools) {
                 throw new Error('Only the project owner can change its goal');
             }
 
+            // The area and goal the project is leaving, if any.
+            const leftContainer = {
+                area_id:
+                    updates.area_id !== undefined &&
+                    `${updates.area_id}` !== `${project.area_id}`
+                        ? project.area_id
+                        : null,
+                goal_id:
+                    updates.goal_id !== undefined &&
+                    `${updates.goal_id}` !== `${project.goal_id}`
+                        ? project.goal_id
+                        : null,
+            };
+
             await sequelize.transaction(async (transaction) => {
                 await project.update(updates, { transaction });
 
@@ -522,6 +560,17 @@ function registerProjectTools(server, context, tools) {
                 }
             });
 
+            if (userAreaPlacement !== undefined) {
+                await projectsRepository.upsertUserProjectArea(
+                    context.userId,
+                    project.id,
+                    userAreaPlacement
+                );
+            }
+
+            if (leftContainer.area_id || leftContainer.goal_id) {
+                await revokeProjectContainerShares(project.id, leftContainer);
+            }
             if (
                 project.user_id === context.userId &&
                 (updates.area_id !== undefined || updates.goal_id !== undefined)
