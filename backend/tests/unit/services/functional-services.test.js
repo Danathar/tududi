@@ -78,6 +78,16 @@ describe('Functional Services', () => {
             expect(typeof quotesService._validateQuotesData).toBe('function');
         });
 
+        it('should load the quotes from backend/config/quotes.yml', () => {
+            const fs = require('fs');
+            expect(fs.existsSync(quotesService._getQuotesFilePath())).toBe(
+                true
+            );
+            expect(quotesService.getQuotesCount()).toBeGreaterThan(
+                quotesService._createDefaultQuotes().length
+            );
+        });
+
         it('should validate quotes data structure correctly', () => {
             const validData = { quotes: ['quote1', 'quote2'] };
             const invalidData1 = { quotes: 'not-array' };

@@ -313,15 +313,19 @@ module.exports = (sequelize) => {
             });
 
             if (user && telegramService.isTelegramConfigured(user)) {
-                await telegramService.sendTelegramNotification(user, {
-                    title,
-                    message,
-                    data,
-                    level: 'info',
-                });
+                const result = await telegramService.sendTelegramNotification(
+                    user,
+                    {
+                        title,
+                        message,
+                        data,
+                        level: 'info',
+                    }
+                );
 
-                // Mark that Telegram was sent for this notification
-                if (notificationInstance) {
+                // Mark that Telegram was sent only when delivery succeeded,
+                // so a failed send is retried on the next scheduler run
+                if (result?.success && notificationInstance) {
                     await notificationInstance.markChannelAsSent('telegram');
                 }
             }
