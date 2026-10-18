@@ -4,7 +4,6 @@ const sharesRepository = require('./repository');
 const groupsRepository = require('../groups/repository');
 const { execAction } = require('../../services/execAction');
 const groupSharing = require('../../services/groupSharing');
-const { isAdmin } = require('../../services/rolesService');
 const { getWorkspaceUserIds } = require('../../services/workspaceMembers');
 const accountsService = require('../../services/accountsService');
 const { logError } = require('../../services/logService');
@@ -42,14 +41,17 @@ class SharesService {
         return resource && resource.user_id === userId;
     }
 
+    // Only the owner shares a resource or sees who it is shared with. Admins
+    // get no exception: they are scoped like regular users everywhere else
+    // (see permissionsService.getAccess), and letting them share another
+    // user's item would let them grant themselves access to it.
     async assertCanManage(userId, resourceType, resourceUid) {
-        const userIsAdmin = await isAdmin(userId);
         const userIsOwner = await this.isResourceOwner(
             userId,
             resourceType,
             resourceUid
         );
-        if (!userIsAdmin && !userIsOwner) {
+        if (!userIsOwner) {
             throw new ForbiddenError('Forbidden');
         }
     }
