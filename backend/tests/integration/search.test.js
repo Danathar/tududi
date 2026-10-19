@@ -1511,6 +1511,16 @@ describe('Universal Search Routes', () => {
                 expect(response.status).toBe(400);
             });
 
+            it('should return 400 for an exponent-notation limit', async () => {
+                const response = await agent.get('/api/search?limit=1e2');
+                expect(response.status).toBe(400);
+            });
+
+            it('should return 400 for a hexadecimal limit', async () => {
+                const response = await agent.get('/api/search?limit=0x10');
+                expect(response.status).toBe(400);
+            });
+
             it('should return 400 for a list-valued limit', async () => {
                 const response = await agent.get('/api/search?limit[]=5');
                 expect(response.status).toBe(400);

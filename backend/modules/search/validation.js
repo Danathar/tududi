@@ -1,6 +1,7 @@
 'use strict';
 
 const { ValidationError } = require('../../shared/errors');
+const { parseIntegerParam } = require('../../utils/list-params');
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -29,24 +30,6 @@ function requireStringParam(value, name) {
         throw new ValidationError(`${name} must be a string`);
     }
     return value;
-}
-
-/**
- * Parse an integer pagination param. Empty or absent values fall back to the
- * default; anything else must be an integer of at least `min`.
- */
-function parseIntegerParam(value, name, fallback, min) {
-    if (value === undefined) return fallback;
-    requireStringParam(value, name);
-    const trimmed = value.trim();
-    if (trimmed === '') return fallback;
-    const parsed = Number(trimmed);
-    if (!Number.isInteger(parsed) || parsed < min) {
-        throw new ValidationError(
-            `${name} must be an integer greater than or equal to ${min}`
-        );
-    }
-    return parsed;
 }
 
 /**
@@ -114,10 +97,18 @@ function parseSearchParams(query) {
 
     const hasPagination = limitParam !== undefined || offsetParam !== undefined;
     const limit = Math.min(
-        parseIntegerParam(limitParam, 'limit', DEFAULT_LIMIT, 1),
+        parseIntegerParam(limitParam, 'limit', {
+            min: 1,
+            max: Number.MAX_SAFE_INTEGER,
+            fallback: DEFAULT_LIMIT,
+        }),
         MAX_LIMIT
     );
-    const offset = parseIntegerParam(offsetParam, 'offset', 0, 0);
+    const offset = parseIntegerParam(offsetParam, 'offset', {
+        min: 0,
+        max: Number.MAX_SAFE_INTEGER,
+        fallback: 0,
+    });
 
     return {
         searchQuery,
