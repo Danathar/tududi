@@ -171,4 +171,40 @@ describe('Task User Isolation', () => {
             expect(userATask).toBeUndefined();
         });
     });
+
+    describe('Parent task errors', () => {
+        // A missing id and another user's task must get the same answer,
+        // or any user can map task ids to their owners.
+        it('should answer the same for User A task and an unused id', async () => {
+            const taskResponse = await agentA.post('/api/task').send({
+                name: 'User A Parent Candidate',
+            });
+            expect(taskResponse.status).toBe(201);
+            const taskA = taskResponse.body;
+
+            const ownedByA = await agentB.post('/api/task').send({
+                name: 'User B Child',
+                parent_task_id: taskA.id,
+            });
+            const unused = await agentB.post('/api/task').send({
+                name: 'User B Child',
+                parent_task_id: taskA.id + 100000,
+            });
+
+            expect(ownedByA.status).toBe(400);
+            expect(unused.status).toBe(400);
+            expect(ownedByA.body).toEqual({ error: 'Invalid parent task.' });
+            expect(unused.body).toEqual(ownedByA.body);
+
+            const ownTask = await agentB.post('/api/task').send({
+                name: 'User B Task',
+            });
+            expect(ownTask.status).toBe(201);
+            const reparent = await agentB
+                .patch(`/api/task/${ownTask.body.uid}`)
+                .send({ parent_task_id: taskA.id });
+            expect(reparent.status).toBe(400);
+            expect(reparent.body).toEqual({ error: 'Invalid parent task.' });
+        });
+    });
 });
