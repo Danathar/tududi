@@ -61,19 +61,11 @@ async function validateParentTaskAccess(parentTaskId, userId, taskId = null) {
     const parentTask = await Task.findOne({
         where: { id: parentTaskId, user_id: userId },
     });
+    // One answer whether the id is unused or another user's task: telling
+    // the two apart, or naming the owner, lets any user map task ids to
+    // accounts (#321).
     if (!parentTask) {
-        const anyTask = await Task.findOne({
-            where: { id: parentTaskId },
-        });
-        if (anyTask) {
-            throw new ValidationError(
-                `Invalid parent task. Parent task exists but belongs to a different user (parent user_id: ${anyTask.user_id}, current user_id: ${userId}).`
-            );
-        } else {
-            throw new ValidationError(
-                `Invalid parent task. Parent task with id ${parentTaskId} not found.`
-            );
-        }
+        throw new ValidationError('Invalid parent task.');
     }
 
     const parentAccess = await permissionsService.getAccess(
