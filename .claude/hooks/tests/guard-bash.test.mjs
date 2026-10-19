@@ -81,6 +81,11 @@ const allowed = [
     'exec -a X git status',
     'time -p npm test',
     '/usr/bin/time -v npm test',
+    // An option value that is a command name, with nothing left to run.
+    'env -u gh -u pr',
+    'timeout -s gh',
+    // A wrapper without its own option table still finds the command.
+    'command -p git status',
     'gh alias list',
     'gh search issues foo',
     'git -c user.name=x commit -m msg',
@@ -213,6 +218,11 @@ const blocked = [
     ["env -S 'gh pr create --title t'", 'no --repo'],
     ["env --split-string='git push upstream main'", 'origin'],
     ["env -Sgh\\ issue\\ create", 'no --repo'],
+    // The words after the -S string are appended to it once, in every spelling.
+    ['env -S gh pr merge 1', 'no --repo'],
+    ['env -Sgh pr merge 1', 'no --repo'],
+    ['env --split-string gh pr merge 1', 'no --repo'],
+    ['env --split-string=gh pr merge 1', 'no --repo'],
     // A wrapper option's value is not the command it runs: `env -u git gh ...`
     // unsets $git and runs gh; `exec -a gh` only names $0.
     ['env -u git gh pr merge 1', 'no --repo'],
@@ -223,6 +233,29 @@ const blocked = [
     ['env --argv0 git gh pr merge 1', 'no --repo'],
     ['exec -a git gh pr merge 1', 'no --repo'],
     ['/usr/bin/time -o git gh pr merge 1', 'no --repo'],
+    // The same for every wrapper with an option table, short and long spellings.
+    ['timeout -s git 5 gh pr merge 1', 'no --repo'],
+    ['timeout --kill-after git 5 gh pr merge 1', 'no --repo'],
+    ['nice -n git gh pr merge 1', 'no --repo'],
+    ['nice --adjustment git gh pr merge 1', 'no --repo'],
+    ['stdbuf -o git gh pr merge 1', 'no --repo'],
+    ['stdbuf --output git gh pr merge 1', 'no --repo'],
+    ['ionice -c git gh pr merge 1', 'no --repo'],
+    // --class is an exact name even though it is also a prefix of --classdata.
+    ['ionice --class git gh pr merge 1', 'no --repo'],
+    ['xargs -a git gh pr merge 1', 'no --repo'],
+    ['xargs --arg-file git gh pr merge 1', 'no --repo'],
+    ['/usr/bin/time --output git gh pr merge 1', 'no --repo'],
+    ['env --chdir git gh pr merge 1', 'no --repo'],
+    // A value joined with = does not consume the next word.
+    ['env --unset=git gh pr merge 1', 'no --repo'],
+    // xargs -i takes its value only from the same word, so `d` is not -d.
+    ['xargs -id gh pr merge 1', 'no --repo'],
+    // `--` ends the wrapper's options; the next word is the command.
+    ['env -- gh pr merge 1', 'no --repo'],
+    ['nice -- gh pr merge 1', 'no --repo'],
+    // A nested exec is read with its own options.
+    ['nice exec -a git gh pr merge 1', 'no --repo'],
     // -S packed after other options, abbreviated, after a value, or behind another wrapper.
     ["env -iS'gh pr merge 1'", 'no --repo'],
     ["env --sp='gh pr merge 1'", 'no --repo'],
