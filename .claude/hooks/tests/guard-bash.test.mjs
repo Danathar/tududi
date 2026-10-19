@@ -79,6 +79,8 @@ const allowed = [
     // Wrapper option values are skipped, not taken for the command.
     'env -a X git status',
     'exec -a X git status',
+    'sudo -u X git status',
+    'sudo -h',
     'time -p npm test',
     '/usr/bin/time -v npm test',
     // An option value that is a command name, with nothing left to run.
@@ -246,6 +248,16 @@ const blocked = [
     ['xargs -a git gh pr merge 1', 'no --repo'],
     ['xargs --arg-file git gh pr merge 1', 'no --repo'],
     ['/usr/bin/time --output git gh pr merge 1', 'no --repo'],
+    // sudo's own option values (-u USER, -g GROUP, -D DIR, -C NUM) are not the command.
+    ['sudo -u git gh pr merge 1', 'no --repo'],
+    ['sudo --user git gh pr merge 1', 'no --repo'],
+    ['sudo -g git gh pr merge 1', 'no --repo'],
+    ['sudo -D git git push --force origin main', 'force'],
+    ['sudo -C git gh pr merge 1', 'no --repo'],
+    ['sudo -u git gh pr create --repo chrisvel/tududi --title t --body b', 'chrisvel/tududi'],
+    ['sudo -u git git push upstream main', 'origin'],
+    // sudo -h takes its host only from the same word, so `git` here is the command.
+    ['sudo -hgit gh pr merge 1', 'no --repo'],
     ['env --chdir git gh pr merge 1', 'no --repo'],
     // A value joined with = does not consume the next word.
     ['env --unset=git gh pr merge 1', 'no --repo'],
@@ -329,6 +341,7 @@ const blockedLocal = [
     ['node --test --require ./x.js t.test.mjs', 'allowlist'],
     ['env -u git npm test -- --require ./x.js', 'allowlist'],
     ['exec -a git npm test -- --require ./x.js', 'allowlist'],
+    ['sudo -u git npm test -- --require ./x.js', 'allowlist'],
     ['nohup env -a node npm test -- --require ./x.js', 'allowlist'],
     ['time -p npm test -- --require ./x.js', 'allowlist'],
     ['/usr/bin/time -f git npm test -- --require ./x.js', 'allowlist'],

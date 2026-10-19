@@ -128,6 +128,7 @@ const WRAPPER_GETOPT = {
     nice: { value: 'n', long: ['adjustment'], takesValue: ['adjustment'] },
     stdbuf: { value: 'ioe', long: ['input', 'output', 'error'], takesValue: ['input', 'output', 'error'] },
     ionice: { value: 'cnpPu', long: ['class', 'classdata', 'pid', 'pgid', 'uid', 'ignore'], takesValue: ['class', 'classdata', 'pid', 'pgid', 'uid'] },
+    sudo: { value: 'aCcDgpRrTtUu', optional: 'h', long: ['askpass', 'auth-type', 'background', 'bell', 'close-from', 'chdir', 'preserve-env', 'edit', 'group', 'set-home', 'help', 'host', 'login', 'remove-timestamp', 'reset-timestamp', 'list', 'login-class', 'non-interactive', 'preserve-groups', 'prompt', 'chroot', 'role', 'stdin', 'shell', 'type', 'command-timeout', 'other-user', 'user', 'version', 'validate'], takesValue: ['auth-type', 'close-from', 'chdir', 'group', 'host', 'login-class', 'prompt', 'chroot', 'role', 'type', 'command-timeout', 'other-user', 'user'] },
     xargs: { value: 'adEILnPs', optional: 'eil', long: ['arg-file', 'delimiter', 'eof', 'replace', 'max-lines', 'max-args', 'max-procs', 'max-chars', 'process-slot-var', 'null', 'open-tty', 'interactive', 'no-run-if-empty', 'verbose', 'exit', 'show-limits'], takesValue: ['arg-file', 'delimiter', 'max-args', 'max-procs', 'max-chars', 'process-slot-var'] },
 };
 
