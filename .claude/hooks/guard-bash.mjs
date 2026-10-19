@@ -114,8 +114,66 @@ const KEYWORDS = new Set(['{', '}', '!', 'if', 'then', 'else', 'elif', 'do', 'wh
 // Wrappers that run another command; we look through them for gh/git/shells.
 const WRAPPERS = new Set([
     'env', 'command', 'builtin', 'exec', 'nohup', 'sudo', 'nice', 'xargs',
-    'timeout', 'setsid', 'stdbuf', 'ionice', 'chronic',
+    'timeout', 'setsid', 'stdbuf', 'ionice', 'chronic', 'time',
 ]);
+// Wrapper options as getopt reads them: the short letters that take a value
+// (from the rest of the word, or else the next word), the ones whose value is
+// optional (only the rest of the same word), and the long names that take a
+// value (getopt_long accepts any unambiguous prefix of `long`).
+const WRAPPER_GETOPT = {
+    env: { value: 'uCSa', long: ['ignore-environment', 'null', 'unset', 'chdir', 'argv0', 'split-string', 'block-signal', 'default-signal', 'ignore-signal', 'list-signal-handling', 'debug'], takesValue: ['unset', 'chdir', 'argv0', 'split-string'] },
+    exec: { value: 'a', long: [], takesValue: [] },
+    time: { value: 'fo', long: ['format', 'output', 'append', 'verbose', 'portability', 'quiet'], takesValue: ['format', 'output'] },
+    timeout: { value: 'sk', long: ['signal', 'kill-after', 'foreground', 'preserve-status', 'verbose'], takesValue: ['signal', 'kill-after'] },
+    nice: { value: 'n', long: ['adjustment'], takesValue: ['adjustment'] },
+    stdbuf: { value: 'ioe', long: ['input', 'output', 'error'], takesValue: ['input', 'output', 'error'] },
+    ionice: { value: 'cnpPu', long: ['class', 'classdata', 'pid', 'pgid', 'uid', 'ignore'], takesValue: ['class', 'classdata', 'pid', 'pgid', 'uid'] },
+    xargs: { value: 'adEILnPs', optional: 'eil', long: ['arg-file', 'delimiter', 'eof', 'replace', 'max-lines', 'max-args', 'max-procs', 'max-chars', 'process-slot-var', 'null', 'open-tty', 'interactive', 'no-run-if-empty', 'verbose', 'exit', 'show-limits'], takesValue: ['arg-file', 'delimiter', 'max-args', 'max-procs', 'max-chars', 'process-slot-var'] },
+};
+
+/**
+ * Read a wrapper's own leading options. Returns { from, script, rest }: `from`
+ * is the index of the first word after them (NAME=value words included), so
+ * an option's value (`env -u git`, `exec -a gh`) is never taken for the
+ * command the wrapper runs. For env, `script` is the -S / --split-string
+ * command string (null if none) and `rest` the index of the word after it.
+ */
+function wrapperOptions(cmd, w) {
+    const spec = WRAPPER_GETOPT[cmd];
+    const none = { from: 1, script: null, rest: w.length };
+    if (!spec) return none;
+    for (let k = 1; k < w.length; k++) {
+        const a = w[k];
+        if (cmd === 'env' && isAssignment(a)) continue;
+        // A lone `-` is env's old spelling of -i; anywhere else it is an operand.
+        if (cmd === 'env' && a === '-') continue;
+        if (a === '--') return { ...none, from: k + 1 };
+        if (!a.startsWith('-') || a === '-') return { ...none, from: k };
+        if (a.startsWith('--')) {
+            const eq = a.indexOf('=');
+            const name = a.slice(2, eq === -1 ? undefined : eq);
+            const hits = spec.long.filter((l) => l.startsWith(name));
+            const opt = spec.long.includes(name) ? name : hits.length === 1 ? hits[0] : null;
+            if (cmd === 'env' && opt === 'split-string') {
+                return eq === -1 ? { from: -1, script: w[k + 1] ?? '', rest: k + 2 } : { from: -1, script: a.slice(eq + 1), rest: k + 1 };
+            }
+            if (eq === -1 && spec.takesValue.includes(opt)) k++;
+            continue;
+        }
+        for (let j = 1; j < a.length; j++) {
+            if (spec.optional?.includes(a[j])) break; // `xargs -iE`: E is -i's value
+            if (!spec.value.includes(a[j])) continue;
+            if (cmd === 'env' && a[j] === 'S') {
+                return j + 1 < a.length
+                    ? { from: -1, script: a.slice(j + 1), rest: k + 1 }
+                    : { from: -1, script: w[k + 1] ?? '', rest: k + 2 };
+            }
+            if (j + 1 === a.length) k++; // the value is the next word
+            break;
+        }
+    }
+    return { ...none, from: w.length };
+}
 const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash']);
 // Commands whose auto-approved forms (.claude/settings.json) are vetted below.
 const NODE_CMDS = ['node', 'nodejs', 'npm'];
@@ -902,43 +960,32 @@ function checkSegment(words, state) {
                 const eq = w[0].indexOf('=');
                 inlineEnv[w[0].slice(0, eq).replace(/\+$/, '')] = w[0].slice(eq + 1);
             }
-            w.shift();
+            // The `time` keyword takes `-p` and then `--` before the command it times.
+            if (w.shift() === 'time') {
+                if (w[0] === '-p') w.shift();
+                if (w[0] === '--') w.shift();
+            }
         }
         const envBlock = checkCodeEnv(Object.keys(inlineEnv));
         if (envBlock) return envBlock;
         if (!w.length) return null;
         const cmd = basename(w[0]);
         if (!WRAPPERS.has(cmd)) break;
-        // `env -S 'gh pr create'` / `--split-string=...` runs a command string.
-        // Only env's own leading options and NAME=value words are scanned; the
+        // `env -S 'gh pr create'` / `-iS ...` / `--split-string=...` runs a command string.
+        // Only env's own leading options and NAME=value words are read; the
         // wrapped command's arguments (e.g. `--title -Sx`) are not env options.
-        if (cmd === 'env') {
-            for (let k = 1; k < w.length; k++) {
-                const a = w[k];
-                if (isAssignment(a)) continue;
-                if (!a.startsWith('-')) break; // first word of the wrapped command
-                if (['-u', '--unset', '-C', '--chdir'].includes(a)) {
-                    k++;
-                    continue;
-                }
-                let script = null;
-                let rest = k + 1;
-                if (a === '-S' || a === '--split-string') {
-                    script = w[k + 1] ?? '';
-                    rest = k + 2;
-                } else if (a.startsWith('--split-string=')) script = a.slice(15);
-                else if (/^-S./.test(a)) script = a.slice(2);
-                if (script === null) continue;
-                // Check the string on its own, then as the head of the command
-                // that still has the remaining words appended.
-                const alone = checkCommand(script, state);
-                if (alone) return alone;
-                const head = tokenize(script).flat();
-                return checkSegment([...head, ...w.slice(rest)], state);
-            }
+        const { from, script, rest } = wrapperOptions(cmd, w);
+        if (script !== null) {
+            // Check the string on its own, then as the head of the command
+            // that still has the remaining words appended.
+            const alone = checkCommand(script, state);
+            if (alone) return alone;
+            const head = tokenize(script).flat();
+            return checkSegment([...head, ...w.slice(rest)], state);
         }
-        // Look through the wrapper for the real command.
-        const idx = w.findIndex((x, n) => n > 0 && ['gh', 'git', ...SHELLS, 'eval', ...NODE_CMDS].includes(basename(x)));
+        // Look through the wrapper for the real command, past the wrapper's own
+        // options and their values. A nested env or exec is read again above.
+        const idx = w.findIndex((x, n) => n >= from && ['gh', 'git', ...SHELLS, 'eval', ...NODE_CMDS, 'env', 'exec'].includes(basename(x)));
         for (const x of w.slice(1, idx === -1 ? w.length : idx)) {
             if (isAssignment(x)) {
                 const eq = x.indexOf('=');

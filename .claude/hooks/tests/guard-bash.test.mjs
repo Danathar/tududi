@@ -76,6 +76,11 @@ const allowed = [
     'git config get --show-origin remote.origin.url',
     'env FOO=1 git status',
     'env -u FOO git status',
+    // Wrapper option values are skipped, not taken for the command.
+    'env -a X git status',
+    'exec -a X git status',
+    'time -p npm test',
+    '/usr/bin/time -v npm test',
     'gh alias list',
     'gh search issues foo',
     'git -c user.name=x commit -m msg',
@@ -208,6 +213,25 @@ const blocked = [
     ["env -S 'gh pr create --title t'", 'no --repo'],
     ["env --split-string='git push upstream main'", 'origin'],
     ["env -Sgh\\ issue\\ create", 'no --repo'],
+    // A wrapper option's value is not the command it runs: `env -u git gh ...`
+    // unsets $git and runs gh; `exec -a gh` only names $0.
+    ['env -u git gh pr merge 1', 'no --repo'],
+    ['env -iu git gh pr merge 1', 'no --repo'],
+    ['env --uns git gh pr merge 1', 'no --repo'],
+    ['env -C git gh pr merge 1', 'no --repo'],
+    ['env -a git gh pr merge 1', 'no --repo'],
+    ['env --argv0 git gh pr merge 1', 'no --repo'],
+    ['exec -a git gh pr merge 1', 'no --repo'],
+    ['/usr/bin/time -o git gh pr merge 1', 'no --repo'],
+    // -S packed after other options, abbreviated, after a value, or behind another wrapper.
+    ["env -iS'gh pr merge 1'", 'no --repo'],
+    ["env --sp='gh pr merge 1'", 'no --repo'],
+    ["env -a X -S'git push --force origin main'", 'force'],
+    ["timeout 5 env -S'gh pr merge 1'", 'no --repo'],
+    ["nice env -S'git push --force origin main'", 'force'],
+    // The `time` keyword's -p / -- before the command.
+    ['time -p gh pr merge 1', 'no --repo'],
+    ['time -p -- gh pr merge 1', 'no --repo'],
     // Unknown gh groups and aliases fail closed.
     ['gh alias set pc "pr create --repo chrisvel/tududi"', 'allowlist'],
     ['gh extension install foo/bar', 'allowlist'],
@@ -270,6 +294,11 @@ const blockedLocal = [
     // node: code-loading flags, under --test and outside it.
     ["node --test --import 'data:text/javascript,1' t.test.mjs", 'allowlist'],
     ['node --test --require ./x.js t.test.mjs', 'allowlist'],
+    ['env -u git npm test -- --require ./x.js', 'allowlist'],
+    ['exec -a git npm test -- --require ./x.js', 'allowlist'],
+    ['nohup env -a node npm test -- --require ./x.js', 'allowlist'],
+    ['time -p npm test -- --require ./x.js', 'allowlist'],
+    ['/usr/bin/time -f git npm test -- --require ./x.js', 'allowlist'],
     ['node --test --env-file=.env t.test.mjs', 'allowlist'],
     ['node --inspect=0.0.0.0:9229 --test t.test.mjs', 'allowlist'],
     ['node --test --test-reporter ./evil.mjs t.test.mjs', 'reporter'],
