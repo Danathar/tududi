@@ -19,7 +19,12 @@ Task: merge upstream release `<version>` into the fork.
      `backend/config/swagger.js`;
    - workflows: keep `docker-publish.yml` (ghcr.io/danathar/tududi) and do not
      restore upstream's tag-driven release or deploy workflow;
-   - docs and links point at `Danathar/tududi`, not `chrisvel/tududi`.
+   - docs and links point at `Danathar/tududi`, not `chrisvel/tududi`;
+   - any other conflicting file: find its row in
+     [`docs/fork-delta.md`](../../docs/fork-delta.md). If upstream fixed the
+     same thing, take upstream's version and drop the row; if upstream changed
+     something nearby, combine both; if upstream never touched it, keep the
+     fork's version. Update that page in the sync PR.
 4. The `package.json` version is taken from upstream as-is. Do not bump it or
    add a suffix.
 5. Run `npm install`, `npm run lint`, `npm test`, `npm run backend:test:upgrade`,
