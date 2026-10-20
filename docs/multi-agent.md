@@ -43,7 +43,7 @@ schedule an agent on their own. What each one does is in
 
 | who | how to recognise it | what it does |
 |---|---|---|
-| The owner (`Danathar`) | commits and PRs under that login | decides scope, merges, syncs upstream by hand |
+| The owner (`Danathar`) | commits and PRs under that login | decides scope, merges, can still sync upstream by hand |
 | Hive agents | PRs and issues from the GitHub App `danathar-atomic-hive` (`gh` prints the author as `app/danathar-atomic-hive`, the REST API as `danathar-atomic-hive[bot]`); the body ends with a line like `— hive: agent=<name>` | pick up issues, open PRs, reply to review |
 | Codex connector | review comments from `chatgpt-codex-connector[bot]` | reviews pull requests and grades findings P0 to P3 |
 | Local agents | Claude Code or omp sessions in a clone on the owner's machine; commits carry the owner's git identity | work one issue on one branch, as the owner directs |
@@ -161,8 +161,12 @@ No agent merges its own pull request unless the owner has set that up.
   [`security/SECURITY-AI.md`](security/SECURITY-AI.md)).
 - **Risk tiers set how hard the owner looks.** See
   [`risk-tiers.md`](risk-tiers.md).
-- **Upstream sync is manual.** The owner brings upstream changes in by hand
-  ([`strategy.md`](strategy.md)). Agents do not add a scheduled sync.
+- **Upstream sync is run by the hive.** Its upstream watch files an issue per
+  upstream release, the scanner opens the sync PR following
+  [`sync-upstream.prompt.md`](../.github/prompts/sync-upstream.prompt.md), and
+  the serialized merge lane lands it as a merge commit, never a squash
+  ([`strategy.md`](strategy.md)). The owner can still sync by hand. Agents do
+  not add a scheduled sync in this repository (no workflow, no cron).
 
 ## If you are an agent
 

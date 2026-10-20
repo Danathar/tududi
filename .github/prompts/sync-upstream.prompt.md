@@ -1,11 +1,14 @@
-# Sync upstream into the fork (by hand)
+# Sync upstream into the fork
 
 Fork rule: this is `Danathar/tududi`. Open the PR with
 `gh pr create --repo Danathar/tududi --base main --head <branch>` and never
 target `chrisvel/tududi`. Upstream is read-only: fetch from it, never push to
 it. See [AGENTS.md](../../AGENTS.md), sections "This repository is a fork. All
-work happens here." and "Docker images". Only run this when the owner asks;
-do not automate it or add a scheduled sync.
+work happens here." and "Docker images". Run this for an `upstream:` issue
+filed by the hive's upstream watch (one per upstream release) or when the owner
+asks. It merges as a real merge commit, never a squash, through the hive's
+serialized lane. Do not add a scheduled sync in this repository (no workflow,
+no cron).
 
 Task: merge upstream release `<version>` into the fork.
 
