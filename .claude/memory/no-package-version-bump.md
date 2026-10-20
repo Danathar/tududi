@@ -4,8 +4,8 @@
 **Wrong:** giving the fork its own version line: bumping `package.json`,
 switching it to CalVer, or adding a suffix such as `-fork.1`.
 **Right:** leave `version` in `package.json` exactly as the last upstream sync
-brought it (`1.7.11` at `a6225863`). It only changes when the owner merges a
-new upstream tag by hand. The ghcr image tag already carries a fork-specific
+brought it (`1.7.11` at `a6225863`). It only changes when an upstream sync
+merges a new upstream tag. The ghcr image tag already carries a fork-specific
 suffix: `:v<package.json version>-<short sha>`.
 **Why it matters:** backups embed the app version, and
 `checkVersionCompatibility` in `backend/services/backupService.js` refuses to

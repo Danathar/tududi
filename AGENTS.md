@@ -60,8 +60,12 @@ This fork's image is `ghcr.io/danathar/tududi`. `.github/workflows/docker-publis
 publishes `:latest`, `:sha-<short commit>` and `:v<version>-<short commit>` on
 every push to `main`, and only from `main`. Do not point builds, compose files,
 or docs at `chrisvel/tududi` or Docker Hub, and do not reintroduce upstream's
-tag-driven release or deploy workflow. The owner syncs upstream by hand; do not
-add a scheduled sync.
+tag-driven release or deploy workflow. Upstream syncs are run by the hive: its
+upstream watch files an issue for each upstream release, the scanner opens the
+sync PR following `.github/prompts/sync-upstream.prompt.md`, and the hive's
+serialized merge lane lands it as a real merge commit, never a squash, so
+upstream's history stays in `main`. The owner can still sync by hand. Do not
+add a scheduled sync in this repository (no workflow, no cron).
 
 The fork has no version line of its own. `package.json` keeps upstream's
 version, which arrives with each upstream sync. Do not bump it, switch it to

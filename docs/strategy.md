@@ -27,9 +27,13 @@ From [`README.md`](../README.md) and [`AGENTS.md`](../AGENTS.md):
   `:v<version>-<short commit>`
   ([`docker-publish.yml`](../.github/workflows/docker-publish.yml)). Upstream's
   Docker Hub image, tag-driven releases and deploy workflow are not used.
-- **Hand-synced upstream.** The owner brings upstream changes in manually (the
-  last one is merge #10, "chore: sync upstream v1.7.8-v1.7.11"). There is no
-  scheduled sync, and the fork has no version line of its own: `package.json`
+- **Hive-run upstream sync.** The hive's upstream watch files an issue for each
+  upstream release, the scanner opens the sync PR following
+  [`sync-upstream.prompt.md`](../.github/prompts/sync-upstream.prompt.md), and
+  the hive's serialized merge lane lands it as a real merge commit, never a
+  squash, so upstream's history is kept. The owner can still sync by hand
+  (merge #10 was a hand sync, "chore: sync upstream v1.7.8-v1.7.11"). There is no
+  scheduled sync in this repository (no workflow, no cron), and the fork has no version line of its own: `package.json`
   keeps upstream's version, because backups embed it and
   `backend/services/backupService.js` refuses to restore a backup newer than the
   running app.
