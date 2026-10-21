@@ -56,8 +56,12 @@ getting around those rules: it blocks code-loading flags and variables
 options that read or write arbitrary files (`--output`, `--no-index`, `-O`,
 `format-patch -o`), and git pagers, external diffs and config keys that run
 programs. It also refuses git, node, npm or a shell run through `xargs`, which
-appends arguments read at run time that none of those checks can see. If a task
-needs one of those, the owner runs it.
+appends arguments read at run time that none of those checks can see, and git,
+gh, node, npm or a shell anywhere behind `flock`, `watch`, `taskset`, `chrt`,
+`unshare` or `find -exec`, whatever their arguments are: those programs' own
+options can move the command out of the checkout or hand it to a shell as one
+string, and in bypass or auto mode nothing prompts for them. If a task needs one
+of those, the owner runs it.
 
 If a secret reaches a commit, issue, log or prompt, stop and tell the owner so
 it can be rotated. Deleting the commit does not undo the exposure. Add new

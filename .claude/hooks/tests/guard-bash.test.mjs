@@ -132,6 +132,14 @@ const allowed = [
     'git -c color.ui=always diff',
     'env FOO=1 npm test',
     "git ls-files '*.js' | xargs grep -l TODO",
+    // flock, watch, taskset, chrt, unshare and find in front of a command this
+    // hook does not check are left alone.
+    'flock /tmp/l make test',
+    'watch -n 2 ls -la',
+    "find . -name '*.js' -exec grep -n flock {} +",
+    'find . -name node_modules -prune -o -type f -print',
+    'taskset -c 0 make',
+    "timeout 5 git log --grep 'find . -exec git diff'",
 ];
 
 const blocked = [
@@ -419,6 +427,30 @@ const blockedLocal = [
     ["printf '%s\\n' --output=/home/u/.bashrc | nice xargs git log -1", 'xargs git'],
     ["printf '%s\\n' /dev/null .env | timeout 5 xargs git diff", 'xargs git'],
     ["echo --import=data:text/javascript,0 | nohup xargs node --test", 'xargs node'],
+    // flock, watch, taskset, chrt, unshare and find run a command whose own
+    // options this hook does not model, so a checked command behind them is
+    // refused whatever its arguments are.
+    ['flock /tmp/l git diff --no-index /dev/null .env', '`flock` runs `git`'],
+    ['flock -n /tmp/l git diff HEAD', '`flock` runs `git`'],
+    ["flock /tmp/l -c 'git diff --no-index /dev/null .env'", '`flock` runs `git`'],
+    ["flock /tmp/l -c'git diff --no-index /dev/null .env'", '`flock` runs `git`'],
+    ["flock /tmp/l --command='git diff --no-index /dev/null .env'", '`flock` runs `git`'],
+    ['watch git diff --no-index /dev/null .env', '`watch` runs `git`'],
+    ["watch -n 1 'git diff --no-index /dev/null .env'", '`watch` runs `git`'],
+    ['taskset -c 0 git diff --no-index /dev/null .env', '`taskset` runs `git`'],
+    ['chrt -f 1 git diff --no-index /dev/null .env', '`chrt` runs `git`'],
+    ['chrt -o +0 git diff --no-index /dev/null .env', '`chrt` runs `git`'],
+    ['chrt -o -- -0 git diff --no-index /dev/null .env', '`chrt` runs `git`'],
+    ['find . -maxdepth 0 -exec git diff --no-index /dev/null .env \\;', '`find` runs `git`'],
+    ['find / -maxdepth 0 -execdir git diff etc/passwd etc/hostname \\;', '`find` runs `git`'],
+    ['find . -name x -ok /usr/bin/git diff {} \\;', '`find` runs `git`'],
+    ['unshare -r git diff --no-index /dev/null .env', '`unshare` runs `git`'],
+    ['unshare --wd=/ git diff etc/passwd etc/hostname', '`unshare` runs `git`'],
+    ['/usr/bin/flock /tmp/l npm test', '`flock` runs `npm`'],
+    ["watch 'node -e 1'", '`watch` runs `node`'],
+    ['nice -n 5 taskset -c 0 git log', '`taskset` runs `git`'],
+    ["printf '%s\\n' /dev/null .env | xargs flock /tmp/l git diff", '`flock` runs `git`'],
+    ["bash -c 'flock /tmp/l git diff --no-index /dev/null .env'", '`flock` runs `git`'],
 ];
 
 for (const command of allowed) {
