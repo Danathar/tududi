@@ -21,6 +21,7 @@ interface NotificationsTabProps {
     isActive: boolean;
     notificationPreferences: NotificationPreferences | null | undefined;
     onChange: (preferences: NotificationPreferences) => void;
+    showTelegram?: boolean;
 }
 
 const DEFAULT_PREFERENCES: NotificationPreferences = {
@@ -100,6 +101,7 @@ interface NotificationTypeRowProps {
         value: boolean
     ) => void;
     telegramConfigured: boolean;
+    showTelegram: boolean;
     pushAvailable: boolean;
     appriseConfigured: boolean;
 }
@@ -111,6 +113,7 @@ const NotificationTypeRow: React.FC<NotificationTypeRowProps> = ({
     preferences,
     onToggle,
     telegramConfigured,
+    showTelegram,
     pushAvailable,
     appriseConfigured,
 }) => {
@@ -165,13 +168,15 @@ const NotificationTypeRow: React.FC<NotificationTypeRowProps> = ({
             <td className="py-4 px-4 text-center">
                 {renderToggle('push', preferences.push, pushAvailable)}
             </td>
-            <td className="py-4 px-4 text-center">
-                {renderToggle(
-                    'telegram',
-                    preferences.telegram,
-                    telegramConfigured
-                )}
-            </td>
+            {showTelegram && (
+                <td className="py-4 px-4 text-center">
+                    {renderToggle(
+                        'telegram',
+                        preferences.telegram,
+                        telegramConfigured
+                    )}
+                </td>
+            )}
             <td className="py-4 px-4 text-center">
                 {renderToggle(
                     'apprise',
@@ -187,6 +192,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
     isActive,
     notificationPreferences,
     onChange,
+    showTelegram = true,
 }) => {
     const { t } = useTranslation();
     const [profile, setProfile] = React.useState<any>(null);
@@ -372,12 +378,14 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                             <th className="py-3 px-4 text-center text-sm font-semibold text-gray-700 dark:text-gray-300">
                                 {t('notifications.channels.push', 'Push')}
                             </th>
-                            <th className="py-3 px-4 text-center text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                {t(
-                                    'notifications.channels.telegram',
-                                    'Telegram'
-                                )}
-                            </th>
+                            {showTelegram && (
+                                <th className="py-3 px-4 text-center text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                    {t(
+                                        'notifications.channels.telegram',
+                                        'Telegram'
+                                    )}
+                                </th>
+                            )}
                             <th className="py-3 px-4 text-center text-sm font-semibold text-gray-700 dark:text-gray-300">
                                 {t('notifications.channels.apprise', 'Apprise')}
                             </th>
@@ -399,6 +407,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                 handleToggle('dueTasks', channel, value)
                             }
                             telegramConfigured={telegramConfigured}
+                            showTelegram={showTelegram}
                             pushAvailable={pushAvailable}
                             appriseConfigured={appriseConfigured}
                         />
@@ -417,6 +426,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                 handleToggle('overdueTasks', channel, value)
                             }
                             telegramConfigured={telegramConfigured}
+                            showTelegram={showTelegram}
                             pushAvailable={pushAvailable}
                             appriseConfigured={appriseConfigured}
                         />
@@ -435,6 +445,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                 handleToggle('deferUntil', channel, value)
                             }
                             telegramConfigured={telegramConfigured}
+                            showTelegram={showTelegram}
                             pushAvailable={pushAvailable}
                             appriseConfigured={appriseConfigured}
                         />
@@ -453,6 +464,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                 handleToggle('taskAssigned', channel, value)
                             }
                             telegramConfigured={telegramConfigured}
+                            showTelegram={showTelegram}
                             pushAvailable={pushAvailable}
                             appriseConfigured={appriseConfigured}
                         />
@@ -471,6 +483,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                 handleToggle('comments', channel, value)
                             }
                             telegramConfigured={telegramConfigured}
+                            showTelegram={showTelegram}
                             pushAvailable={pushAvailable}
                             appriseConfigured={appriseConfigured}
                         />
@@ -489,6 +502,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                 handleToggle('habitReminders', channel, value)
                             }
                             telegramConfigured={telegramConfigured}
+                            showTelegram={showTelegram}
                             pushAvailable={pushAvailable}
                             appriseConfigured={appriseConfigured}
                         />
@@ -507,6 +521,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                 handleToggle('dueProjects', channel, value)
                             }
                             telegramConfigured={telegramConfigured}
+                            showTelegram={showTelegram}
                             pushAvailable={pushAvailable}
                             appriseConfigured={appriseConfigured}
                         />
@@ -525,6 +540,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                 handleToggle('overdueProjects', channel, value)
                             }
                             telegramConfigured={telegramConfigured}
+                            showTelegram={showTelegram}
                             pushAvailable={pushAvailable}
                             appriseConfigured={appriseConfigured}
                         />
@@ -545,14 +561,19 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                     'telegram',
                                     'apprise',
                                 ] as const
-                            ).map((channel) => (
-                                <td
-                                    key={channel}
-                                    className="py-4 px-4 text-center"
-                                >
-                                    {renderTestButton(channel)}
-                                </td>
-                            ))}
+                            )
+                                .filter(
+                                    (channel) =>
+                                        showTelegram || channel !== 'telegram'
+                                )
+                                .map((channel) => (
+                                    <td
+                                        key={channel}
+                                        className="py-4 px-4 text-center"
+                                    >
+                                        {renderTestButton(channel)}
+                                    </td>
+                                ))}
                         </tr>
                     </tfoot>
                 </table>
