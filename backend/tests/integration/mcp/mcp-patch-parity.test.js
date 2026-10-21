@@ -17,9 +17,10 @@ const { Task, TaskEvent, RecurringCompletion } = require('../../../models');
 const { createTestUser } = require('../../helpers/testUtils');
 const { createApiToken } = require('../../../modules/users/apiTokenService');
 
-// Columns PATCH and MCP can both change. Dates are compared to the minute so
-// the two requests running a few milliseconds apart do not count as a
-// difference in completed_at.
+// Columns PATCH and MCP can both change. Two dates match when they are less
+// than a minute apart (or both empty), so the two requests running a few
+// milliseconds apart do not count as a difference in completed_at, even when
+// they fall either side of a minute boundary.
 const COMPARED_COLUMNS = [
     'name',
     'note',
@@ -44,9 +45,25 @@ const MCP_PRIORITY = { low: 0, medium: 1, high: 2 };
 
 const DAILY = { recurrence_type: 'daily', recurrence_interval: 1 };
 
+const DATE_TOLERANCE_MS = 60_000;
+
 function comparable(value) {
-    if (value instanceof Date) return value.toISOString().slice(0, 16);
     return value ?? null;
+}
+
+function sameValue(a, b) {
+    if (a instanceof Date && b instanceof Date) {
+        return Math.abs(a - b) < DATE_TOLERANCE_MS;
+    }
+    return JSON.stringify(a) === JSON.stringify(b);
+}
+
+// Dates are shown to the minute in a reported difference.
+function shown(value) {
+    if (value instanceof Date) {
+        return JSON.stringify(value.toISOString().slice(0, 16));
+    }
+    return JSON.stringify(value);
 }
 
 // The same edit in PATCH's body shape: numeric status and priority.
@@ -119,14 +136,10 @@ describe('MCP task edits match PATCH /api/task/:uid', () => {
 
     function differences(viaPatch, viaMcp) {
         return Object.keys(viaPatch)
-            .filter(
-                (key) =>
-                    JSON.stringify(viaPatch[key]) !==
-                    JSON.stringify(viaMcp[key])
-            )
+            .filter((key) => !sameValue(viaPatch[key], viaMcp[key]))
             .map(
                 (key) =>
-                    `${key}: PATCH=${JSON.stringify(viaPatch[key])} MCP=${JSON.stringify(viaMcp[key])}`
+                    `${key}: PATCH=${shown(viaPatch[key])} MCP=${shown(viaMcp[key])}`
             );
     }
 
