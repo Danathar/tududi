@@ -55,6 +55,11 @@
 //     chrt, unshare or find (-exec/-execdir/-ok), whatever its arguments are:
 //     those programs' own options are not modelled here, so the command they
 //     run is never checked word by word.
+//   - behind any other program that is not checked here (setarch, prlimit,
+//     script -c, ...), a checked command it would run that is refused on its
+//     own, and more than 8 checked commands behind one program.
+//   - any command still being checked after BUDGET_MS: Claude Code runs a
+//     command whose hook times out or dies.
 //
 // Read-only gh commands (view, list, status, diff, checks, api GET, ...) are
 // always allowed. The command is split into segments on && || ; | & newlines,
@@ -200,6 +205,26 @@ const OPAQUE_WRAPPERS = new Set(['flock', 'watch', 'taskset', 'chrt', 'unshare',
 // own punctuation and quotes. Splitting on all of them reads more words than
 // the shell would, which can only over-refuse.
 const COMMAND_STRING_SEPARATORS = /[\s;&|()<>`'"]+/;
+// No list of programs that run a command is complete: `setarch x86_64 git
+// diff`, `prlimit`, `setpriv` and `nsenter` run the words after them, and
+// `script -qc '...'` hands a shell one string. Behind any program this hook
+// neither checks nor steps over, the checked command it would run is checked
+// as a command of its own; see checkUnlistedProgram(). These print or match
+// their arguments and never run them, so they are not read at all, which keeps
+// `grep -rn 'git diff --no-index' docs` working. Only the bare spelling counts,
+// and leaving a program out of this set can only over-refuse.
+const ARGUMENT_ONLY_PROGRAMS = new Set(['echo', 'printf', 'grep', 'egrep', 'fgrep']);
+// Each checked command behind such a program is checked from where it starts
+// to the end of the segment, so the work grows with the square of the words.
+// Past this many the command is refused unread; no real invocation runs that many.
+const MAX_UNLISTED_INNER = 8;
+// How long one decision may take. Claude Code runs the command when the hook
+// times out or dies, and reading every tail of a short-option cluster grows
+// with the square of the word: a 120 KB `flock -nnn...n /tmp/l git diff ...`
+// ran Node out of memory, and the git diff behind it went unchecked. A command
+// still being read past this is refused instead; see spend().
+export const BUDGET_MS = 5000;
+let deadline = null;
 
 // ---------------------------------------------------------------------------
 // Tokenizer
@@ -971,27 +996,51 @@ function checkNpm(args) {
 // Opaque wrappers (flock, watch, taskset, chrt, unshare, find)
 // ---------------------------------------------------------------------------
 
+/** Thrown once a decision has run past BUDGET_MS; decide() refuses with it. */
+class OverBudget extends Error {}
+
+function spend() {
+    if (deadline !== null && Date.now() > deadline) {
+        throw new OverBudget(
+            `Blocked: this hook could not finish checking the command within ${BUDGET_MS / 1000} seconds, and ` +
+                'Claude Code runs a command whose hook times out, so it is refused rather than left half-read. ' +
+                'Split it into shorter commands.'
+        );
+    }
+}
+
 /**
- * The checked command a command string in this word names, or null. The
- * string is the word itself when it holds more than one word of its own
- * (`watch 'git diff ...'`), or a value attached to an option in the same word:
- * after the `=` of a long option (`flock --command='git diff ...'`), or after
- * any letter of a short-option cluster (`flock -c'git diff ...'`). Which letter
- * takes a value is not modelled, so every one is tried.
+ * The command strings a word may hand to a shell: the word itself when it
+ * holds more than one word of its own (`watch 'git diff ...'`), or a value
+ * attached to an option in the same word: after the `=` of a long option
+ * (`flock --command='git diff ...'`), or after any letter of a short-option
+ * cluster (`flock -c'git diff ...'`). Which letter takes a value is not
+ * modelled, so every one is tried. Yielded one at a time: a long cluster has
+ * as many tails as letters, each nearly as long as the word.
  */
-function stringCheckedName(word) {
-    const texts = [];
-    if (COMMAND_STRING_SEPARATORS.test(word)) texts.push(word);
+function* commandStrings(word) {
+    if (COMMAND_STRING_SEPARATORS.test(word)) yield word;
     if (word.startsWith('--')) {
         const eq = word.indexOf('=');
-        if (eq !== -1) texts.push(word.slice(eq + 1));
+        if (eq !== -1) yield word.slice(eq + 1);
     } else {
         const cluster = /^-[A-Za-z0-9]+/.exec(word);
-        if (cluster) for (let cut = 2; cut <= cluster[0].length; cut++) texts.push(word.slice(cut));
+        if (cluster) for (let cut = 2; cut <= cluster[0].length; cut++) yield word.slice(cut);
     }
-    for (const text of texts) {
-        const hit = text.split(COMMAND_STRING_SEPARATORS).find((piece) => piece && CHECKED.has(basename(piece)));
-        if (hit !== undefined) return basename(hit);
+}
+
+/** The checked command a command string names, or null. */
+function checkedNameIn(text) {
+    spend();
+    const hit = text.split(COMMAND_STRING_SEPARATORS).find((piece) => piece && CHECKED.has(basename(piece)));
+    return hit === undefined ? null : basename(hit);
+}
+
+/** The checked command a command string in this word names, or null. */
+function stringCheckedName(word) {
+    for (const text of commandStrings(word)) {
+        const name = checkedNameIn(text);
+        if (name !== null) return name;
     }
     return null;
 }
@@ -1004,9 +1053,59 @@ function stringCheckedName(word) {
  */
 function opaqueWrapperCommand(w) {
     for (const x of w.slice(1)) {
+        spend();
         if (CHECKED.has(basename(x))) return basename(x);
         const found = stringCheckedName(x);
         if (found !== null) return found;
+    }
+    return null;
+}
+
+/**
+ * For a segment whose command is a program this hook neither checks nor steps
+ * over (`setarch x86_64 git diff ...`, `prlimit ...`, `script -qc '...'`), the
+ * refusal for the checked command it would run, or null. Each later word where
+ * a checked command starts is checked from there to the end, with the
+ * assignments in front of the program, and each command string a later word
+ * carries is checked as a command line of its own. A command that passes alone
+ * still passes behind any program. Only over-refusing is guessed at: an option
+ * value that reads as a checked command (`uname -- git diff --no-index a b`)
+ * is refused too.
+ */
+function checkUnlistedProgram(w, inlineEnv, state) {
+    const cmd = w[0];
+    if (ARGUMENT_ONLY_PROGRAMS.has(cmd)) return null;
+    const env = Object.entries(inlineEnv).map(([name, value]) => `${name}=${value}`);
+    let checked = 0;
+    for (let n = 1; n < w.length; n++) {
+        spend();
+        let refusal = null;
+        if (CHECKED.has(basename(w[n]))) {
+            if (++checked > MAX_UNLISTED_INNER) {
+                return blockLocal(
+                    `Blocked: more than ${MAX_UNLISTED_INNER} commands this hook checks behind \`${basename(cmd)}\`, ` +
+                        'too many to read. Run them as commands of their own.'
+                );
+            }
+            let start = n;
+            while (start > 1 && isAssignment(w[start - 1])) start--;
+            refusal = checkSegment([...env, ...w.slice(start)], state);
+        }
+        if (!refusal) {
+            for (const text of commandStrings(w[n])) {
+                if (checkedNameIn(text) === null) continue;
+                refusal = checkCommand(text, state);
+                if (refusal) break;
+            }
+        }
+        if (refusal) {
+            return {
+                ...refusal,
+                reason:
+                    `\`${basename(cmd)}\` runs a command that is refused on its own, and bypass and auto modes ` +
+                    `prompt for neither, so it is checked as though it stood alone. ${refusal.reason}`,
+            };
+        }
     }
     return null;
 }
@@ -1016,6 +1115,7 @@ function opaqueWrapperCommand(w) {
 // ---------------------------------------------------------------------------
 
 function checkSegment(words, state) {
+    spend();
     let w = words.slice();
     const inlineEnv = {};
     // Set once the segment runs through xargs: xargs appends words it reads at
@@ -1125,7 +1225,7 @@ function checkSegment(words, state) {
         return null;
     }
     if (cmd === 'eval') return checkCommand(args.join(' '), state);
-    return null;
+    return checkUnlistedProgram(w, inlineEnv, state);
 }
 
 /** Analyse a command line. Returns null if allowed, else { blocked, reason }. */
@@ -1149,9 +1249,10 @@ export function checkCommand(command, state = {}) {
  * Decide on one hook invocation. Returns the exit code and stderr text.
  * Claude Code only blocks on exit 2; any other non-zero code (such as the 1 Node
  * uses for an uncaught exception) lets the command run, so every failure path
- * here must map to 2. `check` is injectable so that path can be tested.
+ * here must map to 2. `check` and `budgetMs` are injectable so those paths can
+ * be tested.
  */
-export function decide(raw, check = checkCommand) {
+export function decide(raw, check = checkCommand, budgetMs = BUDGET_MS) {
     let payload;
     try {
         payload = JSON.parse(raw);
@@ -1163,14 +1264,18 @@ export function decide(raw, check = checkCommand) {
         const command = payload?.tool_input?.command;
         if (typeof command !== 'string' || !command.trim()) return { code: 0, stderr: '' };
 
+        deadline = Date.now() + budgetMs;
         const result = check(command);
         if (result) return { code: 2, stderr: `guard-bash: ${result.reason}\n` };
         return { code: 0, stderr: '' };
     } catch (err) {
+        if (err instanceof OverBudget) return { code: 2, stderr: `guard-bash: ${err.message}\n${LOCAL_GUIDANCE}\n` };
         return {
             code: 2,
             stderr: `guard-bash: internal error (${err?.message ?? err}); blocking (fail closed).\n`,
         };
+    } finally {
+        deadline = null;
     }
 }
 
