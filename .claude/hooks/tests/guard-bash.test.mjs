@@ -140,6 +140,13 @@ const allowed = [
     'find . -name node_modules -prune -o -type f -print',
     'taskset -c 0 make',
     "timeout 5 git log --grep 'find . -exec git diff'",
+    // Behind a program this hook does not list, a command that passes alone
+    // still passes, and echo/printf/grep are not read at all (#355).
+    'setarch x86_64 git diff HEAD',
+    'setarch x86_64 gh pr create --repo Danathar/tududi --base main --head b',
+    "grep -rn 'git diff --no-index' docs",
+    'man git',
+    'which git node npm',
 ];
 
 const blocked = [
@@ -339,6 +346,9 @@ const blocked = [
     ['xargs -n1 gh pr close', 'no --repo'],
     ['gh pr create \\\n  --title t', 'no --repo'],
     ['git push origin main && git push upstream main', 'origin'],
+    // A program this hook does not list runs the gh command after it (#355).
+    ['setpriv gh pr create --title t', '`setpriv` runs a command'],
+    ['GH_REPO=chrisvel/tududi setarch x86_64 gh issue create --title t', '`setarch` runs a command'],
 ];
 
 // Code execution / file writes through auto-approved commands (#65, #69).
@@ -473,6 +483,18 @@ const blockedLocal = [
     // The value can follow any letter of a short-option cluster, not only the
     // first.
     ["flock /tmp/l -nc'git diff --no-index /dev/null .env'", '`flock` runs `git`'],
+    // Any other program that runs the words after it, or hands a shell one
+    // string, is read the same way: what it would run is checked as though it
+    // stood alone (#355).
+    ['setarch x86_64 git diff --no-index /dev/null .env', '`setarch` runs a command'],
+    ['prlimit git diff --no-index /dev/null .env', '`prlimit` runs a command'],
+    ['nsenter -t 1 git diff --no-index /dev/null .env', '`nsenter` runs a command'],
+    ['busybox git diff --no-index /dev/null .env', '`busybox` runs a command'],
+    ['GIT_EXTERNAL_DIFF=x setarch x86_64 git diff', '`setarch` runs a command'],
+    ['setarch x86_64 npm test -- --require ./x.js', '`setarch` runs a command'],
+    ['script -qc "git diff --no-index /dev/null .env" /dev/null', '`script` runs a command'],
+    ["script -qc'git diff --no-index /dev/null .env' /dev/null", '`script` runs a command'],
+    [`setarch x86_64 ${'git diff HEAD '.repeat(9)}`, 'more than 8 commands'],
 ];
 
 for (const command of allowed) {
@@ -526,6 +548,19 @@ test('internal errors exit 2 (fail closed), not 1', () => {
     });
     assert.equal(r.code, 2);
     assert.match(r.stderr, /internal error \(boom\); blocking \(fail closed\)/);
+});
+
+test('a command still being read past the budget is refused, not left to the hook timeout (#355)', () => {
+    // Every tail of a long short-option cluster is read, which grows with the
+    // square of the word; at about 120 KB it ran Node out of memory, and
+    // Claude Code runs the command when the hook dies.
+    const command = `flock -${'n'.repeat(20000)} /tmp/l git diff --no-index /dev/null .env`;
+    const payload = JSON.stringify({ tool_name: 'Bash', tool_input: { command } });
+    const r = decide(payload, undefined, 1);
+    assert.equal(r.code, 2);
+    assert.match(r.stderr, /could not finish checking the command within/);
+    // The budget is reset after each decision.
+    assert.equal(decide(JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'ls' } })).code, 0);
 });
 
 test('hook still blocks when invoked through a symlinked path', () => {

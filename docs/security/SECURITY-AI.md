@@ -60,8 +60,11 @@ appends arguments read at run time that none of those checks can see, and git,
 gh, node, npm or a shell anywhere behind `flock`, `watch`, `taskset`, `chrt`,
 `unshare` or `find -exec`, whatever their arguments are: those programs' own
 options can move the command out of the checkout or hand it to a shell as one
-string, and in bypass or auto mode nothing prompts for them. If a task needs one
-of those, the owner runs it.
+string, and in bypass or auto mode nothing prompts for them. Behind any other
+program (`setarch`, `prlimit`, `script -c`, ...), the command it would run is
+checked as though it stood alone, and a command the guard cannot finish
+checking within five seconds is refused, since Claude Code runs a command whose
+hook times out or crashes. If a task needs one of those, the owner runs it.
 
 If a secret reaches a commit, issue, log or prompt, stop and tell the owner so
 it can be rotated. Deleting the commit does not undo the exposure. Add new
