@@ -51,6 +51,10 @@
 //   - git, node, npm or a shell run through xargs: xargs appends words read at
 //     run time (`printf '%s\n' --output=FILE | xargs git log`), so none of the
 //     argument checks here could see them.
+//   - git, gh, node, npm or a shell anywhere behind flock, watch, taskset,
+//     chrt, unshare or find (-exec/-execdir/-ok), whatever its arguments are:
+//     those programs' own options are not modelled here, so the command they
+//     run is never checked word by word.
 //
 // Read-only gh commands (view, list, status, diff, checks, api GET, ...) are
 // always allowed. The command is split into segments on && || ; | & newlines,
@@ -178,6 +182,24 @@ function wrapperOptions(cmd, w) {
 const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash']);
 // Commands whose auto-approved forms (.claude/settings.json) are vetted below.
 const NODE_CMDS = ['node', 'nodejs', 'npm'];
+// The commands this hook checks, which a wrapper is looked through to find
+// (env and exec are read again as wrappers).
+const CHECKED = new Set(['gh', 'git', ...SHELLS, 'eval', ...NODE_CMDS, 'env', 'exec']);
+// Programs that run a command of their own choosing, but whose options are not
+// modelled the way WRAPPER_GETOPT models the wrappers': `chrt -o +0` and
+// `flock -n /tmp/l` take values that look like a command, `unshare --wd=DIR`
+// and `find -execdir` move the command out of this checkout, `find -exec ...
+// {}` hands it operands that are not in this string, and `watch` and
+// `flock -c` hand it to `sh -c` as one string. Claude Code's allow-rule matcher
+// does not step over them, so in bypass and auto mode nothing prompts either.
+// A checked command anywhere behind one of these is refused outright, whatever
+// its arguments are; see opaqueWrapperCommand().
+const OPAQUE_WRAPPERS = new Set(['flock', 'watch', 'taskset', 'chrt', 'unshare', 'find']);
+// What separates the words of a command string a wrapper hands to a shell
+// (`watch 'git diff ...'`, `flock -c 'git diff ...'`): whitespace, the shell's
+// own punctuation and quotes. Splitting on all of them reads more words than
+// the shell would, which can only over-refuse.
+const COMMAND_STRING_SEPARATORS = /[\s;&|()<>`'"]+/;
 
 // ---------------------------------------------------------------------------
 // Tokenizer
@@ -946,6 +968,50 @@ function checkNpm(args) {
 }
 
 // ---------------------------------------------------------------------------
+// Opaque wrappers (flock, watch, taskset, chrt, unshare, find)
+// ---------------------------------------------------------------------------
+
+/**
+ * The checked command a command string in this word names, or null. The
+ * string is the word itself when it holds more than one word of its own
+ * (`watch 'git diff ...'`), or a value attached to an option in the same word:
+ * after the `=` of a long option (`flock --command='git diff ...'`), or after
+ * any letter of a short-option cluster (`flock -c'git diff ...'`). Which letter
+ * takes a value is not modelled, so every one is tried.
+ */
+function stringCheckedName(word) {
+    const texts = [];
+    if (COMMAND_STRING_SEPARATORS.test(word)) texts.push(word);
+    if (word.startsWith('--')) {
+        const eq = word.indexOf('=');
+        if (eq !== -1) texts.push(word.slice(eq + 1));
+    } else {
+        const cluster = /^-[A-Za-z0-9]+/.exec(word);
+        if (cluster) for (let cut = 2; cut <= cluster[0].length; cut++) texts.push(word.slice(cut));
+    }
+    for (const text of texts) {
+        const hit = text.split(COMMAND_STRING_SEPARATORS).find((piece) => piece && CHECKED.has(basename(piece)));
+        if (hit !== undefined) return basename(hit);
+    }
+    return null;
+}
+
+/**
+ * For a segment whose command is an OPAQUE_WRAPPERS program, the checked
+ * command it runs (`flock /tmp/l git diff`, `chrt -o -- -0 git diff`,
+ * `find . -exec git diff ... \;`, `watch 'git diff ...'`), or null. Every
+ * later word is read, since the wrapper's own options are not modelled.
+ */
+function opaqueWrapperCommand(w) {
+    for (const x of w.slice(1)) {
+        if (CHECKED.has(basename(x))) return basename(x);
+        const found = stringCheckedName(x);
+        if (found !== null) return found;
+    }
+    return null;
+}
+
+// ---------------------------------------------------------------------------
 // Segment / command analysis
 // ---------------------------------------------------------------------------
 
@@ -985,8 +1051,9 @@ function checkSegment(words, state) {
             return checkSegment([...head, ...w.slice(rest)], state);
         }
         // Look through the wrapper for the real command, past the wrapper's own
-        // options and their values. A nested env or exec is read again above.
-        const idx = w.findIndex((x, n) => n >= from && ['gh', 'git', ...SHELLS, 'eval', ...NODE_CMDS, 'env', 'exec'].includes(basename(x)));
+        // options and their values. A nested env or exec is read again above,
+        // and an opaque wrapper (`nice taskset -c 0 git log`) is read below.
+        const idx = w.findIndex((x, n) => n >= from && (CHECKED.has(basename(x)) || OPAQUE_WRAPPERS.has(basename(x))));
         for (const x of w.slice(1, idx === -1 ? w.length : idx)) {
             if (isAssignment(x)) {
                 const eq = x.indexOf('=');
@@ -1009,6 +1076,18 @@ function checkSegment(words, state) {
         return blockLocal(
             `Blocked: \`xargs ${cmd}\`; xargs adds arguments read at run time, so this hook cannot check the ` +
                 `${cmd} command line the allow rules pre-approve. Write the ${cmd} command out in full instead.`
+        );
+    }
+
+    if (OPAQUE_WRAPPERS.has(cmd)) {
+        const hidden = opaqueWrapperCommand(w);
+        if (hidden === null) return null;
+        return blockLocal(
+            `Blocked: \`${cmd}\` runs \`${hidden}\` where this hook cannot check it: flock, watch, taskset, ` +
+                'chrt, unshare and find have options that can move the command out of this checkout ' +
+                '(`unshare --wd`, `find -execdir`), hand it operands that are not in this string ' +
+                '(`find -exec ... {}`) or pass it to `sh -c` as one string (`watch`, `flock -c`), and ' +
+                'bypass and auto modes prompt for none of them. Run the command on its own instead.'
         );
     }
 
