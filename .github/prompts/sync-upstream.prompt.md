@@ -31,7 +31,9 @@ Task: merge upstream release `<version>` into the fork.
 4. The `package.json` version is taken from upstream as-is. Do not bump it or
    add a suffix.
 5. Run `npm install`, `npm run lint`, `npm test`, `npm run backend:test:upgrade`,
-   `npm run build`.
+   `npm run build`, and `node scripts/check-fork-delta.mjs upstream/main` (or
+   the release tag you merged), which fails until `docs/fork-delta.md` names
+   every upstream file the fork still changes and nothing upstream now matches.
 6. Push the branch to `origin` and open the PR with
    `gh pr create --repo Danathar/tududi --base main --head sync/upstream-<version>`.
    Do not merge it yourself; the owner does.
