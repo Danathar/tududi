@@ -451,6 +451,28 @@ const blockedLocal = [
     ['nice -n 5 taskset -c 0 git log', '`taskset` runs `git`'],
     ["printf '%s\\n' /dev/null .env | xargs flock /tmp/l git diff", '`flock` runs `git`'],
     ["bash -c 'flock /tmp/l git diff --no-index /dev/null .env'", '`flock` runs `git`'],
+    // A shell or eval behind one of them is refused by name too, even when no
+    // checked command follows it in this string.
+    ['flock /tmp/l bash ./scripts/x.sh', '`flock` runs `bash`'],
+    ['flock /tmp/l eval "$CMD"', '`flock` runs `eval`'],
+    // A command string handed to `sh -c` is cut at each piece of shell
+    // punctuation and at quotes, so the checked command is found right next to
+    // any of them.
+    ["watch 'cd /;git diff --no-index /dev/null .env'", '`watch` runs `git`'],
+    ["watch 'true&&git diff --no-index /dev/null .env'", '`watch` runs `git`'],
+    ["watch 'false||git diff --no-index /dev/null .env'", '`watch` runs `git`'],
+    ["watch '(git diff --no-index /dev/null .env)'", '`watch` runs `git`'],
+    ["watch 'case x in x)git diff --no-index /dev/null .env;; esac'", '`watch` runs `git`'],
+    ["watch 'git</dev/null diff --no-index /dev/null .env'", '`watch` runs `git`'],
+    ["watch 'git>/tmp/o diff --no-index /dev/null .env'", '`watch` runs `git`'],
+    ["watch 'echo `git diff --no-index /dev/null .env`'", '`watch` runs `git`'],
+    ['watch "\'git\' diff --no-index /dev/null .env"', '`watch` runs `git`'],
+    ['watch \'"git" diff --no-index /dev/null .env\'', '`watch` runs `git`'],
+    // A path to the command in the string is reported by its name.
+    ["watch '/usr/bin/git diff --no-index /dev/null .env'", '`watch` runs `git`'],
+    // The value can follow any letter of a short-option cluster, not only the
+    // first.
+    ["flock /tmp/l -nc'git diff --no-index /dev/null .env'", '`flock` runs `git`'],
 ];
 
 for (const command of allowed) {
