@@ -1029,6 +1029,16 @@ function* commandStrings(word) {
     }
 }
 
+/**
+ * The text as the shell would look names up in it: quotes, backslashes and `$`
+ * removed. A shell drops quotes and backslashes before it looks a name up, so
+ * `g""it`, `gi\t` and `$'git'` inside a command string all run git. Removing
+ * more can only refuse more.
+ */
+function unquoted(text) {
+    return text.replace(/[$"'\\]/g, '');
+}
+
 /** The checked command a command string names, or null. */
 function checkedNameIn(text) {
     spend();
@@ -1080,7 +1090,10 @@ function checkUnlistedProgram(w, inlineEnv, state) {
     for (let n = 1; n < w.length; n++) {
         spend();
         let refusal = null;
-        if (CHECKED.has(basename(w[n]))) {
+        // A name the shell joins back together (`g""it`, `$'git'`) is checked
+        // as the shell would run it; a word that already names one is read as written.
+        const word = CHECKED.has(basename(w[n])) ? w[n] : unquoted(w[n]);
+        if (CHECKED.has(basename(word))) {
             if (++checked > MAX_UNLISTED_INNER) {
                 return blockLocal(
                     `Blocked: more than ${MAX_UNLISTED_INNER} commands this hook checks behind \`${basename(cmd)}\`, ` +
@@ -1089,12 +1102,19 @@ function checkUnlistedProgram(w, inlineEnv, state) {
             }
             let start = n;
             while (start > 1 && isAssignment(w[start - 1])) start--;
-            refusal = checkSegment([...env, ...w.slice(start)], state);
+            refusal = checkSegment([...env, ...w.slice(start, n), word, ...w.slice(n + 1)], state);
         }
         if (!refusal) {
             for (const text of commandStrings(w[n])) {
-                if (checkedNameIn(text) === null) continue;
-                refusal = checkCommand(text, state);
+                // The text as written, then as the shell would run it once its
+                // quoted names are joined back together (`$'git'` is read as
+                // `$git` as written). Each is checked only if it names a
+                // checked command.
+                for (const candidate of new Set([text, unquoted(text)])) {
+                    if (checkedNameIn(candidate) === null) continue;
+                    refusal = checkCommand(candidate, state);
+                    if (refusal) break;
+                }
                 if (refusal) break;
             }
         }
