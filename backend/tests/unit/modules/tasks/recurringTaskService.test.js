@@ -9,7 +9,6 @@ const {
     calculateVirtualOccurrences,
     normalizeRecurrenceInterval,
 } = require('../../../../modules/tasks/recurringTaskService');
-const moment = require('moment-timezone');
 const {
     processDueDateForStorage,
 } = require('../../../../utils/timezone-utils');
