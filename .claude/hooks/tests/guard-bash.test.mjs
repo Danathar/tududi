@@ -147,6 +147,17 @@ const allowed = [
     "setarch x86_64 $'git' status",
     'setarch x86_64 gh pr create --repo Danathar/tududi --base main --head b',
     "grep -rn 'git diff --no-index' docs",
+    // A name braces, a glob in a path or `$'...'` build passes as it would
+    // spelled out, and braces and globs that build no checked name are left
+    // alone (#368).
+    '/usr/bin/g?t status',
+    "$'git' status",
+    'ls /usr/bin/g*',
+    'cat {a,b}.txt',
+    "sh -c 'cp {a,b}.js /tmp'",
+    "find . -name '*' -print",
+    "awk -F: '$1 == \"root\" {print $7}' /etc/passwd",
+    "git log --format=$'%h\\t%s' -3",
     'man git',
     'which git node npm',
 ];
@@ -503,6 +514,29 @@ const blockedLocal = [
     ['script -qc "$\'git\' diff --no-index /dev/null .env" /dev/null', '`script` runs a command'],
     ["setarch x86_64 $'git' diff --no-index /dev/null .env", '`setarch` runs a command'],
     [`setarch x86_64 ${'git diff HEAD '.repeat(9)}`, 'more than 8 commands'],
+    // The shell expands braces and a glob in a path, and decodes `$'...'` and
+    // `$"..."`, before it looks the command name up, so each of these runs git
+    // (#368). Braces are refused outright; the rest are checked as git.
+    ['{git,} diff --no-index /dev/null .env', 'expands with its braces'],
+    ['setarch x86_64 {git,} diff --no-index /dev/null .env', '`setarch` runs a command'],
+    ['{git,diff} --no-index /dev/null .env', 'expands with its braces'],
+    ['g{i,x}t diff --no-index /dev/null .env', 'expands with its braces'],
+    ['env {git,} diff --no-index /dev/null .env', 'expands with its braces'],
+    ["sh -c 'g{,}it diff --no-index /dev/null .env'", 'expands with its braces'],
+    ['/usr/bin/g?t diff --no-index /dev/null .env', 'no-index'],
+    ['setarch x86_64 /usr/bin/g?t diff --no-index /dev/null .env', '`setarch` runs a command'],
+    ['/usr/bin/g[i]t log --output=x', '--output'],
+    ['timeout 5 /usr/bin/g?t diff --no-index /dev/null .env', 'no-index'],
+    ['xargs /usr/bin/g?t log', 'xargs git'],
+    ['watch /usr/bin/g?t diff --no-index /dev/null .env', '`watch` runs `git`'],
+    ["$'git' diff --no-index /dev/null .env", 'no-index'],
+    ['$"git" diff --no-index /dev/null .env', 'no-index'],
+    ["$'\\x67it' diff --no-index /dev/null .env", 'no-index'],
+    ["$'\\147it' diff --no-index /dev/null .env", 'no-index'],
+    ["$'\\u0067it' diff --no-index /dev/null .env", 'no-index'],
+    ['script -qc "$\'\\x67it\' diff --no-index /dev/null .env" /dev/null', '`script` runs a command'],
+    // `\'` does not end a `$'...'` string, so the substitution after it is read.
+    ["echo $'\\'' $(git diff --no-index /dev/null .env)", 'no-index'],
 ];
 
 for (const command of allowed) {
