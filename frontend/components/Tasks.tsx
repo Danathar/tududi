@@ -14,6 +14,10 @@ import {
     saveTaskOrder,
     updateTask,
 } from '../utils/tasksService';
+import {
+    mergeUpdatedGroupedTasks,
+    mergeUpdatedTaskList,
+} from '../utils/taskUpdateMerge';
 import { mergeVisibleOrder } from './Shared/sortableList';
 import { useStore } from '../store/useStore';
 import { appendFocusParams, focusKey, useFocus } from '../utils/focus';
@@ -435,17 +439,17 @@ const Tasks: React.FC = () => {
             if (response.ok) {
                 const updatedTaskFromServer = await response.json();
                 setTasks((prevTasks) =>
-                    prevTasks.map((task) =>
-                        task.id === updatedTask.id
-                            ? {
-                                  ...task,
-                                  ...updatedTaskFromServer,
-                                  subtasks:
-                                      updatedTaskFromServer.subtasks ||
-                                      task.subtasks ||
-                                      [],
-                              }
-                            : task
+                    mergeUpdatedTaskList(
+                        prevTasks,
+                        updatedTask,
+                        updatedTaskFromServer
+                    )
+                );
+                setGroupedTasks((prevGroupedTasks) =>
+                    mergeUpdatedGroupedTasks(
+                        prevGroupedTasks,
+                        updatedTask,
+                        updatedTaskFromServer
                     )
                 );
             } else {
