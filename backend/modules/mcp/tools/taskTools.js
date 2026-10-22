@@ -57,6 +57,13 @@ const { filterTasksByParams } = require('../../tasks/queries/query-builders');
 
 const RECURRENCE_TYPES = Object.values(Task.RECURRENCE_TYPE);
 
+const PRIORITY_MAP = {
+    none: null,
+    low: 0,
+    medium: 1,
+    high: 2,
+};
+
 const RECURRENCE_FIELDS = [
     'recurrence_type',
     'recurrence_interval',
@@ -405,7 +412,7 @@ function registerTaskTools(server, context, tools) {
                 },
                 priority: {
                     type: 'string',
-                    enum: ['low', 'medium', 'high'],
+                    enum: ['none', 'low', 'medium', 'high'],
                     description: 'Task priority',
                 },
                 estimated_minutes: {
@@ -462,8 +469,6 @@ function registerTaskTools(server, context, tools) {
             required: ['name'],
         },
         handler: async (params) => {
-            const priorityMap = { low: 0, medium: 1, high: 2 };
-
             if (typeof params.name !== 'string' || !params.name.trim()) {
                 throw new Error('Task name is required');
             }
@@ -536,7 +541,9 @@ function registerTaskTools(server, context, tools) {
                 user_id: context.userId,
                 name: params.name.trim(),
                 note: params.note ?? params.description ?? '',
-                priority: params.priority ? priorityMap[params.priority] : 1,
+                priority: Object.hasOwn(PRIORITY_MAP, params.priority)
+                    ? PRIORITY_MAP[params.priority]
+                    : 1,
                 status: 0, // pending
                 due_date: dueDate,
                 due_has_time: dueAttrs.due_has_time ?? false,
@@ -644,7 +651,7 @@ function registerTaskTools(server, context, tools) {
         note: { type: 'string', description: 'New note' },
         priority: {
             type: 'string',
-            enum: ['low', 'medium', 'high'],
+            enum: ['none', 'low', 'medium', 'high'],
         },
         status: {
             type: 'string',
@@ -759,8 +766,7 @@ function registerTaskTools(server, context, tools) {
             const incomingNote = params.note ?? params.description;
             if (incomingNote !== undefined) updates.note = incomingNote;
             if (params.priority) {
-                const priorityMap = { low: 0, medium: 1, high: 2 };
-                updates.priority = priorityMap[params.priority];
+                updates.priority = PRIORITY_MAP[params.priority];
             }
             if (params.estimated_minutes !== undefined) {
                 updates.estimated_minutes = parseEstimatedMinutes(
@@ -1345,7 +1351,7 @@ function registerTaskTools(server, context, tools) {
                 },
                 priority: {
                     type: 'string',
-                    enum: ['low', 'medium', 'high'],
+                    enum: ['none', 'low', 'medium', 'high'],
                 },
                 due_date: {
                     type: 'string',
@@ -1375,13 +1381,13 @@ function registerTaskTools(server, context, tools) {
                 throw new Error('Access denied');
             }
 
-            const priorityMap = { low: 0, medium: 1, high: 2 };
-
             const subtaskData = {
                 user_id: context.userId,
                 name: params.name,
                 parent_task_id: parentTask.id,
-                priority: params.priority ? priorityMap[params.priority] : 1,
+                priority: Object.hasOwn(PRIORITY_MAP, params.priority)
+                    ? PRIORITY_MAP[params.priority]
+                    : 1,
                 status: 0,
                 due_date: processDueDateForStorage(
                     params.due_date,
