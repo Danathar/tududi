@@ -226,6 +226,7 @@ function withScope(where, scopeWhere) {
 module.exports = {
     parseScopeParams,
     resolveScope,
+    projectIdsInArea,
     taskScopeWhere,
     projectScopeWhere,
     noteScopeWhere,

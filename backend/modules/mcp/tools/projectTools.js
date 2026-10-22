@@ -13,6 +13,10 @@ const {
 const { validateAreaAccess } = require('../../tasks/utils/validation');
 const { resolveTagsForTransaction } = require('./tagResolver');
 const { validateName } = require('../../projects/validation');
+const { projectIdsInArea } = require('../../../services/scopeService');
+const {
+    applyViewerAreasToProjects,
+} = require('../../../services/projectAreaOverrides');
 
 const colorInputProperty = {
     type: 'string',
@@ -142,7 +146,14 @@ function registerProjectTools(server, context, tools) {
             }
 
             if (params.area_id) {
-                whereClause.area_id = params.area_id;
+                // The area as the caller sees it: a shared project sits in
+                // the area the caller placed it in, not the owner's.
+                whereClause.id = {
+                    [Op.in]: await projectIdsInArea(
+                        Number(params.area_id),
+                        context.userId
+                    ),
+                };
             }
 
             const projects = await Project.findAll({
@@ -152,8 +163,11 @@ function registerProjectTools(server, context, tools) {
                 order: [['created_at', 'DESC']],
             });
 
-            const serialized = projects.map((p) => {
-                const proj = p.toJSON();
+            const viewed = await applyViewerAreasToProjects(
+                projects.map((p) => p.toJSON()),
+                context.userId
+            );
+            const serialized = viewed.map((proj) => {
                 return {
                     id: proj.id,
                     uid: proj.uid,
@@ -223,7 +237,10 @@ function registerProjectTools(server, context, tools) {
                 throw new Error(`Project not found: ${params.uid}`);
             }
 
-            const proj = project.toJSON();
+            const [proj] = await applyViewerAreasToProjects(
+                [project.toJSON()],
+                context.userId
+            );
             const serialized = {
                 id: proj.id,
                 uid: proj.uid,
@@ -581,6 +598,11 @@ function registerProjectTools(server, context, tools) {
             const reloadedProject = await Project.findByPk(project.id, {
                 include: projectIncludes,
             });
+            // A caller who doesn't own the project sees their own placement.
+            const [viewedProject] = await applyViewerAreasToProjects(
+                [reloadedProject.toJSON()],
+                context.userId
+            );
 
             const serialized = {
                 id: reloadedProject.id,
@@ -589,7 +611,7 @@ function registerProjectTools(server, context, tools) {
                 description: reloadedProject.description,
                 status: reloadedProject.status,
                 priority: reloadedProject.priority,
-                area: reloadedProject.Area ? reloadedProject.Area.name : null,
+                area: viewedProject.Area ? viewedProject.Area.name : null,
                 goal: serializeGoal(reloadedProject.Goal),
                 is_maintenance: !!reloadedProject.is_maintenance,
                 tags: reloadedProject.Tags
