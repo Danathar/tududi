@@ -7,6 +7,9 @@ const {
     serializeTasks,
 } = require('../../tasks/core/serializers');
 const {
+    applyViewerProjectAreas,
+} = require('../../../services/projectAreaOverrides');
+const {
     calculateInitialDueDate,
     applyDueTime,
     applyReminderAt,
@@ -318,6 +321,9 @@ function registerTaskTools(server, context, tools) {
                 context.user.timezone,
                 { preserveOriginalName: true }
             );
+            // A shared project shows in the area the caller placed it in,
+            // as in the REST API.
+            await applyViewerProjectAreas(serializedTasks, context.userId);
 
             return {
                 content: [
@@ -372,6 +378,7 @@ function registerTaskTools(server, context, tools) {
                 context.user.timezone,
                 { preserveOriginalName: true }
             );
+            await applyViewerProjectAreas([serialized], context.userId);
 
             return {
                 content: [
@@ -611,6 +618,7 @@ function registerTaskTools(server, context, tools) {
                 context.user.timezone,
                 { preserveOriginalName: true }
             );
+            await applyViewerProjectAreas([serialized], context.userId);
 
             return {
                 content: [
@@ -1050,6 +1058,7 @@ function registerTaskTools(server, context, tools) {
                 context.user.timezone,
                 { preserveOriginalName: true }
             );
+            await applyViewerProjectAreas([serialized], context.userId);
 
             return {
                 content: [
@@ -1171,6 +1180,7 @@ function registerTaskTools(server, context, tools) {
                 context.user.timezone,
                 { preserveOriginalName: true }
             );
+            await applyViewerProjectAreas([serialized], context.userId);
 
             return {
                 content: [
@@ -1261,6 +1271,7 @@ function registerTaskTools(server, context, tools) {
                 context.user.timezone,
                 { preserveOriginalName: true }
             );
+            await applyViewerProjectAreas([serialized], context.userId);
 
             return {
                 content: [
@@ -1416,6 +1427,7 @@ function registerTaskTools(server, context, tools) {
                 context.user.timezone,
                 { preserveOriginalName: true }
             );
+            await applyViewerProjectAreas([serialized], context.userId);
 
             return {
                 content: [
