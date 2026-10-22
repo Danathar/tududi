@@ -143,6 +143,8 @@ const allowed = [
     // Behind a program this hook does not list, a command that passes alone
     // still passes, and echo/printf/grep are not read at all (#355).
     'setarch x86_64 git diff HEAD',
+    "script -qc 'g\"\"it status' /dev/null",
+    "setarch x86_64 $'git' status",
     'setarch x86_64 gh pr create --repo Danathar/tududi --base main --head b',
     "grep -rn 'git diff --no-index' docs",
     'man git',
@@ -494,6 +496,12 @@ const blockedLocal = [
     ['setarch x86_64 npm test -- --require ./x.js', '`setarch` runs a command'],
     ['script -qc "git diff --no-index /dev/null .env" /dev/null', '`script` runs a command'],
     ["script -qc'git diff --no-index /dev/null .env' /dev/null", '`script` runs a command'],
+    // The shell drops quotes, backslashes and `$'` before it looks a name up,
+    // so a name split by them inside a command string still runs (#366).
+    ["script -qc 'g\"\"it diff --no-index /dev/null .env' /dev/null", '`script` runs a command'],
+    ["script -qc 'gi\\t diff --no-index /dev/null .env' /dev/null", '`script` runs a command'],
+    ['script -qc "$\'git\' diff --no-index /dev/null .env" /dev/null', '`script` runs a command'],
+    ["setarch x86_64 $'git' diff --no-index /dev/null .env", '`setarch` runs a command'],
     [`setarch x86_64 ${'git diff HEAD '.repeat(9)}`, 'more than 8 commands'],
 ];
 
