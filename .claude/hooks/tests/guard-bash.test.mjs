@@ -160,6 +160,14 @@ const allowed = [
     "git log --format=$'%h\\t%s' -3",
     'man git',
     'which git node npm',
+    // A bare glob passes as the command it builds would, and a word made only
+    // of wildcards is left alone where it is not the command name.
+    'g?t status',
+    'cat g?t',
+    'ls *',
+    'nice ls *',
+    'timeout 5 ls *',
+    'for f in *; do echo $f; done',
 ];
 
 const blocked = [
@@ -535,6 +543,19 @@ const blockedLocal = [
     ["$'\\147it' diff --no-index /dev/null .env", 'no-index'],
     ["$'\\u0067it' diff --no-index /dev/null .env", 'no-index'],
     ['script -qc "$\'\\x67it\' diff --no-index /dev/null .env" /dev/null', '`script` runs a command'],
+    // A bare glob matches a file named git in the working directory, and the
+    // shell then looks the name it built up on the PATH, so `touch git; g?t`
+    // runs git. A name made only of wildcards runs whichever file sorts first.
+    ['g?t diff --no-index /dev/null .env', 'no-index'],
+    ['touch git && g?t diff --no-index /dev/null .env', 'no-index'],
+    ['gi* log --output=x', '--output'],
+    ['n?de -e 1', 'node -e'],
+    ['setarch x86_64 g?t diff --no-index /dev/null .env', '`setarch` runs a command'],
+    ['* diff --no-index /dev/null .env', 'only of wildcards'],
+    ['./??? diff --no-index /dev/null .env', 'only of wildcards'],
+    ['nice * diff --no-index /dev/null .env', 'only of wildcards'],
+    ['timeout 5 * diff --no-index /dev/null .env', 'only of wildcards'],
+    ['env A=1 * diff --no-index /dev/null .env', 'only of wildcards'],
     // `\'` does not end a `$'...'` string, so the substitution after it is read.
     ["echo $'\\'' $(git diff --no-index /dev/null .env)", 'no-index'],
 ];

@@ -59,9 +59,11 @@
 //     script -c, ...), a checked command it would run that is refused on its
 //     own, and more than 8 checked commands behind one program.
 //   - a command name built with braces (`{git,}`, `g{i,x}t`) that can expand
-//     to a checked command. A glob in a path (`/usr/bin/g?t`) is checked as
-//     each checked command it can match, and `$'\x67it'` and `$"git"` are
-//     read as the git they decode to.
+//     to a checked command. A glob (`/usr/bin/g?t`, or `g?t` beside a file
+//     named git) is checked as each checked command it can match, and
+//     `$'\x67it'` and `$"git"` are read as the git they decode to.
+//   - a command name made only of wildcards (`*`, `./???`), which runs
+//     whichever file it matches first.
 //   - any command still being checked after BUDGET_MS: Claude Code runs a
 //     command whose hook times out or dies.
 //
@@ -1104,12 +1106,13 @@ function unquoted(text) {
 
 // A command name the shell builds before it looks it up (#368). Bash expands
 // braces in every word, so `{git,}` and `g{i,x}t` run git, and matches a glob
-// in a word with a `/` against the filesystem, so `/usr/bin/g?t` runs git.
-// Only a glob with a `/` counts: a bare `g?t` matches files in the working
-// directory, not a program on the PATH. A last part made only of `*` and `?`
-// (`src/*`) matches every file and runs whichever sorts first, so it names no
-// command in particular. A word with more brace forms than MAX_BRACE_FORMS is
-// read only that far, and with its braces and commas taken out.
+// in a word against the filesystem, so `/usr/bin/g?t` runs git. A bare `g?t`
+// counts too: it matches a file named git in the working directory, and the
+// shell then looks the name it produced up on the PATH, so `touch git; g?t`
+// runs git. A last part made only of `*` and `?` (`src/*`) names no command in
+// particular, and is refused as a command name in checkSegment(). A word with
+// more brace forms than MAX_BRACE_FORMS is read only that far, and with its
+// braces and commas taken out.
 const BUILT_NAME = /[{}*?[]/;
 const BRACE_GROUP = /\{([^{}]*,[^{}]*|(?:-?\d+|[A-Za-z])\.\.(?:-?\d+|[A-Za-z])(?:\.\.-?\d+)?)\}/;
 const MAX_BRACE_FORMS = 32;
@@ -1173,7 +1176,7 @@ function spelledNames(word) {
         if (/\s/.test(form)) continue; // a word with a space in it names no program
         const name = basename(form);
         if (CHECKED.has(name)) names.add(name);
-        else if (form.includes('/') && /[*?[]/.test(name) && !/^[*?]+$/.test(name)) {
+        else if (/[*?[]/.test(name) && !/^[*?]+$/.test(name)) {
             for (const checked of CHECKED) if (globMatches(name, checked)) names.add(checked);
         }
     }
@@ -1317,10 +1320,18 @@ function checkSegment(words, state) {
         const envBlock = checkCodeEnv(Object.keys(inlineEnv));
         if (envBlock) return envBlock;
         if (!w.length) return null;
+        // A name made only of `*` and `?` (`*`, `./???`) runs whichever file
+        // sorts first, which in a directory holding only a file named git is git.
+        if (/^[*?]+$/.test(basename(w[0]))) {
+            return blockLocal(
+                `Blocked: \`${w[0]}\` is a command name made only of wildcards, so the shell runs whichever ` +
+                    'file it matches first, which can be a command this hook checks. Spell the name out.'
+            );
+        }
         // A command name the shell builds before it looks it up (#368). Braces
         // are refused: `{git,diff} --no-index ...` is `git diff --no-index ...`,
-        // and the words they add are not modelled here. A glob in a path
-        // (`/usr/bin/g?t`) is checked as each checked command it can match,
+        // and the words they add are not modelled here. A glob
+        // (`/usr/bin/g?t`, `g?t`) is checked as each checked command it can match,
         // with the assignments and any xargs in front of it.
         const spelled = CHECKED.has(basename(w[0])) ? [] : spelledNames(w[0]);
         if (spelled.length && /[{}]/.test(w[0])) {
@@ -1355,7 +1366,17 @@ function checkSegment(words, state) {
         // Look through the wrapper for the real command, past the wrapper's own
         // options and their values. A nested env or exec is read again above,
         // and an opaque wrapper (`nice taskset -c 0 git log`) is read below.
-        const idx = w.findIndex((x, n) => n >= from && (commandName(x) !== null || OPAQUE_WRAPPERS.has(basename(x))));
+        // The word in the wrapper's command position (past env's assignments
+        // and timeout's duration) is also its command when it is made only of
+        // wildcards (`nice * diff ...`), and is refused as one below.
+        let at = from;
+        while (cmd === 'env' && at < w.length && isAssignment(w[at])) at++;
+        if (cmd === 'timeout') at++;
+        const idx = w.findIndex(
+            (x, n) =>
+                n >= from &&
+                (commandName(x) !== null || OPAQUE_WRAPPERS.has(basename(x)) || (n === at && /^[*?]+$/.test(basename(x))))
+        );
         for (const x of w.slice(1, idx === -1 ? w.length : idx)) {
             if (isAssignment(x)) {
                 const eq = x.indexOf('=');
