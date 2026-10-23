@@ -54,9 +54,12 @@ getting around those rules: it blocks code-loading flags and variables
 (`node -e`/`--import`/`--require`, `npm --node-options`, `NODE_OPTIONS`,
 `npm_config_*`), test-runner options that load modules or write files, git
 options that read or write arbitrary files (`--output`, `--no-index`, `-O`,
-`format-patch -o`), and git pagers, external diffs and config keys that run
-programs. It also refuses git, node, npm or a shell run through `xargs`, which
-appends arguments read at run time that none of those checks can see, and git,
+`format-patch -o`) or run a program (`--ext-diff`, `fetch --upload-pack`), and
+git pagers, external diffs and config keys that run programs. It checks a
+script handed to a shell (`bash -c`, fish's `--command`, or a heredoc or
+`echo` text fed to it on stdin) as a command of its own. It also refuses git,
+node, npm or a shell run through `xargs`, which appends arguments read at run
+time that none of those checks can see, and git,
 gh, node, npm or a shell anywhere behind `flock`, `watch`, `taskset`, `chrt`,
 `unshare` or `find -exec`, whatever their arguments are: those programs' own
 options can move the command out of the checkout or hand it to a shell as one
@@ -65,6 +68,14 @@ program (`setarch`, `prlimit`, `script -c`, ...), the command it would run is
 checked as though it stood alone, and a command the guard cannot finish
 checking within five seconds is refused, since Claude Code runs a command whose
 hook times out or crashes. If a task needs one of those, the owner runs it.
+
+The guard reads a command line through `.claude/hooks/shell-reader.mjs`, which
+splits words, resolves quotes, `$'...'`, braces, wildcards and wrappers the way
+the shell would, and names no repository. It is a byte-identical copy of the
+reader in Danathar/akmods, shared by every repository that carries this guard,
+and `.claude/hooks/tests/shell-reader.test.mjs` pins its hash: a reading fix is
+made in akmods first and then copied here, while this repository's rules stay
+in `guard-bash.mjs`.
 
 If a secret reaches a commit, issue, log or prompt, stop and tell the owner so
 it can be rotated. Deleting the commit does not undo the exposure. Add new
