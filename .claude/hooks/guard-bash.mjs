@@ -37,7 +37,8 @@
 // writes, which would walk past the `Read(.env*)` deny rules and the `ask`/`deny`
 // rules on the files that bound agents (#65, #69). Blocked:
 //   - NODE_OPTIONS, npm_config_*, LD_PRELOAD, BASH_ENV and similar code-loading
-//     variables, set inline, through `env`, or with export/declare -x.
+//     variables, set inline (also as NAME+=value), through `env`, or with
+//     export/declare -x.
 //   - node code-loading flags (-e/-p/-r, --eval, --print, --require, --import,
 //     --loader, --env-file, ...); under `node --test` only an allowlist of
 //     test-runner flags and in-repo relative file patterns.
@@ -45,8 +46,11 @@
 //     forwarded to a test script pass only a jest allowlist.
 //   - git file-writing or file-reading options on any subcommand other than
 //     push/remote/config (--output*, --no-index, --orderfile/-O, format-patch
-//     -o, ...), GIT_* environment other than identity/locking variables, pagers
-//     and editors other than cat/true, and `-c`/config writes of keys that run
+//     -o, --ext-diff, --open-files-in-pager, ...), --upload-pack (and its
+//     abbreviations such as --upl), --exec and clone/ls-remote -u on git
+//     fetch|pull|clone|ls-remote|archive, which run the program they name,
+//     GIT_* environment other than identity/locking variables, pagers and
+//     editors other than cat/true, and `-c`/config writes of keys that run
 //     programs (core.pager, core.fsmonitor, diff.*, alias.*, include.*, ...).
 //   - git, node, npm or a shell run through xargs: xargs appends words read at
 //     run time (`printf '%s\n' --output=FILE | xargs git log`), so none of the
@@ -56,8 +60,13 @@
 //     those programs' own options are not modelled here, so the command they
 //     run is never checked word by word.
 //   - behind any other program that is not checked here (setarch, prlimit,
-//     script -c, ...), a checked command it would run that is refused on its
-//     own, and more than 8 checked commands behind one program.
+//     script -c, nsenter, setpriv, busybox, ...), a checked command it would
+//     run that is refused on its own, and more than 8 checked commands behind
+//     one program.
+//   - a script a shell would run that is refused on its own: a `-c` string,
+//     fish's -c/--command/-C/--init-command strings, and, for a shell with no
+//     script operand, the heredoc, here-string or echo/printf text fed to it
+//     on stdin (`bash <<'EOF'`, `echo '...' | sh`).
 //   - a command name built with braces (`{git,}`, `g{i,x}t`) that can expand
 //     to a checked command. A glob (`/usr/bin/g?t`, or `g?t` beside a file
 //     named git) is checked as each checked command it can match, and
@@ -70,12 +79,42 @@
 // Read-only gh commands (view, list, status, diff, checks, api GET, ...) are
 // always allowed. The command is split into segments on && || ; | & newlines,
 // subshells and command substitutions; shell -c / eval strings are analysed
-// recursively. Quoted text is data, so a quoted "chrisvel/tududi" inside a
-// read-only command or an `echo` is fine.
+// recursively. Redirections (`>log`, `2>&1`, `<file`) are not arguments, and
+// quoted heredoc bodies are data unless a shell reads them. Quoted text is
+// data, so a quoted "chrisvel/tududi" inside a read-only command or an `echo`
+// is fine.
+//
+// Layout: the reading described in these notes (words, quotes, `$'...'`,
+// substitutions and heredocs, brace and wildcard names, wrappers and the
+// commands they run, shell and fish command strings, the git option, config
+// and environment rules, the time budget) lives in shell-reader.mjs. That file
+// names no repository and is kept byte-identical in every repository that
+// carries this guard (its sha256 is pinned by
+// .claude/hooks/tests/shell-reader.test.mjs); a reading fix is made in
+// Danathar/akmods first and then copied here. This file holds this
+// repository's rules (the list above), its messages and the hook's entry
+// point, and imports the reader. A few readings this guard made before it
+// adopted the shared reader are stricter than the shared one, and are kept
+// here as policy until the shared reader makes them too: extended glob groups
+// after `shopt -s extglob` (`g@(i)t`), brace sequences and comma-less groups
+// in a command name (`{f..h}it`, `g{i}t`), a POSIX class in a bracket
+// (`g[[:alpha:]]t`), `NAME+=value` prefixes, and sudo's option table.
 
 import { basename } from 'node:path';
 import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+// Reading the command line as the shell would is shared with the other
+// repositories that carry this guard; see shell-reader.mjs.
+import {
+    ARGUMENT_ONLY_PROGRAMS, BUDGET_MS, commandNameReader, commandStrings, COMMAND_STRING_SEPARATORS,
+    EXEC_GIT_CONFIG, expandWrapperOptions, extractSubstitutions, fishScripts, GIT_EXEC_OPTION,
+    GIT_SHORT_UPLOAD_PACK, GIT_UPLOAD_PACK_OPTION, GIT_UPLOAD_PACK_SUBCOMMANDS, KEYWORDS, MAX_BRACE_FORMS,
+    MAX_UNLISTED_INNER, NOOP_PROGRAMS, OverBudget, PROGRAM_ENV, REFUSED_GIT_OPTION, RISKY_GIT_CONFIG, SHELLS,
+    spend, startBudget, tokenize, unquoted, WRAPPERS, wrapperTarget,
+} from './shell-reader.mjs';
+
+// Kept importable from here, where they were defined before the split.
+export { BUDGET_MS, extractSubstitutions, tokenize } from './shell-reader.mjs';
 
 export const FORK = 'danathar/tududi';
 export const UPSTREAM = 'chrisvel/tududi';
@@ -124,355 +163,84 @@ const GH_OTHER_READONLY = {
     version: true,
 };
 
-// Words that may precede the real command and carry no meaning for us.
-const KEYWORDS = new Set(['{', '}', '!', 'if', 'then', 'else', 'elif', 'do', 'while', 'until', 'time']);
-// Wrappers that run another command; we look through them for gh/git/shells.
-const WRAPPERS = new Set([
-    'env', 'command', 'builtin', 'exec', 'nohup', 'sudo', 'nice', 'xargs',
-    'timeout', 'setsid', 'stdbuf', 'ionice', 'chronic', 'time',
-]);
-// Wrapper options as getopt reads them: the short letters that take a value
-// (from the rest of the word, or else the next word), the ones whose value is
-// optional (only the rest of the same word), and the long names that take a
-// value (getopt_long accepts any unambiguous prefix of `long`).
-const WRAPPER_GETOPT = {
-    env: { value: 'uCSa', long: ['ignore-environment', 'null', 'unset', 'chdir', 'argv0', 'split-string', 'block-signal', 'default-signal', 'ignore-signal', 'list-signal-handling', 'debug'], takesValue: ['unset', 'chdir', 'argv0', 'split-string'] },
-    exec: { value: 'a', long: [], takesValue: [] },
-    time: { value: 'fo', long: ['format', 'output', 'append', 'verbose', 'portability', 'quiet'], takesValue: ['format', 'output'] },
-    timeout: { value: 'sk', long: ['signal', 'kill-after', 'foreground', 'preserve-status', 'verbose'], takesValue: ['signal', 'kill-after'] },
-    nice: { value: 'n', long: ['adjustment'], takesValue: ['adjustment'] },
-    stdbuf: { value: 'ioe', long: ['input', 'output', 'error'], takesValue: ['input', 'output', 'error'] },
-    ionice: { value: 'cnpPu', long: ['class', 'classdata', 'pid', 'pgid', 'uid', 'ignore'], takesValue: ['class', 'classdata', 'pid', 'pgid', 'uid'] },
-    sudo: { value: 'aCcDgpRrTtUu', optional: 'h', long: ['askpass', 'auth-type', 'background', 'bell', 'close-from', 'chdir', 'preserve-env', 'edit', 'group', 'set-home', 'help', 'host', 'login', 'remove-timestamp', 'reset-timestamp', 'list', 'login-class', 'non-interactive', 'preserve-groups', 'prompt', 'chroot', 'role', 'stdin', 'shell', 'type', 'command-timeout', 'other-user', 'user', 'version', 'validate'], takesValue: ['auth-type', 'close-from', 'chdir', 'group', 'host', 'login-class', 'prompt', 'chroot', 'role', 'type', 'command-timeout', 'other-user', 'user'] },
-    xargs: { value: 'adEILnPs', optional: 'eil', long: ['arg-file', 'delimiter', 'eof', 'replace', 'max-lines', 'max-args', 'max-procs', 'max-chars', 'process-slot-var', 'null', 'open-tty', 'interactive', 'no-run-if-empty', 'verbose', 'exit', 'show-limits'], takesValue: ['arg-file', 'delimiter', 'max-args', 'max-procs', 'max-chars', 'process-slot-var'] },
+// Commands whose auto-approved forms (.claude/settings.json) are vetted below.
+const NODE_CMDS = ['node', 'nodejs', 'npm'];
+// Programs that run a command of their own choosing. The shared reader can
+// step over most of them, but `chrt -o +0` and `flock -n /tmp/l` take values
+// that look like a command, `unshare --wd=DIR` and `find -execdir` move the
+// command out of this checkout, `find -exec ... {}` hands it operands that are
+// not in this string, and `watch` and `flock -c` hand it to `sh -c` as one
+// string. Claude Code's allow-rule matcher does not step over them, so in
+// bypass and auto mode nothing prompts either. A checked command anywhere
+// behind one of these is refused outright, whatever its arguments are; see
+// opaqueWrapperCommand().
+const OPAQUE_WRAPPERS = new Set(['flock', 'watch', 'taskset', 'chrt', 'unshare', 'find']);
+// The shared reader can also step over these. This guard reads them as
+// programs it does not list (checkUnlistedProgram()): every later word that
+// names a checked command, and every command string, is checked as though it
+// stood alone, which refuses at least as much as stepping over them.
+const READ_AS_UNLISTED = new Set(['nsenter', 'setpriv', 'chroot', 'busybox']);
+// Wrappers that are looked through to the command they run (env, nice,
+// timeout, xargs, sudo, time, ...).
+const STEPPED_OVER = new Set([...WRAPPERS].filter((w) => !OPAQUE_WRAPPERS.has(w) && !READ_AS_UNLISTED.has(w)));
+// The commands this hook checks, which a wrapper is looked through to find
+// (env and exec are read again as wrappers).
+const CHECKED_NAMES = new Set(['gh', 'git', ...SHELLS, 'eval', ...NODE_CMDS, 'env', 'exec']);
+
+// sudo's options as getopt reads them: the short letters that take a value
+// (from the rest of the word, or else the next word), the one whose value is
+// optional (only the rest of the same word), and the long names, of which
+// `takesValue` take one (getopt_long accepts any unambiguous prefix). The
+// shared reader has no table for sudo, so this guard keeps its own: without
+// it `sudo -u git gh pr merge 1` would be read as git rather than gh.
+const SUDO_GETOPT = {
+    value: 'aCcDgpRrTtUu',
+    optional: 'h',
+    long: [
+        'askpass', 'auth-type', 'background', 'bell', 'close-from', 'chdir', 'preserve-env', 'edit', 'group', 'set-home',
+        'help', 'host', 'login', 'remove-timestamp', 'reset-timestamp', 'list', 'login-class', 'non-interactive',
+        'preserve-groups', 'prompt', 'chroot', 'role', 'stdin', 'shell', 'type', 'command-timeout', 'other-user', 'user',
+        'version', 'validate',
+    ],
+    takesValue: [
+        'auth-type', 'close-from', 'chdir', 'group', 'host', 'login-class', 'prompt', 'chroot', 'role', 'type',
+        'command-timeout', 'other-user', 'user',
+    ],
 };
 
-/**
- * Read a wrapper's own leading options. Returns { from, script, rest }: `from`
- * is the index of the first word after them (NAME=value words included), so
- * an option's value (`env -u git`, `exec -a gh`) is never taken for the
- * command the wrapper runs. For env, `script` is the -S / --split-string
- * command string (null if none) and `rest` the index of the word after it.
- */
-function wrapperOptions(cmd, w) {
-    const spec = WRAPPER_GETOPT[cmd];
-    const none = { from: 1, script: null, rest: w.length };
-    if (!spec) return none;
+/** Index of the command sudo runs, past its options, their values and NAME=value words, or -1. */
+function sudoTarget(w) {
     for (let k = 1; k < w.length; k++) {
         const a = w[k];
-        if (cmd === 'env' && isAssignment(a)) continue;
-        // A lone `-` is env's old spelling of -i; anywhere else it is an operand.
-        if (cmd === 'env' && a === '-') continue;
-        if (a === '--') return { ...none, from: k + 1 };
-        if (!a.startsWith('-') || a === '-') return { ...none, from: k };
+        if (isPrefixAssignment(a)) continue;
+        if (a === '--') return k + 1 < w.length ? k + 1 : -1;
+        if (!a.startsWith('-') || a === '-') return k;
         if (a.startsWith('--')) {
             const eq = a.indexOf('=');
             const name = a.slice(2, eq === -1 ? undefined : eq);
-            const hits = spec.long.filter((l) => l.startsWith(name));
-            const opt = spec.long.includes(name) ? name : hits.length === 1 ? hits[0] : null;
-            if (cmd === 'env' && opt === 'split-string') {
-                return eq === -1 ? { from: -1, script: w[k + 1] ?? '', rest: k + 2 } : { from: -1, script: a.slice(eq + 1), rest: k + 1 };
-            }
-            if (eq === -1 && spec.takesValue.includes(opt)) k++;
+            const hits = SUDO_GETOPT.long.filter((l) => l.startsWith(name));
+            const opt = SUDO_GETOPT.long.includes(name) ? name : hits.length === 1 ? hits[0] : null;
+            if (eq === -1 && SUDO_GETOPT.takesValue.includes(opt)) k++;
             continue;
         }
         for (let j = 1; j < a.length; j++) {
-            if (spec.optional?.includes(a[j])) break; // `xargs -iE`: E is -i's value
-            if (!spec.value.includes(a[j])) continue;
-            if (cmd === 'env' && a[j] === 'S') {
-                return j + 1 < a.length
-                    ? { from: -1, script: a.slice(j + 1), rest: k + 1 }
-                    : { from: -1, script: w[k + 1] ?? '', rest: k + 2 };
-            }
+            if (SUDO_GETOPT.optional.includes(a[j])) break; // `sudo -hgit`: git is -h's value
+            if (!SUDO_GETOPT.value.includes(a[j])) continue;
             if (j + 1 === a.length) k++; // the value is the next word
             break;
         }
     }
-    return { ...none, from: w.length };
-}
-const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash']);
-// Commands whose auto-approved forms (.claude/settings.json) are vetted below.
-const NODE_CMDS = ['node', 'nodejs', 'npm'];
-// The commands this hook checks, which a wrapper is looked through to find
-// (env and exec are read again as wrappers).
-const CHECKED = new Set(['gh', 'git', ...SHELLS, 'eval', ...NODE_CMDS, 'env', 'exec']);
-// Programs that run a command of their own choosing, but whose options are not
-// modelled the way WRAPPER_GETOPT models the wrappers': `chrt -o +0` and
-// `flock -n /tmp/l` take values that look like a command, `unshare --wd=DIR`
-// and `find -execdir` move the command out of this checkout, `find -exec ...
-// {}` hands it operands that are not in this string, and `watch` and
-// `flock -c` hand it to `sh -c` as one string. Claude Code's allow-rule matcher
-// does not step over them, so in bypass and auto mode nothing prompts either.
-// A checked command anywhere behind one of these is refused outright, whatever
-// its arguments are; see opaqueWrapperCommand().
-const OPAQUE_WRAPPERS = new Set(['flock', 'watch', 'taskset', 'chrt', 'unshare', 'find']);
-// What separates the words of a command string a wrapper hands to a shell
-// (`watch 'git diff ...'`, `flock -c 'git diff ...'`): whitespace, the shell's
-// own punctuation and quotes. Splitting on all of them reads more words than
-// the shell would, which can only over-refuse.
-const COMMAND_STRING_SEPARATORS = /[\s;&|()<>`'"]+/;
-// No list of programs that run a command is complete: `setarch x86_64 git
-// diff`, `prlimit`, `setpriv` and `nsenter` run the words after them, and
-// `script -qc '...'` hands a shell one string. Behind any program this hook
-// neither checks nor steps over, the checked command it would run is checked
-// as a command of its own; see checkUnlistedProgram(). These print or match
-// their arguments and never run them, so they are not read at all, which keeps
-// `grep -rn 'git diff --no-index' docs` working. Only the bare spelling counts,
-// and leaving a program out of this set can only over-refuse.
-const ARGUMENT_ONLY_PROGRAMS = new Set(['echo', 'printf', 'grep', 'egrep', 'fgrep']);
-// Each checked command behind such a program is checked from where it starts
-// to the end of the segment, so the work grows with the square of the words.
-// Past this many the command is refused unread; no real invocation runs that many.
-const MAX_UNLISTED_INNER = 8;
-// How long one decision may take. Claude Code runs the command when the hook
-// times out or dies, and reading every tail of a short-option cluster grows
-// with the square of the word: a 120 KB `flock -nnn...n /tmp/l git diff ...`
-// ran Node out of memory, and the git diff behind it went unchecked. A command
-// still being read past this is refused instead; see spend().
-export const BUDGET_MS = 5000;
-let deadline = null;
-
-// ---------------------------------------------------------------------------
-// Tokenizer
-// ---------------------------------------------------------------------------
-
-/**
- * Split a shell command line into segments of words.
- * Quotes and backslashes are resolved; operators and parentheses end a segment;
- * heredoc bodies are skipped. This is a deliberately small approximation of
- * shell parsing, good enough to find command names and their flags.
- *
- * With `extglob`, a `(` right after `?`, `*`, `+`, `@` or `!` in a word opens
- * an extended glob group that stays in the word up to its matching `)`, as
- * bash reads it once `shopt -s extglob` is on: `/usr/bin/g@(i)t` is one word
- * that runs git, not `/usr/bin/g@` followed by a subshell.
- */
-export function tokenize(input, { extglob = false } = {}) {
-    const segments = [];
-    let words = [];
-    let word = null; // null = no word in progress ('' = empty quoted word)
-    const pendingHeredocs = [];
-
-    const endWord = () => {
-        if (word !== null) words.push(word);
-        word = null;
-    };
-    const endSegment = () => {
-        endWord();
-        if (words.length) segments.push(words);
-        words = [];
-    };
-    const append = (ch) => {
-        word = (word ?? '') + ch;
-    };
-
-    let i = 0;
-    while (i < input.length) {
-        const c = input[i];
-
-        if (c === '$' && input[i + 1] === "'") {
-            // ANSI-C quoting: the shell decodes the escapes in `$'...'`, so
-            // `$'\x67it'` is the word git (#368).
-            const { text, end } = ansiC(input, i + 2);
-            append(text);
-            i = end;
-        } else if (c === '$' && input[i + 1] === '"') {
-            // Locale quoting: `$"..."` is a double-quoted string looked up in
-            // the message catalog, which leaves `$"git"` as git.
-            i++;
-        } else if (c === "'") {
-            const end = input.indexOf("'", i + 1);
-            const stop = end === -1 ? input.length : end;
-            append(input.slice(i + 1, stop));
-            i = stop + 1;
-        } else if (c === '"') {
-            i++;
-            append('');
-            while (i < input.length && input[i] !== '"') {
-                if (input[i] === '\\' && i + 1 < input.length) {
-                    const next = input[i + 1];
-                    if ('"\\$`'.includes(next)) i++;
-                    else if (next === '\n') {
-                        i += 2;
-                        continue;
-                    }
-                }
-                append(input[i]);
-                i++;
-            }
-            i++;
-        } else if (c === '\\') {
-            if (input[i + 1] === '\n') {
-                i += 2; // line continuation
-            } else {
-                append(input[i + 1] ?? '');
-                i += 2;
-            }
-        } else if (c === '#' && word === null) {
-            while (i < input.length && input[i] !== '\n') i++; // comment
-        } else if (c === '\n') {
-            endSegment();
-            i++;
-            // Skip the bodies of heredocs started on the line that just ended.
-            while (pendingHeredocs.length) {
-                const delim = pendingHeredocs.shift();
-                while (i < input.length) {
-                    let eol = input.indexOf('\n', i);
-                    if (eol === -1) eol = input.length;
-                    const line = input.slice(i, eol).replace(/^\t+/, '');
-                    i = eol + 1;
-                    if (line === delim) break;
-                }
-            }
-        } else if (c === '<' && input[i + 1] === '<' && input[i + 2] !== '<') {
-            i += 2;
-            if (input[i] === '-') i++;
-            while (input[i] === ' ' || input[i] === '\t') i++;
-            let delim = '';
-            let quote = null;
-            while (i < input.length) {
-                const d = input[i];
-                if (quote) {
-                    if (d === quote) quote = null;
-                    else delim += d;
-                } else if (d === "'" || d === '"') quote = d;
-                else if (/[\s;&|()<>]/.test(d)) break;
-                else delim += d;
-                i++;
-            }
-            endWord();
-            if (delim) pendingHeredocs.push(delim);
-        } else if (c === ' ' || c === '\t') {
-            endWord();
-            i++;
-        } else if (c === '(' && extglob && word !== null && /[?*+@!]$/.test(word)) {
-            let depth = 0;
-            let j = i;
-            do {
-                if (input[j] === '\\') j++;
-                else if (input[j] === "'" || input[j] === '"') {
-                    const end = input.indexOf(input[j], j + 1);
-                    j = end === -1 ? input.length : end;
-                } else if (input[j] === '(') depth++;
-                else if (input[j] === ')') depth--;
-                j++;
-            } while (depth > 0 && j < input.length);
-            append(input.slice(i, j));
-            i = j;
-        } else if (c === '&' || c === '|' || c === ';' || c === '(' || c === ')') {
-            endSegment();
-            i++;
-        } else if (c === '`') {
-            endSegment(); // substitution contents are analysed separately
-            i++;
-        } else if (c === '$' && input[i + 1] === '(') {
-            endSegment();
-            i += 2;
-        } else {
-            append(c);
-            i++;
-        }
-    }
-    endSegment();
-    return segments;
-}
-
-const ANSI_C_ESCAPES = {
-    a: '\x07', b: '\b', e: '\x1b', E: '\x1b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v',
-    '\\': '\\', "'": "'", '"': '"', '?': '?',
-};
-
-/**
- * Decode the body of a `$'...'` string that starts at `start` (just past the
- * opening quote), as bash does: `\n`, `\NNN` (octal), `\xHH`, `\uHHHH`,
- * `\UHHHHHHHH` and `\cX` are decoded, `\'` does not end the string, and a NUL
- * ends the value. Returns the decoded text and the index past the closing quote.
- */
-function ansiC(input, start) {
-    let text = '';
-    let cut = false;
-    let i = start;
-    while (i < input.length && input[i] !== "'") {
-        let ch = input[i];
-        let len = 1;
-        if (ch === '\\' && i + 1 < input.length) {
-            const rest = input.slice(i + 1, i + 10);
-            let m;
-            len = 2;
-            if ((m = /^[0-7]{1,3}/.exec(rest))) {
-                ch = String.fromCharCode(parseInt(m[0], 8) & 0xff);
-                len = 1 + m[0].length;
-            } else if ((m = /^x([0-9A-Fa-f]{1,2})/.exec(rest)) || (m = /^u([0-9A-Fa-f]{1,4})/.exec(rest)) ||
-                (m = /^U([0-9A-Fa-f]{1,8})/.exec(rest))) {
-                const code = parseInt(m[1], 16);
-                ch = code <= 0x10ffff ? String.fromCodePoint(code) : '';
-                len = 1 + m[0].length;
-            } else if ((m = /^c([\s\S])/.exec(rest))) {
-                ch = String.fromCharCode(m[1].toUpperCase().charCodeAt(0) & 0x1f);
-                len = 3;
-            } else if (rest[0] in ANSI_C_ESCAPES) {
-                ch = ANSI_C_ESCAPES[rest[0]];
-            } else {
-                ch = `\\${rest[0]}`;
-            }
-        }
-        if (ch === '\0') cut = true;
-        if (!cut) text += ch;
-        i += len;
-    }
-    return { text, end: i + 1 };
-}
-
-/**
- * Find the bodies of $(...) and `...` substitutions, including ones inside
- * double quotes (but not single quotes), so they can be analysed as commands.
- */
-export function extractSubstitutions(input) {
-    const found = [];
-    let inSingle = false;
-    let inDouble = false;
-    for (let i = 0; i < input.length; i++) {
-        const c = input[i];
-        if (c === '\\' && !inSingle) {
-            i++;
-        } else if (c === '$' && input[i + 1] === "'" && !inSingle && !inDouble) {
-            // `$'...'` is single-quoted text in which `\'` does not end it.
-            for (i += 2; i < input.length && input[i] !== "'"; i++) if (input[i] === '\\') i++;
-        } else if (c === "'" && !inDouble) {
-            inSingle = !inSingle;
-        } else if (c === '"' && !inSingle) {
-            inDouble = !inDouble;
-        } else if (!inSingle && c === '$' && input[i + 1] === '(') {
-            let depth = 1;
-            let j = i + 2;
-            // Match the closing paren, ignoring parens in quotes or escaped.
-            let q = null;
-            for (; j < input.length && depth > 0; j++) {
-                const d = input[j];
-                if (d === '\\' && q !== "'") j++;
-                else if (q) {
-                    if (d === q) q = null;
-                } else if (d === "'" || d === '"') q = d;
-                else if (d === '(') depth++;
-                else if (d === ')') depth--;
-            }
-            found.push(input.slice(i + 2, j - 1));
-            i = j - 1; // nested substitutions are found by the recursive analysis
-        } else if (!inSingle && c === '`') {
-            const end = input.indexOf('`', i + 1);
-            const stop = end === -1 ? input.length : end;
-            found.push(input.slice(i + 1, stop));
-            i = stop;
-        }
-    }
-    return found;
+    return -1;
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const isAssignment = (w) => /^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(w);
+// `NAME=value` and bash's `NAME+=value` in front of a command both set NAME
+// for it. The shared reader's isAssignment() reads only the first; this guard
+// reads both, so `NODE_OPTIONS+=--import=x npm test` is refused.
+const isPrefixAssignment = (w) => /^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(w);
 
 /** Normalise OWNER/REPO, HOST/OWNER/REPO, or a github URL to "owner/repo". */
 export function normalizeRepo(value) {
@@ -692,13 +460,14 @@ function checkPrCreate(args) {
 // git
 // ---------------------------------------------------------------------------
 
-// git config keys that can redirect where a push goes or how it authenticates.
-// (push.* keys such as push.default or push.autoSetupRemote cannot change the target.)
-const RISKY_GIT_CONFIG = /^(remote\.|url\.|credential\.|core\.sshcommand$)/i;
-
-// git config keys that make git run a program or read/write another file.
-const EXEC_GIT_CONFIG =
+// git config keys that can redirect a push (RISKY_GIT_CONFIG) or make git run a
+// program or read config from elsewhere (EXEC_GIT_CONFIG) come from the shared
+// reader. This guard also refuses the keys below, which it refused before it
+// adopted the shared reader and the shared list does not name
+// (core.excludesfile, core.worktree, difftool.*, mergetool.*, ssh.*, sendemail.*).
+const LOCAL_EXEC_GIT_CONFIG =
     /^(core\.(pager|editor|fsmonitor|hookspath|askpass|gitproxy|attributesfile|excludesfile|worktree)$|pager\.|diff\.|difftool\.|merge\.|mergetool\.|filter\.|alias\.|include\.|includeif\.|gpg\.|ssh\.|sequence\.editor$|interactive\.difffilter$|uploadpack\.|protocol\.|sendemail\.)/i;
+const runsProgram = (key) => EXEC_GIT_CONFIG.test(key) || LOCAL_EXEC_GIT_CONFIG.test(key);
 
 // GIT_* variables that only set identity, locking or pathspec behaviour.
 const SAFE_GIT_ENV = new Set([
@@ -708,14 +477,12 @@ const SAFE_GIT_ENV = new Set([
     'GIT_LITERAL_PATHSPECS', 'GIT_GLOB_PATHSPECS', 'GIT_NOGLOB_PATHSPECS', 'GIT_ICASE_PATHSPECS',
     'GIT_FLUSH', 'GIT_ADVICE', 'GIT_PROGRESS_DELAY',
 ]);
-// Variables naming a program git runs; harmless only with these values.
-const PROGRAM_ENV = new Set(['GIT_PAGER', 'PAGER', 'GIT_EDITOR', 'GIT_SEQUENCE_EDITOR', 'EDITOR', 'VISUAL']);
-const SAFE_PROGRAMS = new Set(['', 'cat', 'true', ':']);
 
 function checkGitEnv(env) {
     for (const [name, value] of Object.entries(env)) {
+        // PROGRAM_ENV (GIT_PAGER, PAGER, editors) is harmless only with a NOOP_PROGRAMS value.
         const unsafe = PROGRAM_ENV.has(name)
-            ? !SAFE_PROGRAMS.has(String(value ?? '\0'))
+            ? !NOOP_PROGRAMS.has(String(value ?? '\0'))
             : name === 'PATH' || (/^GIT_/.test(name) && !SAFE_GIT_ENV.has(name));
         if (unsafe) {
             return blockLocal(`Blocked: \`git\` with ${name}= in its environment can run another program or read/write other files.`);
@@ -729,10 +496,23 @@ const GIT_SHORT_VALUED = 'SGIlnUMCBXL';
 // Subcommands whose -o names an output file or directory.
 const GIT_O_WRITES = new Set(['format-patch', 'archive', 'bugreport', 'diagnose']);
 
+/** Whether a git option makes fetch|pull|clone|ls-remote|archive run the program it names. */
+function runsUploadPack(sub, a) {
+    return (
+        GIT_UPLOAD_PACK_SUBCOMMANDS.has(sub) &&
+        (GIT_UPLOAD_PACK_OPTION.test(a) ||
+            ((sub === 'ls-remote' || sub === 'archive') && GIT_EXEC_OPTION.test(a)) ||
+            ((sub === 'clone' || sub === 'ls-remote') && GIT_SHORT_UPLOAD_PACK.test(a)))
+    );
+}
+
 /**
  * Options that make an otherwise read-only git command write a file at a chosen
- * path (`--output=`, format-patch `-o`) or read any file on the machine
- * (`diff --no-index`, `--orderfile`/`-O`). Pathspecs after `--` are not options.
+ * path (`--output=`, format-patch `-o`), read any file on the machine
+ * (`diff --no-index`, `--orderfile`/`-O`) or run a program (`--ext-diff`,
+ * `--open-files-in-pager`, `fetch --upload-pack`). Pathspecs after `--` are not
+ * options. Any prefix of `--output`, `--no-index` and `--orderfile` is refused,
+ * which is stricter than the shared REFUSED_GIT_OPTION (full spelling only).
  */
 function checkGitFileOptions(sub, rest) {
     for (const a of rest) {
@@ -740,8 +520,11 @@ function checkGitFileOptions(sub, rest) {
         if (/^--out/.test(a)) return blockLocal(`Blocked: \`git ${sub} ${a.split('=')[0]}\` writes a file at a chosen path.`);
         if (/^--no-ind/.test(a)) return blockLocal(`Blocked: \`git ${sub} --no-index\` reads files outside the repository's history (e.g. .env).`);
         if (/^--orde/.test(a)) return blockLocal(`Blocked: \`git ${sub} --orderfile\` reads an arbitrary file.`);
-        if (/^--upload-pack/.test(a)) {
-            return blockLocal(`Blocked: \`git ${sub} ${a.split('=')[0]}\` runs a chosen program.`);
+        if (/^--upload-pack/.test(a) || runsUploadPack(sub, a)) {
+            return blockLocal(`Blocked: \`git ${sub} ${a.split('=')[0]}\` runs a chosen program (--upload-pack, --exec, clone/ls-remote -u).`);
+        }
+        if (REFUSED_GIT_OPTION.test(a)) {
+            return blockLocal(`Blocked: \`git ${sub} ${a.split('=')[0]}\` writes a file, reads outside the repository or runs a program.`);
         }
         if (/^-[^-]/.test(a)) {
             if (GIT_O_WRITES.has(sub) && a.includes('o')) {
@@ -767,7 +550,7 @@ function checkGit(args, inlineEnv = {}, exported = {}) {
         if (configKey !== null && RISKY_GIT_CONFIG.test(configKey)) {
             return block(`Blocked: \`git ${a} ${configKey}=...\` could redirect pushes or credentials.`);
         }
-        if (configKey !== null && EXEC_GIT_CONFIG.test(configKey)) {
+        if (configKey !== null && runsProgram(configKey)) {
             return blockLocal(`Blocked: \`git ${a} ${configKey}=...\` can make git run a program or read other files.`);
         }
         if (a.startsWith('--exec-path=')) {
@@ -831,13 +614,13 @@ function checkGitConfig(rest) {
     if (key !== undefined && RISKY_GIT_CONFIG.test(key) && modifies) {
         return block(`Blocked: \`git config ${key}\` write could redirect pushes or credentials.`);
     }
-    if (key !== undefined && EXEC_GIT_CONFIG.test(key) && modifies) {
+    if (key !== undefined && runsProgram(key) && modifies) {
         return blockLocal(`Blocked: \`git config ${key}\` write can make git run a program or read other files.`);
     }
     // Section renames move settings between names: check both the old and the new
     // section (`git config rename-section foo remote.origin` adopts foo.pushurl).
     const renames = verbRenames || rest.includes('--rename-section');
-    if (renames && positionals.some((p) => RISKY_GIT_CONFIG.test(`${p}.x`) || EXEC_GIT_CONFIG.test(`${p}.x`) || p.toLowerCase() === 'core')) {
+    if (renames && positionals.some((p) => RISKY_GIT_CONFIG.test(`${p}.x`) || runsProgram(`${p}.x`) || p.toLowerCase() === 'core')) {
         return block('Blocked: `git config rename-section` involving a remote/url/credential section (or one that runs programs) could redirect pushes.');
     }
     if (rest.includes('--edit') || rest.includes('-e')) {
@@ -1077,89 +860,23 @@ function checkNpm(args) {
 }
 
 // ---------------------------------------------------------------------------
-// Opaque wrappers (flock, watch, taskset, chrt, unshare, find)
+// Command names the shell builds
 // ---------------------------------------------------------------------------
 
-/** Thrown once a decision has run past BUDGET_MS; decide() refuses with it. */
-class OverBudget extends Error {}
+// How the shell may build one of CHECKED_NAMES out of a word (brace groups,
+// wildcards); see commandNameReader() in shell-reader.mjs.
+const { builtCommandName } = commandNameReader(CHECKED_NAMES);
 
-function spend() {
-    if (deadline !== null && Date.now() > deadline) {
-        throw new OverBudget(
-            `Blocked: this hook could not finish checking the command within ${BUDGET_MS / 1000} seconds, and ` +
-                'Claude Code runs a command whose hook times out, so it is refused rather than left half-read. ' +
-                'Split it into shorter commands.'
-        );
-    }
-}
+// Readings of a command name this guard made before it adopted the shared
+// reader, which the shared reader does not make. They only refuse more, so
+// they are kept here until a reading fix in Danathar/akmods covers them: a
+// brace sequence (`{f..h}it` is fit git hit), a group without a comma read as
+// if its braces were gone (`g{i}t`), and a bracket expression holding a POSIX
+// class read as any one character (`g[[:alpha:]]t`).
+const BRACE_SEQUENCE = /\{(-?\d+|[A-Za-z])\.\.(-?\d+|[A-Za-z])(?:\.\.(-?\d+))?\}/;
 
-/**
- * The command strings a word may hand to a shell: the word itself when it
- * holds more than one word of its own (`watch 'git diff ...'`), or a value
- * attached to an option in the same word: after the `=` of a long option
- * (`flock --command='git diff ...'`), or after any letter of a short-option
- * cluster (`flock -c'git diff ...'`). Which letter takes a value is not
- * modelled, so every one is tried. Yielded one at a time: a long cluster has
- * as many tails as letters, each nearly as long as the word.
- */
-function* commandStrings(word) {
-    if (COMMAND_STRING_SEPARATORS.test(word)) yield word;
-    if (word.startsWith('--')) {
-        const eq = word.indexOf('=');
-        if (eq !== -1) yield word.slice(eq + 1);
-    } else {
-        const cluster = /^-[A-Za-z0-9]+/.exec(word);
-        if (cluster) for (let cut = 2; cut <= cluster[0].length; cut++) yield word.slice(cut);
-    }
-}
-
-/**
- * The text as the shell would look names up in it: quotes, backslashes and `$`
- * removed. A shell drops quotes and backslashes before it looks a name up, so
- * `g""it`, `gi\t` and `$'git'` inside a command string all run git. Removing
- * more can only refuse more.
- */
-function unquoted(text) {
-    return text.replace(/[$"'\\]/g, '');
-}
-
-// A command name the shell builds before it looks it up (#368). Bash expands
-// braces in every word, so `{git,}` and `g{i,x}t` run git, and matches a glob
-// in a word against the filesystem, so `/usr/bin/g?t` runs git. A bare `g?t`
-// counts too: it matches a file named git in the working directory, and the
-// shell then looks the name it produced up on the PATH, so `touch git; g?t`
-// runs git. A last part made only of `*` and `?` (`src/*`) names no command in
-// particular, and is refused as a command name in checkSegment(). A word with
-// more brace forms than MAX_BRACE_FORMS is read only that far, and with its
-// braces and commas taken out.
-const BUILT_NAME = /[{}*?[]/;
-// An extended glob group (`@(i)`, `+(g|x)`, `!(x)`) opened by a `(` the
-// tokenizer kept in the word.
-const EXTGLOB_GROUP = /[?*+@!]\([^()]*\)/;
-const EXTGLOB_OPEN = /[?*+@!]\(/;
-
-/**
- * The word with each extended glob group read as `*`, which matches at least
- * every name the group can, so `g@(i)t` is read as `g*t` and `@(git)` as `*`.
- */
-function extglobAsStar(word) {
-    let out = word;
-    while (EXTGLOB_GROUP.test(out)) {
-        spend();
-        out = out.replace(new RegExp(EXTGLOB_GROUP, 'g'), '*');
-    }
-    return out;
-}
-
-/** Whether a command name is made only of wildcards (`*`, `./???`, `@(git)`). */
-const onlyWildcards = (word) => /^[*?]+$/.test(basename(extglobAsStar(word)));
-const BRACE_GROUP = /\{([^{}]*,[^{}]*|(?:-?\d+|[A-Za-z])\.\.(?:-?\d+|[A-Za-z])(?:\.\.-?\d+)?)\}/;
-const MAX_BRACE_FORMS = 32;
-
-/** The words a brace group stands for: its alternatives, or a sequence's members. */
-function braceAlternatives(body) {
-    if (body.includes(',')) return body.split(',');
-    const [from, to, step] = body.split('..');
+/** The members of a brace sequence `{from..to[..step]}`, at most MAX_BRACE_FORMS of them. */
+function sequenceMembers(from, to, step) {
     const numeric = /^-?\d+$/.test(from);
     const a = numeric ? Number(from) : from.charCodeAt(0);
     const b = numeric ? Number(to) : to.charCodeAt(0);
@@ -1171,106 +888,115 @@ function braceAlternatives(body) {
     return out;
 }
 
-/**
- * Whether a glob matches a name the way the shell matches a file name. The
- * match is linear: a backtracking regular expression built from a run of `*`
- * takes longer than Claude Code waits for the hook, and Claude Code runs a
- * command whose hook times out; spend() cannot stop a match already running.
- */
-function globMatches(pattern, name) {
-    // One step per pattern part: '*', or a test for the one character it matches.
-    const steps = [];
-    for (let k = 0; k < pattern.length; k++) {
-        const ch = pattern[k];
-        const cls = ch === '[' ? /\[([!^]?)(\]?[^\]]*)\]/y : null;
-        if (cls) cls.lastIndex = k;
-        const m = cls?.exec(pattern);
-        if (ch === '*') {
-            if (steps[steps.length - 1] !== '*') steps.push('*');
-        } else if (ch === '?') steps.push(() => true);
-        else if (m) {
-            // A character class such as [[:alpha:]] is read as any character.
-            const one = m[2].includes('[:')
-                ? /^[^]$/s
-                : new RegExp(`^[${m[1] ? '^' : ''}${m[2].replace(/[\\\]^[]/g, '\\$&')}]$`, 's');
-            steps.push((c) => one.test(c));
-            k += m[0].length - 1;
-        } else steps.push((c) => c === ch);
-    }
-    // Match, going back only to the last '*' seen.
-    let p = 0;
-    let n = 0;
-    let star = -1;
-    let resume = 0;
-    while (n < name.length) {
-        if (p < steps.length && steps[p] === '*') {
-            star = p++;
-            resume = n;
-        } else if (p < steps.length && steps[p](name[n])) {
-            p++;
-            n++;
-        } else if (star !== -1) {
-            p = star + 1;
-            n = ++resume;
-        } else return false;
-    }
-    while (p < steps.length && steps[p] === '*') p++;
-    return p === steps.length;
-}
-
-/**
- * The checked commands the shell could run from this command word once it
- * has expanded its braces and a glob in a path, or [] when it builds none.
- * A name spelled out plainly is read by the callers.
- */
-function spelledNames(word) {
-    word = extglobAsStar(word);
-    if (!BUILT_NAME.test(word)) return [];
-    const forms = new Set([word, word.replace(/[{},]/g, '')]);
+/** The words the brace sequences in `word` expand to (other groups left as they are), at most MAX_BRACE_FORMS. */
+function sequenceForms(word) {
+    const forms = [];
     const pending = [word];
-    while (pending.length && forms.size < MAX_BRACE_FORMS) {
+    while (pending.length && forms.length < MAX_BRACE_FORMS) {
         spend();
         const form = pending.pop();
-        const group = BRACE_GROUP.exec(form);
-        if (group === null) continue;
-        for (const alternative of braceAlternatives(group[1]).slice(0, MAX_BRACE_FORMS)) {
-            const expanded = form.slice(0, group.index) + alternative + form.slice(group.index + group[0].length);
-            forms.add(expanded);
-            pending.push(expanded);
+        const m = BRACE_SEQUENCE.exec(form);
+        if (m === null) {
+            if (form !== word) forms.push(form);
+            continue;
+        }
+        for (const member of sequenceMembers(m[1], m[2], m[3])) {
+            pending.push(form.slice(0, m.index) + member + form.slice(m.index + m[0].length));
         }
     }
-    const names = new Set();
-    for (const form of forms) {
-        if (/\s/.test(form)) continue; // a word with a space in it names no program
-        const name = basename(form);
-        if (CHECKED.has(name)) names.add(name);
-        else if (/[*?[]/.test(name) && !/^[*?]+$/.test(name)) {
-            for (const checked of CHECKED) if (globMatches(name, checked)) names.add(checked);
-        }
-    }
-    return [...names];
+    return forms;
 }
 
-/** The checked command this word runs as a command name, or null. */
+/**
+ * How the shell could build a checked command name out of this word:
+ * { braces: true } or { globs: [names] } as commandNameReader() reads it,
+ * then the local readings above. Null when it builds none.
+ */
+function builtName(word, commandWord = false) {
+    const shared = builtCommandName(word, commandWord);
+    if (shared !== null) return shared;
+    const braced = /[{}]/.test(word);
+    const forms = [];
+    if (braced) forms.push(word.replace(/[{},]/g, ''), ...sequenceForms(word));
+    if (word.includes('[:')) forms.push(word.replace(/\[[^\]]*\]+/g, '?'));
+    for (const form of forms) {
+        if (form === word) continue;
+        const name = basename(form);
+        const built = CHECKED_NAMES.has(name) ? { globs: [name] } : builtCommandName(form, commandWord);
+        if (built !== null) return braced ? { braces: true } : built;
+    }
+    return null;
+}
+
+/** Whether this word names a checked command, also once the shell has expanded it. */
+function namesChecked(word) {
+    return CHECKED_NAMES.has(basename(word)) || builtName(word) !== null;
+}
+
+/** The checked command this word runs as a command name (a braced word as written), or null. */
 function commandName(word) {
-    if (CHECKED.has(basename(word))) return basename(word);
-    return spelledNames(word)[0] ?? null;
+    if (CHECKED_NAMES.has(basename(word))) return basename(word);
+    const built = builtName(word);
+    if (built === null) return null;
+    return built.globs?.[0] ?? word;
+}
+
+/** Whether a command name is made only of wildcards (`*`, `./???`, `@(git)` read with extglob). */
+const onlyWildcards = (word) => /^[*?]+$/.test(basename(word));
+
+// Claude Code runs a command line by line, so a `shopt -s extglob` (or a shell
+// started with it on) changes how a later line is read: a `(` right after `?`,
+// `*`, `+`, `@` or `!` then opens an extended glob group that stays in the
+// word, and `/usr/bin/g@(i)t` is one word that runs git, not `/usr/bin/g@`
+// followed by a subshell. The shared reader does not read extglob, so a line
+// holding such a group is read a second time with each group replaced by `*`,
+// which matches at least every name the group can (`g@(i)t` is read as
+// `g*t`, `@(git)` as `*`).
+const EXTGLOB_OPEN = /[?*+@!]\(/;
+
+/** The text with each extended glob group (`@(...)`, `!(...)`, ...) read as `*`. */
+function extglobAsStar(text) {
+    spend();
+    let out = '';
+    let i = 0;
+    while (i < text.length) {
+        if ('?*+@!'.includes(text[i]) && text[i + 1] === '(') {
+            let depth = 0;
+            let j = i + 1;
+            do {
+                if (text[j] === '\\') j++;
+                else if (text[j] === "'" || text[j] === '"') {
+                    const end = text.indexOf(text[j], j + 1);
+                    j = end === -1 ? text.length : end;
+                } else if (text[j] === '(') depth++;
+                else if (text[j] === ')') depth--;
+                j++;
+            } while (depth > 0 && j < text.length);
+            out += '*';
+            i = j;
+        } else {
+            out += text[i];
+            i++;
+        }
+    }
+    return out;
 }
 
 /**
  * The checked command a command string names, or null: in the text cut at its
  * punctuation and quotes, or in its words as the shell reads them, where
- * `$'\x67it'` is git and braces or a glob in a path can build a name (#368).
+ * `$'\x67it'` is git and braces, a glob or an extended glob group can build a
+ * name (#368, #389).
  */
 function checkedNameIn(text) {
     spend();
-    const hit = text.split(COMMAND_STRING_SEPARATORS).find((piece) => piece && CHECKED.has(basename(piece)));
+    const hit = text.split(COMMAND_STRING_SEPARATORS).find((piece) => piece && CHECKED_NAMES.has(basename(piece)));
     if (hit !== undefined) return basename(hit);
     // Only text the cut above can misread is read as words: tokenizing every
     // tail of a long short-option cluster costs as much again.
-    if (!/\$'|[{}*?[]/.test(text) && !EXTGLOB_OPEN.test(text)) return null;
-    for (const extglob of [false, true]) {
-        for (const word of tokenize(text, { extglob }).flat()) {
+    if (!/\$['"]|[{}*?[]/.test(text) && !EXTGLOB_OPEN.test(text)) return null;
+    for (const form of new Set([text, extglobAsStar(text)])) {
+        for (const word of tokenize(form).flat()) {
             const name = commandName(word);
             if (name !== null) return name;
         }
@@ -1287,6 +1013,10 @@ function stringCheckedName(word) {
     return null;
 }
 
+// ---------------------------------------------------------------------------
+// Programs that run a command (flock, watch, ..., and any program not listed)
+// ---------------------------------------------------------------------------
+
 /**
  * For a segment whose command is an OPAQUE_WRAPPERS program, the checked
  * command it runs (`flock /tmp/l git diff`, `chrt -o -- -0 git diff`,
@@ -1296,7 +1026,8 @@ function stringCheckedName(word) {
 function opaqueWrapperCommand(w) {
     for (const x of w.slice(1)) {
         spend();
-        if (commandName(x) !== null) return commandName(x);
+        const name = commandName(x);
+        if (name !== null) return name;
         const found = stringCheckedName(x);
         if (found !== null) return found;
     }
@@ -1324,10 +1055,10 @@ function checkUnlistedProgram(w, inlineEnv, state) {
         let refusal = null;
         // A name the shell joins back together (`g""it`) is checked as the
         // shell would run it; a word that already names one, or that braces or
-        // a glob in a path build into one (`{git,}`, `/usr/bin/g?t`), is read
-        // as written, and checkSegment() reads it as a command name (#368).
-        const word = commandName(w[n]) !== null ? w[n] : unquoted(w[n]);
-        if (commandName(word) !== null) {
+        // a glob build into one (`{git,}`, `/usr/bin/g?t`), is read as written,
+        // and checkSegment() reads it as a command name (#368).
+        const word = namesChecked(w[n]) ? w[n] : unquoted(w[n]);
+        if (namesChecked(word)) {
             if (++checked > MAX_UNLISTED_INNER) {
                 return blockLocal(
                     `Blocked: more than ${MAX_UNLISTED_INNER} commands this hook checks behind \`${basename(cmd)}\`, ` +
@@ -1335,7 +1066,7 @@ function checkUnlistedProgram(w, inlineEnv, state) {
                 );
             }
             let start = n;
-            while (start > 1 && isAssignment(w[start - 1])) start--;
+            while (start > 1 && isPrefixAssignment(w[start - 1])) start--;
             refusal = checkSegment([...env, ...w.slice(start, n), word, ...w.slice(n + 1)], state);
         }
         if (!refusal) {
@@ -1370,22 +1101,23 @@ function checkUnlistedProgram(w, inlineEnv, state) {
 
 function checkSegment(words, state) {
     spend();
+    // What the tokenizer found feeding this segment's stdin: a heredoc body, a
+    // here-string, a `< file` and the segment piped into it.
+    const { pipedFrom, stdinFrom, hereString, heredocBody } = words;
+    const withInput = (next) => Object.assign(next, { pipedFrom, stdinFrom, hereString, heredocBody });
     let w = words.slice();
     const inlineEnv = {};
+    const assign = (x) => {
+        const eq = x.indexOf('=');
+        inlineEnv[x.slice(0, eq).replace(/\+$/, '')] = x.slice(eq + 1);
+    };
     // Set once the segment runs through xargs: xargs appends words it reads at
     // run time, so no argument check below sees the real command line.
     let xargsFed = false;
     for (;;) {
-        while (w.length && (isAssignment(w[0]) || KEYWORDS.has(w[0]))) {
-            if (isAssignment(w[0])) {
-                const eq = w[0].indexOf('=');
-                inlineEnv[w[0].slice(0, eq).replace(/\+$/, '')] = w[0].slice(eq + 1);
-            }
-            // The `time` keyword takes `-p` and then `--` before the command it times.
-            if (w.shift() === 'time') {
-                if (w[0] === '-p') w.shift();
-                if (w[0] === '--') w.shift();
-            }
+        while (w.length && (isPrefixAssignment(w[0]) || KEYWORDS.has(w[0]))) {
+            if (isPrefixAssignment(w[0])) assign(w[0]);
+            w.shift();
         }
         const envBlock = checkCodeEnv(Object.keys(inlineEnv));
         if (envBlock) return envBlock;
@@ -1403,60 +1135,68 @@ function checkSegment(words, state) {
         // and the words they add are not modelled here. A glob
         // (`/usr/bin/g?t`, `g?t`) is checked as each checked command it can match,
         // with the assignments and any xargs in front of it.
-        const spelled = CHECKED.has(basename(w[0])) ? [] : spelledNames(w[0]);
-        if (spelled.length && /[{}]/.test(w[0])) {
+        const built = CHECKED_NAMES.has(basename(w[0])) ? null : builtName(w[0], true);
+        if (built?.braces) {
             return blockLocal(
                 `Blocked: \`${w[0]}\` is a command name the shell expands with its braces before running it, ` +
-                    `and it can expand to \`${spelled[0]}\`, which this hook checks only when the name is spelled ` +
-                    'out. Spell the name out.'
+                    'and it can expand to a command this hook checks only when the name is spelled out. ' +
+                    'Spell the name out.'
             );
         }
-        if (spelled.length) {
+        if (built) {
             const env = Object.entries(inlineEnv).map(([name, value]) => `${name}=${value}`);
-            for (const name of spelled) {
-                const refusal = checkSegment([...env, ...(xargsFed ? ['xargs'] : []), name, ...w.slice(1)], state);
+            for (const name of built.globs) {
+                const refusal = checkSegment(withInput([...env, ...(xargsFed ? ['xargs'] : []), name, ...w.slice(1)]), state);
                 if (refusal) return refusal;
             }
             return null;
         }
         const cmd = basename(w[0]);
-        if (!WRAPPERS.has(cmd)) break;
-        // `env -S 'gh pr create'` / `-iS ...` / `--split-string=...` runs a command string.
-        // Only env's own leading options and NAME=value words are read; the
+        if (!STEPPED_OVER.has(cmd)) break;
+        // Each wrapper's packed and abbreviated options are spelled out one per
+        // word first (`env -iu X` -> `env -i -u X`), so an option's value
+        // (`env -u git`, `exec -a gh`) is never taken for the command it runs.
+        if (cmd !== 'sudo') w = expandWrapperOptions(cmd, w);
+        // `env -S 'gh pr create'` / `--split-string=...` runs a command string.
+        // Only env's own leading options and NAME=value words are scanned; the
         // wrapped command's arguments (e.g. `--title -Sx`) are not env options.
-        const { from, script, rest } = wrapperOptions(cmd, w);
-        if (script !== null) {
-            // Check the string on its own, then as the head of the command
-            // that still has the remaining words appended.
-            const alone = checkCommand(script, state);
-            if (alone) return alone;
-            const head = tokenize(script).flat();
-            return checkSegment([...head, ...w.slice(rest)], state);
-        }
-        // Look through the wrapper for the real command, past the wrapper's own
-        // options and their values. A nested env or exec is read again above,
-        // and an opaque wrapper (`nice taskset -c 0 git log`) is read below.
-        // The word in the wrapper's command position (past env's assignments
-        // and timeout's duration) is also its command when it is made only of
-        // wildcards (`nice * diff ...`), and is refused as one below.
-        let at = from;
-        while (cmd === 'env' && at < w.length && isAssignment(w[at])) at++;
-        if (cmd === 'timeout') at++;
-        const idx = w.findIndex(
-            (x, n) =>
-                n >= from &&
-                (commandName(x) !== null || OPAQUE_WRAPPERS.has(basename(x)) || (n === at && onlyWildcards(x)))
-        );
-        for (const x of w.slice(1, idx === -1 ? w.length : idx)) {
-            if (isAssignment(x)) {
-                const eq = x.indexOf('=');
-                inlineEnv[x.slice(0, eq).replace(/\+$/, '')] = x.slice(eq + 1);
+        if (cmd === 'env') {
+            for (let k = 1; k < w.length; k++) {
+                const a = w[k];
+                if (isPrefixAssignment(a)) continue;
+                if (!a.startsWith('-')) break; // first word of the wrapped command
+                if (['-u', '--unset', '-C', '--chdir', '-a', '--argv0'].includes(a)) {
+                    k++;
+                    continue;
+                }
+                let script = null;
+                let rest = k + 1;
+                if (a === '-S' || a === '--split-string') {
+                    script = w[k + 1] ?? '';
+                    rest = k + 2;
+                } else if (a.startsWith('--split-string=')) script = a.slice(15);
+                else if (/^-S./.test(a)) script = a.slice(2);
+                if (script === null) continue;
+                // Check the string on its own, then as the head of the command
+                // that still has the remaining words appended.
+                const alone = checkCommand(script, state);
+                if (alone) return alone;
+                const head = tokenize(script).flat();
+                return checkSegment(withInput([...head, ...w.slice(rest)]), state);
             }
         }
+        // Look through the wrapper to the command it runs, past its own options
+        // (and their values), NAME=value words and operands such as timeout's
+        // duration. A nested env or exec is read again above, an opaque
+        // wrapper (`nice taskset -c 0 git log`) below, and a command name made
+        // only of wildcards in the wrapper's command position (`nice * diff`)
+        // is refused above.
+        const idx = cmd === 'sudo' ? sudoTarget(w) : wrapperTarget(w);
+        for (const x of w.slice(1, idx === -1 ? w.length : idx)) if (isPrefixAssignment(x)) assign(x);
         if (idx === -1) return checkCodeEnv(Object.keys(inlineEnv));
-        // Any xargs between here and the real command counts, so an outer
-        // wrapper (`nice xargs git log`, `timeout 5 xargs git log`) does not hide it.
-        if (w.slice(0, idx).some((x) => basename(x) === 'xargs')) xargsFed = true;
+        // Any xargs on the way to the real command counts, so an outer wrapper
+        // (`nice xargs git log`, `timeout 5 xargs git log`) does not hide it.
+        if (cmd === 'xargs') xargsFed = true;
         w = w.slice(idx);
     }
 
@@ -1511,10 +1251,44 @@ function checkSegment(words, state) {
     }
     if (cmd === 'git') return checkGit(args, inlineEnv, state.exportedEnv ?? {});
     if (SHELLS.has(cmd)) {
-        const c = args.findIndex((a) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a));
-        // The script is the first non-option word after -c (`sh -c -- 'cmd'`, `sh -c -x 'cmd'`).
-        const script = c === -1 ? undefined : args.slice(c + 1).find((a) => !a.startsWith('-'));
-        if (script !== undefined) return checkCommand(script, state);
+        let scripts;
+        if (cmd === 'fish') {
+            // fish takes code from -c/--command and -C/--init-command (each may repeat,
+            // with the value attached or in the next word); every one of them runs.
+            scripts = fishScripts(args);
+        } else {
+            const c = args.findIndex((a) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a));
+            // The script is the first non-option word after -c (`sh -c -- 'cmd'`, `sh -c -x 'cmd'`).
+            const script = c === -1 ? undefined : args.slice(c + 1).find((a) => !a.startsWith('-'));
+            scripts = script === undefined ? [] : [script];
+        }
+        if (scripts.length) {
+            for (const script of scripts) {
+                const r = checkCommand(script, state);
+                if (r) return r;
+            }
+            return null;
+        }
+        // No script operand: the shell reads its program from stdin. A heredoc
+        // or here-string fed to it is a script it runs, and so is the text piped
+        // in from a heredoc, a here-string or a literal echo/printf
+        // (`cat <<'EOF' | bash`, `echo 'git push ...' | sh`).
+        if (!args.some((a) => !a.startsWith('-'))) {
+            const feeders = [];
+            for (let p = pipedFrom; p; p = p.pipedFrom) feeders.push(p);
+            const literal = (f) => {
+                const name = basename(f[0] ?? '');
+                if (name !== 'echo' && name !== 'printf') return undefined;
+                const rest = f.slice(1).filter((a) => !a.startsWith('-'));
+                if (name === 'printf') rest.shift(); // the format string
+                return rest.join(' ');
+            };
+            for (const text of [heredocBody, hereString, ...feeders.flatMap((f) => [f.heredocBody, f.hereString, literal(f)])]) {
+                if (text === undefined) continue;
+                const r = checkCommand(text, state);
+                if (r) return r;
+            }
+        }
         return null;
     }
     if (cmd === 'eval') return checkCommand(args.join(' '), state);
@@ -1535,7 +1309,7 @@ export function checkCommand(command, state = {}) {
     // shell started with it on) changes how a later line is read, and
     // `/usr/bin/g@(i)t push --force` runs git. Such a line is read both ways.
     if (EXTGLOB_OPEN.test(command)) {
-        for (const words of tokenize(command, { extglob: true })) {
+        for (const words of tokenize(extglobAsStar(command))) {
             const r = checkSegment(words, state);
             if (r) return r;
         }
@@ -1566,7 +1340,7 @@ export function decide(raw, check = checkCommand, budgetMs = BUDGET_MS) {
         const command = payload?.tool_input?.command;
         if (typeof command !== 'string' || !command.trim()) return { code: 0, stderr: '' };
 
-        deadline = Date.now() + budgetMs;
+        startBudget(budgetMs);
         const result = check(command);
         if (result) return { code: 2, stderr: `guard-bash: ${result.reason}\n` };
         return { code: 0, stderr: '' };
@@ -1577,7 +1351,7 @@ export function decide(raw, check = checkCommand, budgetMs = BUDGET_MS) {
             stderr: `guard-bash: internal error (${err?.message ?? err}); blocking (fail closed).\n`,
         };
     } finally {
-        deadline = null;
+        startBudget(Infinity); // no deadline between decisions
     }
 }
 
