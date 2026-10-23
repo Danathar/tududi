@@ -66,12 +66,16 @@ import format, so it applies as-is.
   arrives as a pull request that passed the required checks. It does not make
   the merger a person: a token that can write contents could merge a green
   pull request through the API.
-- **Two required checks, `test-sqlite` and `test-postgres`.** They are the two
-  jobs in [`ci.yml`](../.github/workflows/ci.yml), which runs on every pull
-  request to `main` with no path filter, so no pull request waits for a check
-  that never starts. `integration_id` 15368 is GitHub Actions. Renaming either
-  job, or giving `ci.yml` a path filter, blocks every merge until this file and
-  the live ruleset are updated to match.
+- **Three required checks: `test-sqlite`, `test-postgres` and
+  `agent-tooling`.** The first two are the jobs in
+  [`ci.yml`](../.github/workflows/ci.yml); `agent-tooling` is the job in
+  [`agent-tooling.yml`](../.github/workflows/agent-tooling.yml), which runs the
+  tests of the Bash guard hook (`.claude/hooks/tests/`) and of the helper
+  scripts (`scripts/tests/`). Both workflows run on every pull request to
+  `main` with no path filter, so no pull request waits for a check that never
+  starts. `integration_id` 15368 is GitHub Actions. Renaming any of these
+  jobs, or giving either workflow a path filter, blocks every merge until this
+  file and the live ruleset are updated to match.
 - **A pull request merges only with `main`'s current head in it**
   (`strict_required_status_checks_policy: true`). The required checks have
   then run on what will land, not on a stale base.
@@ -86,7 +90,7 @@ and this one is under a personal account, so the ruleset has no `merge_queue`
 rule. The same guarantee comes from two pieces together:
 
 1. The up-to-date rule above: every pull request carries `main`'s current head
-   and has passed `test-sqlite` and `test-postgres` on it.
+   and has passed `test-sqlite`, `test-postgres` and `agent-tooling` on it.
 2. Hive's serialized merge lane (`merge_strategy: hive-serialized`): Hive merges
    one pull request at a time and re-validates the next one against the new
    `main`, so two agent pull requests that pass on their own cannot break

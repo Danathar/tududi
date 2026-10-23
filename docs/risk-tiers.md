@@ -25,9 +25,9 @@ directory level.
 
 Review values: `owner` means the repository owner (Danathar) reads the diff and
 merges it, and a green CI run alone is not enough. `ci` means the required CI
-checks (`test-sqlite` and `test-postgres` in `.github/workflows/ci.yml`) must
-pass, and an agent may open and, under the Hive merge strategy, queue the pull
-request.
+checks (`test-sqlite` and `test-postgres` in `.github/workflows/ci.yml`, and
+`agent-tooling` in `.github/workflows/agent-tooling.yml`) must pass, and an
+agent may open and, under the Hive merge strategy, queue the pull request.
 
 ## How to apply it
 

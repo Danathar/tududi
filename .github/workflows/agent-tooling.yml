@@ -5,21 +5,18 @@
 #
 # Other slices add test files over time, so the file list is built in shell
 # and an empty glob does not fail the job.
+#
+# No path filter: the `agent-tooling` job is a required check in the main
+# ruleset (docs/branch-protection.md), and a required check must report on
+# every pull request, or a pull request that does not touch these paths waits
+# for it forever. Renaming the job blocks every merge until the ruleset matches.
 name: Agent tooling
 
 on:
   pull_request:
     branches: [ main ]
-    paths:
-      - '.claude/**'
-      - 'scripts/**'
-      - '.github/workflows/agent-tooling.yml'
   push:
     branches: [ main ]
-    paths:
-      - '.claude/**'
-      - 'scripts/**'
-      - '.github/workflows/agent-tooling.yml'
 
 permissions:
   contents: read
@@ -30,6 +27,7 @@ concurrency:
 
 jobs:
   node-tests:
+    name: agent-tooling
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

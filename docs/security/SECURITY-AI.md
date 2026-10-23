@@ -125,8 +125,8 @@ Without the owner's explicit, in-conversation instruction, an agent never:
 - force-pushes, deletes branches it did not create, rewrites published
   history, or pushes to another contributor's branch;
 - merges, approves, or closes pull requests it opened itself, or disables,
-  skips or deletes a required check (`test-sqlite`, `test-postgres`) to make a
-  pull request pass;
+  skips or deletes a required check (`test-sqlite`, `test-postgres`,
+  `agent-tooling`) to make a pull request pass;
 - edits `.github/rulesets`, repository settings, labels, secrets or deploy keys;
 - adds a scheduled upstream sync or reintroduces upstream's release workflow;
 - writes migrations that drop or rewrite user data without a tested path
