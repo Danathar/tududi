@@ -168,6 +168,12 @@ const allowed = [
     'nice ls *',
     'timeout 5 ls *',
     'for f in *; do echo $f; done',
+    // An extended glob group passes as the command it builds would, and one in
+    // an argument, or a `!` before a subshell, is left alone.
+    'shopt -s extglob\n/usr/bin/g@(i)t status',
+    'shopt -s extglob\nls @(a|b).js',
+    'ls !(node_modules)',
+    '! (git status)',
 ];
 
 const blocked = [
@@ -370,6 +376,9 @@ const blocked = [
     // A program this hook does not list runs the gh command after it (#355).
     ['setpriv gh pr create --title t', '`setpriv` runs a command'],
     ['GH_REPO=chrisvel/tududi setarch x86_64 gh issue create --title t', '`setarch` runs a command'],
+    // An extended glob group builds the command name after `shopt -s extglob`.
+    ['shopt -s extglob\ng@(i)t push --force origin main', 'force push'],
+    ["bash -O extglob -c '/usr/bin/g@(i)t push --force origin main'", 'force push'],
 ];
 
 // Code execution / file writes through auto-approved commands (#65, #69).
@@ -556,6 +565,20 @@ const blockedLocal = [
     ['nice * diff --no-index /dev/null .env', 'only of wildcards'],
     ['timeout 5 * diff --no-index /dev/null .env', 'only of wildcards'],
     ['env A=1 * diff --no-index /dev/null .env', 'only of wildcards'],
+    // Claude Code runs a command line by line, so after `shopt -s extglob` a
+    // `(` after `?*+@!` opens an extended glob group in the word, and
+    // `/usr/bin/g@(i)t` runs git, not `/usr/bin/g@` and a subshell.
+    ['shopt -s extglob\n/usr/bin/g@(i)t diff --no-index /dev/null .env', 'no-index'],
+    ['shopt -s extglob\ng@(i)t diff --no-index /dev/null .env', 'no-index'],
+    ['shopt -s extglob\n/usr/bin/g+(i)t diff --no-index /dev/null .env', 'no-index'],
+    ['shopt -s extglob\n/usr/bin/!(x)it diff --no-index /dev/null .env', 'no-index'],
+    ['shopt -s extglob\ng?(i)t diff --no-index /dev/null .env', 'no-index'],
+    ['shopt -s extglob\nnice /usr/bin/g@(i)t diff --no-index /dev/null .env', 'no-index'],
+    ['shopt -s extglob\nsetarch x86_64 /usr/bin/g@(i)t diff --no-index /dev/null .env', '`setarch` runs a command'],
+    ["script -qc '/usr/bin/g@(i)t diff --no-index /dev/null .env' /dev/null", '`script` runs a command'],
+    ["bash -O extglob -c '/usr/bin/g@(i)t diff --no-index /dev/null .env'", 'no-index'],
+    ['shopt -s extglob\n@(git) diff --no-index /dev/null .env', 'only of wildcards'],
+    ['shopt -s extglob\n!(x) diff --no-index /dev/null .env', 'only of wildcards'],
     // `\'` does not end a `$'...'` string, so the substitution after it is read.
     ["echo $'\\'' $(git diff --no-index /dev/null .env)", 'no-index'],
 ];
@@ -587,6 +610,19 @@ for (const [command, fragment] of blockedLocal) {
         assert.match(r.stderr, /guard-bash: /);
         assert.ok(r.stderr.includes(fragment), `stderr should mention "${fragment}": ${r.stderr}`);
         assert.match(r.stderr, /SECURITY-AI\.md/);
+    });
+}
+
+// A run of `*` once compiled to a backtracking regular expression that took
+// minutes on its own (`^.*.*...Z$` against each checked name), past Claude
+// Code's hook timeout, and Claude Code runs a command whose hook times out.
+for (const stall of ['*'.repeat(200) + 'Z', '/usr/bin/' + '*?'.repeat(200) + 'Z', 'g' + '*'.repeat(5000) + 'Z']) {
+    test(`decides in time behind a long glob: ${stall.slice(0, 24)}...`, () => {
+        const input = JSON.stringify({ tool_name: 'Bash', tool_input: { command: `${stall}; git push --force origin main` } });
+        const r = spawnSync(process.execPath, [HOOK], { input, encoding: 'utf8', timeout: 10000 });
+        assert.equal(r.signal, null, 'hook was killed by the timeout');
+        assert.equal(r.status, 2, `expected block, got ${r.status}: ${r.stderr}`);
+        assert.match(r.stderr, /force push/);
     });
 }
 

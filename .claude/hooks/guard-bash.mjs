@@ -241,8 +241,13 @@ let deadline = null;
  * Quotes and backslashes are resolved; operators and parentheses end a segment;
  * heredoc bodies are skipped. This is a deliberately small approximation of
  * shell parsing, good enough to find command names and their flags.
+ *
+ * With `extglob`, a `(` right after `?`, `*`, `+`, `@` or `!` in a word opens
+ * an extended glob group that stays in the word up to its matching `)`, as
+ * bash reads it once `shopt -s extglob` is on: `/usr/bin/g@(i)t` is one word
+ * that runs git, not `/usr/bin/g@` followed by a subshell.
  */
-export function tokenize(input) {
+export function tokenize(input, { extglob = false } = {}) {
     const segments = [];
     let words = [];
     let word = null; // null = no word in progress ('' = empty quoted word)
@@ -340,6 +345,20 @@ export function tokenize(input) {
         } else if (c === ' ' || c === '\t') {
             endWord();
             i++;
+        } else if (c === '(' && extglob && word !== null && /[?*+@!]$/.test(word)) {
+            let depth = 0;
+            let j = i;
+            do {
+                if (input[j] === '\\') j++;
+                else if (input[j] === "'" || input[j] === '"') {
+                    const end = input.indexOf(input[j], j + 1);
+                    j = end === -1 ? input.length : end;
+                } else if (input[j] === '(') depth++;
+                else if (input[j] === ')') depth--;
+                j++;
+            } while (depth > 0 && j < input.length);
+            append(input.slice(i, j));
+            i = j;
         } else if (c === '&' || c === '|' || c === ';' || c === '(' || c === ')') {
             endSegment();
             i++;
@@ -1114,6 +1133,26 @@ function unquoted(text) {
 // more brace forms than MAX_BRACE_FORMS is read only that far, and with its
 // braces and commas taken out.
 const BUILT_NAME = /[{}*?[]/;
+// An extended glob group (`@(i)`, `+(g|x)`, `!(x)`) opened by a `(` the
+// tokenizer kept in the word.
+const EXTGLOB_GROUP = /[?*+@!]\([^()]*\)/;
+const EXTGLOB_OPEN = /[?*+@!]\(/;
+
+/**
+ * The word with each extended glob group read as `*`, which matches at least
+ * every name the group can, so `g@(i)t` is read as `g*t` and `@(git)` as `*`.
+ */
+function extglobAsStar(word) {
+    let out = word;
+    while (EXTGLOB_GROUP.test(out)) {
+        spend();
+        out = out.replace(new RegExp(EXTGLOB_GROUP, 'g'), '*');
+    }
+    return out;
+}
+
+/** Whether a command name is made only of wildcards (`*`, `./???`, `@(git)`). */
+const onlyWildcards = (word) => /^[*?]+$/.test(basename(extglobAsStar(word)));
 const BRACE_GROUP = /\{([^{}]*,[^{}]*|(?:-?\d+|[A-Za-z])\.\.(?:-?\d+|[A-Za-z])(?:\.\.-?\d+)?)\}/;
 const MAX_BRACE_FORMS = 32;
 
@@ -1132,23 +1171,51 @@ function braceAlternatives(body) {
     return out;
 }
 
-/** Whether a glob matches a name the way the shell matches a file name. */
+/**
+ * Whether a glob matches a name the way the shell matches a file name. The
+ * match is linear: a backtracking regular expression built from a run of `*`
+ * takes longer than Claude Code waits for the hook, and Claude Code runs a
+ * command whose hook times out; spend() cannot stop a match already running.
+ */
 function globMatches(pattern, name) {
-    let re = '';
+    // One step per pattern part: '*', or a test for the one character it matches.
+    const steps = [];
     for (let k = 0; k < pattern.length; k++) {
         const ch = pattern[k];
         const cls = ch === '[' ? /\[([!^]?)(\]?[^\]]*)\]/y : null;
         if (cls) cls.lastIndex = k;
         const m = cls?.exec(pattern);
-        if (ch === '*') re += '.*';
-        else if (ch === '?') re += '.';
+        if (ch === '*') {
+            if (steps[steps.length - 1] !== '*') steps.push('*');
+        } else if (ch === '?') steps.push(() => true);
         else if (m) {
             // A character class such as [[:alpha:]] is read as any character.
-            re += m[2].includes('[:') ? '.' : `[${m[1] ? '^' : ''}${m[2].replace(/[\\\]^[]/g, '\\$&')}]`;
+            const one = m[2].includes('[:')
+                ? /^[^]$/s
+                : new RegExp(`^[${m[1] ? '^' : ''}${m[2].replace(/[\\\]^[]/g, '\\$&')}]$`, 's');
+            steps.push((c) => one.test(c));
             k += m[0].length - 1;
-        } else re += ch.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+        } else steps.push((c) => c === ch);
     }
-    return new RegExp(`^${re}$`, 's').test(name);
+    // Match, going back only to the last '*' seen.
+    let p = 0;
+    let n = 0;
+    let star = -1;
+    let resume = 0;
+    while (n < name.length) {
+        if (p < steps.length && steps[p] === '*') {
+            star = p++;
+            resume = n;
+        } else if (p < steps.length && steps[p](name[n])) {
+            p++;
+            n++;
+        } else if (star !== -1) {
+            p = star + 1;
+            n = ++resume;
+        } else return false;
+    }
+    while (p < steps.length && steps[p] === '*') p++;
+    return p === steps.length;
 }
 
 /**
@@ -1157,6 +1224,7 @@ function globMatches(pattern, name) {
  * A name spelled out plainly is read by the callers.
  */
 function spelledNames(word) {
+    word = extglobAsStar(word);
     if (!BUILT_NAME.test(word)) return [];
     const forms = new Set([word, word.replace(/[{},]/g, '')]);
     const pending = [word];
@@ -1200,10 +1268,12 @@ function checkedNameIn(text) {
     if (hit !== undefined) return basename(hit);
     // Only text the cut above can misread is read as words: tokenizing every
     // tail of a long short-option cluster costs as much again.
-    if (!/\$'|[{}*?[]/.test(text)) return null;
-    for (const word of tokenize(text).flat()) {
-        const name = commandName(word);
-        if (name !== null) return name;
+    if (!/\$'|[{}*?[]/.test(text) && !EXTGLOB_OPEN.test(text)) return null;
+    for (const extglob of [false, true]) {
+        for (const word of tokenize(text, { extglob }).flat()) {
+            const name = commandName(word);
+            if (name !== null) return name;
+        }
     }
     return null;
 }
@@ -1322,7 +1392,7 @@ function checkSegment(words, state) {
         if (!w.length) return null;
         // A name made only of `*` and `?` (`*`, `./???`) runs whichever file
         // sorts first, which in a directory holding only a file named git is git.
-        if (/^[*?]+$/.test(basename(w[0]))) {
+        if (onlyWildcards(w[0])) {
             return blockLocal(
                 `Blocked: \`${w[0]}\` is a command name made only of wildcards, so the shell runs whichever ` +
                     'file it matches first, which can be a command this hook checks. Spell the name out.'
@@ -1375,7 +1445,7 @@ function checkSegment(words, state) {
         const idx = w.findIndex(
             (x, n) =>
                 n >= from &&
-                (commandName(x) !== null || OPAQUE_WRAPPERS.has(basename(x)) || (n === at && /^[*?]+$/.test(basename(x))))
+                (commandName(x) !== null || OPAQUE_WRAPPERS.has(basename(x)) || (n === at && onlyWildcards(x)))
         );
         for (const x of w.slice(1, idx === -1 ? w.length : idx)) {
             if (isAssignment(x)) {
@@ -1460,6 +1530,15 @@ export function checkCommand(command, state = {}) {
     for (const words of tokenize(command)) {
         const r = checkSegment(words, state);
         if (r) return r;
+    }
+    // Claude Code runs a command line by line, so a `shopt -s extglob` (or a
+    // shell started with it on) changes how a later line is read, and
+    // `/usr/bin/g@(i)t push --force` runs git. Such a line is read both ways.
+    if (EXTGLOB_OPEN.test(command)) {
+        for (const words of tokenize(command, { extglob: true })) {
+            const r = checkSegment(words, state);
+            if (r) return r;
+        }
     }
     return null;
 }
