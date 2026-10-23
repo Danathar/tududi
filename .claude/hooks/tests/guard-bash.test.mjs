@@ -44,7 +44,7 @@ const allowed = [
     'gh repo edit https://github.com/Danathar/tududi.git --enable-wiki=false',
     'gh repo sync Danathar/tududi',
     'gh repo deploy-key add key.pub -R Danathar/tududi',
-    'gh repo autolink create JIRA- https://example.com/<num> --repo Danathar/tududi',
+    "gh repo autolink create JIRA- 'https://example.com/<num>' --repo Danathar/tududi",
     'GH_REPO=Danathar/tududi gh repo edit --description x',
     'export GH_REPO=Danathar/tududi; gh repo deploy-key add key.pub',
     // A shell running a script file (no -c) has no inline command to inspect.
@@ -198,6 +198,9 @@ const blocked = [
     ['gh repo edit --visibility public', 'without an explicit Danathar/tududi target'],
     ['gh repo sync', 'without an explicit Danathar/tududi target'],
     ['gh repo deploy-key add key.pub', 'without an explicit Danathar/tududi target'],
+    // Unquoted, `<num> --repo` is two redirections (`<num`, `> --repo`), so
+    // gh never receives the --repo flag.
+    ['gh repo autolink create JIRA- https://example.com/<num> --repo Danathar/tududi', 'without an explicit Danathar/tududi target'],
     ['gh repo edit Danathar/tududi-mirror --description x', 'without an explicit Danathar/tududi target'],
     ['gh repo create Danathar/scratch --public', 'without an explicit Danathar/tududi target'],
     ['gh repo deploy-key add key.pub -R someone/other', 'without an explicit Danathar/tududi target'],
