@@ -105,8 +105,8 @@ Every new migration runs on both SQLite and PostgreSQL. The full checklist is
       `e2e/tests/` (Playwright). Layout: [testing.md](testing.md).
 - [ ] Tests check behaviour and boundaries, not that a function was called.
 - [ ] A fix for a bug includes the test that would have caught it.
-- [ ] CI (`test-sqlite` and `test-postgres`) is green **and the branch is
-      current with `main`**. A green run on a stale branch says little about
+- [ ] CI (`test-sqlite`, `test-postgres` and `agent-tooling`) is green **and
+      the branch is current with `main`**. A green run on a stale branch says little about
       the merge result.
 - [ ] Known gap: `ci.yml` does not run `npm run frontend:test`, so frontend
       test changes are only verified if the author reports running it. Ask for
