@@ -95,3 +95,4 @@ out.
 | [#322](https://github.com/Danathar/tududi/pull/322) | `backend/modules/tasks/utils/validation.js`, `backend/tests/integration/task-user-isolation.test.js` | fix(tasks): stop the parent task error naming another user's task owner | fork only |
 | [#331](https://github.com/Danathar/tududi/pull/331) | `backend/modules/search/validation.js`, `backend/tests/integration/search.test.js` | fix(search): use shared limit/offset parser | fork only |
 | [#380](https://github.com/Danathar/tududi/pull/380) | `backend/modules/mcp/tools/projectTools.js`, `backend/modules/mcp/tools/taskTools.js`, `backend/services/scopeService.js` | fix(mcp): show the caller's own area for a shared project in task and project tools | fork only |
+| [#396](https://github.com/Danathar/tududi/pull/396) | `.github/workflows/ci.yml`, `.gitignore`, `package-lock.json`, `package.json` | ci: report changed lines whose tests would not notice them breaking (advisory mutation job) | fork only |

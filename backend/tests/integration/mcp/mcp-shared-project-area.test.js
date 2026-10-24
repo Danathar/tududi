@@ -144,6 +144,47 @@ describe('MCP: area of a shared project', () => {
         expect(updated.task.Project.area_id).toBe(viewerArea.id);
     });
 
+    it('shows the viewer their own placement on a task they complete, skip or add a subtask to', async () => {
+        const completed = await callTool(viewerToken, 'complete_task', {
+            id: task.uid,
+        });
+        expect(completed.task.Project.area_id).toBe(viewerArea.id);
+
+        const recurring = await Task.create({
+            name: 'Shared weekly review',
+            user_id: owner.id,
+            project_id: project.id,
+            status: 0,
+            recurrence_type: 'daily',
+            recurrence_interval: 1,
+            due_date: new Date('2030-01-10T00:00:00Z'),
+        });
+        const skipped = await callTool(viewerToken, 'skip_task_occurrence', {
+            id: recurring.uid,
+        });
+        expect(skipped.task.Project.area_id).toBe(viewerArea.id);
+
+        const sub = await callTool(viewerToken, 'add_subtask', {
+            parent_id: recurring.uid,
+            name: 'Viewer subtask',
+        });
+        expect(sub.subtask.Project.area_id).toBe(viewerArea.id);
+    });
+
+    it('shows the viewer their own placement on a shared project they update', async () => {
+        const updated = await callTool(viewerToken, 'update_project', {
+            uid: project.uid,
+            name: 'Shared plan, renamed',
+        });
+        expect(updated.project.area).toBe('My side');
+
+        const ownerView = await callTool(ownerToken, 'update_project', {
+            uid: project.uid,
+            name: 'Shared plan',
+        });
+        expect(ownerView.project.area).toBe('Work');
+    });
+
     it("keeps the owner's own area for the owner's task tools", async () => {
         const single = await callTool(ownerToken, 'get_task', {
             id: task.uid,

@@ -91,3 +91,35 @@ jobs:
     # also compares the PostgreSQL schema produced by db-prepare.
     - name: Upgrade legacy SQLite databases and check schema parity
       run: npm run backend:test:upgrade
+
+  # Advisory: breaks the lines this PR changes on purpose (StrykerJS) and
+  # reports each break the backend or frontend tests still pass, minus the
+  # accepted survivors in .mutation-survivors.json. Not a required check
+  # (docs/branch-protection.md). Upstream syncs are skipped: upstream code is
+  # not this fork's to test. See docs/quality.md.
+  mutation:
+    name: Mutation check on changed lines (advisory)
+    if: github.event_name == 'pull_request' && !startsWith(github.event.pull_request.title, 'chore: sync upstream')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: '22'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Mutate the lines this PR changes
+      env:
+        BASE_REF: ${{ github.base_ref }}
+      run: node scripts/mutation-check.mjs --base "origin/$BASE_REF"

@@ -16,6 +16,7 @@ repository is a fork. All work happens here.").
 |---|---|---|---|
 | `test-sqlite` job | [ci.yml](../.github/workflows/ci.yml) | lint (`npm run lint`), backend Jest on SQLite (`npm run backend:test`), legacy-database upgrade and schema parity (`npm run backend:test:upgrade`), frontend build with `tsc --noEmit` (`npm run build`) | planned: required check, see [branch-protection.md](branch-protection.md) |
 | `test-postgres` job | [ci.yml](../.github/workflows/ci.yml) | bootstraps an empty PostgreSQL database, runs pending migrations, backend Jest on PostgreSQL (`npm run backend:test:pg`), upgrade suite again | planned: required check |
+| mutation check (`mutation` job) | [ci.yml](../.github/workflows/ci.yml), `scripts/mutation-check.mjs`, [stryker.config.mjs](../stryker.config.mjs), ledger [.mutation-survivors.json](../.mutation-survivors.json) | StrykerJS breaks the backend and frontend source lines a pull request adds or changes, one small breakage at a time, and lists each one the Jest tests still pass (`Survived`) or never run (`NoCoverage`), minus accepted survivors in the ledger. Skipped for upstream syncs (`chore: sync upstream`); see [Mutation check](#mutation-check) | no, advisory (`continue-on-error`) |
 | coverage gate | [coverage-gate.yml](../.github/workflows/coverage-gate.yml), thresholds in [.coverage-thresholds.json](../.coverage-thresholds.json) | coverage has not dropped below the recorded floor | per that workflow |
 | nightly compliance | [nightly-compliance.yml](../.github/workflows/nightly-compliance.yml) | scheduled re-check of the repository against its own rules | no, notification |
 | policy check | [policy-check.yml](../.github/workflows/policy-check.yml), `scripts/check-policies.mjs`, [policies/](../policies/README.md) | agent-facing policy files are well formed and consistent | per that workflow |
@@ -30,6 +31,56 @@ repository is a fork. All work happens here.").
 Workflows beyond `ci.yml`, `docker-publish.yml` and `upgrade-docker.yml` arrive
 through their own pull requests; a link above that does not resolve yet means
 that PR has not merged.
+
+## Mutation check
+
+Line coverage says a changed line ran in some test; it does not say anything
+checked what that line did. The `mutation` job in `ci.yml` closes that gap for
+the lines each pull request adds or changes:
+
+1. `scripts/mutation-check.mjs` reads `git diff -U0 origin/main...HEAD` and
+   turns the added and changed lines into StrykerJS `--mutate file:start-end`
+   ranges. Only source the Jest suites test is mutated:
+   `backend/{modules,services,middleware,models,utils,shared}/**/*.js` for the
+   backend suite and `frontend/**/*.{js,jsx,ts,tsx}` for the frontend suite.
+   Tests, migrations, seeders, scripts, configs, `backend/models/index.js`,
+   `frontend/index.tsx`, type declarations and `locales/` (including
+   upstream's landing-site strings) are left out. Lines a pull request only
+   deletes have nothing to mutate.
+2. Stryker runs once per suite ([stryker.config.mjs](../stryker.config.mjs),
+   `MUTATION_PROJECT=backend|frontend`), running only the Jest tests related
+   to the mutated files. Reports land in `reports/mutation/` (ignored by git).
+3. Every `Survived` or `NoCoverage` mutant is a change to the pull request's
+   lines that no test notices. The script drops those accepted in
+   [.mutation-survivors.json](../.mutation-survivors.json) and lists the rest.
+
+Exit status: `0` nothing new, `1` at least one new survivor, `2` the check
+could not run (bad arguments, git or Stryker failure, malformed ledger). The
+job is advisory (`continue-on-error: true`) and not a required check, so a red
+mutation step marks the job but never blocks a merge; whether to make it
+required is a later decision.
+
+For each new survivor, add a test that fails on it. Only when the mutant is
+equivalent (the code behaves the same) or harmless, copy the ledger entry the
+script prints into `.mutation-survivors.json` and replace its `TODO` reason.
+An entry matches on file, mutator, original and replacement text, not on line
+number, so it keeps matching when the file changes elsewhere.
+
+Locally, after `npm install`:
+
+```bash
+# which ranges would be mutated, without running Stryker
+node scripts/mutation-check.mjs --base origin/main --dry-run
+# the full check
+node scripts/mutation-check.mjs --base origin/main
+# re-read reports from an earlier run against the ledger
+node scripts/mutation-check.mjs --report reports/mutation/backend.json
+```
+
+Not covered yet: `scripts/` and `.claude/hooks/` (their `node --test` suites
+would need Stryker's `command` runner). The frontend suite's three known
+failures ([Baseline](#baseline-read-2026-10-09)) make a frontend run fail with exit `2` when the pull request
+changes a file one of those tests covers.
 
 ## Where to look
 
