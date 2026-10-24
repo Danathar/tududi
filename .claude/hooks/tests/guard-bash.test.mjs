@@ -385,6 +385,11 @@ const blocked = [
     // An extended glob group builds the command name after `shopt -s extglob`.
     ['shopt -s extglob\ng@(i)t push --force origin main', 'force push'],
     ["bash -O extglob -c '/usr/bin/g@(i)t push --force origin main'", 'force push'],
+    // `\'` does not end a `$'...'` heredoc delimiter: `<<$'\''` is the delimiter
+    // `'`, so the rest of the line is a command bash runs.
+    ["cat <<$'\\'' ; git push --force origin main", 'force push'],
+    ["cat <<-$'\\'' ; git push --force origin main", 'force push'],
+    ["cat <<$'\\x45OF'\nx\nEOF\ngit push --force origin main", 'force push'],
 ];
 
 // Code execution / file writes through auto-approved commands (#65, #69).
@@ -593,11 +598,6 @@ const blockedLocal = [
     ["echo $'\\c' ; git diff --no-index /dev/null .env", 'no-index'],
     ["echo $'\\c\\\\' ; git diff --no-index /dev/null .env", 'no-index'],
     ["echo $(echo $'\\'') $(git diff --no-index /dev/null .env)", 'no-index'],
-    // `\'` does not end a `$'...'` heredoc delimiter: `<<$'\''` is the delimiter
-    // `'`, so the rest of the line is a command bash runs.
-    ["cat <<$'\\'' ; git push --force origin main", 'force push'],
-    ["cat <<-$'\\'' ; git push --force origin main", 'force push'],
-    ["cat <<$'\\x45OF'\nx\nEOF\ngit push --force origin main", 'force push'],
 ];
 
 for (const command of allowed) {

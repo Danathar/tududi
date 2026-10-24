@@ -46,7 +46,6 @@ const KNOWN_GAPS = new Set([
     'name-bare-glob',
     'unlisted-name-bare-glob',
     'name-extglob-path',
-    'name-extglob-whole',
     'name-extglob-bare',
     'unlisted-name-extglob',
     'name-extglob-command-string',
