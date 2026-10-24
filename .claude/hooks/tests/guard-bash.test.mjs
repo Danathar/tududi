@@ -103,6 +103,9 @@ const allowed = [
     'git status && git diff --stat',
     'npm run lint',
     'cat <<EOF\ngh pr create\nEOF',
+    // a `$'...'` heredoc delimiter is decoded the way bash decodes it, and quotes the body
+    "cat <<$'EOF'\ngh pr create\nEOF",
+    "cat <<-$'EOF'\n\tgh pr create\n\tEOF",
     'git commit -m "$(cat <<\'EOF\'\nuse gh pr create --repo Danathar/tududi\nEOF\n)"',
     // The auto-approved test and read-only git commands in their normal forms (#65, #69).
     'node --test .claude/hooks/tests/guard-bash.test.mjs',
@@ -382,6 +385,11 @@ const blocked = [
     // An extended glob group builds the command name after `shopt -s extglob`.
     ['shopt -s extglob\ng@(i)t push --force origin main', 'force push'],
     ["bash -O extglob -c '/usr/bin/g@(i)t push --force origin main'", 'force push'],
+    // `\'` does not end a `$'...'` heredoc delimiter: `<<$'\''` is the delimiter
+    // `'`, so the rest of the line is a command bash runs.
+    ["cat <<$'\\'' ; git push --force origin main", 'force push'],
+    ["cat <<-$'\\'' ; git push --force origin main", 'force push'],
+    ["cat <<$'\\x45OF'\nx\nEOF\ngit push --force origin main", 'force push'],
 ];
 
 // Code execution / file writes through auto-approved commands (#65, #69).
