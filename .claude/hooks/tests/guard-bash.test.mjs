@@ -584,6 +584,12 @@ const blockedLocal = [
     ['shopt -s extglob\n!(x) diff --no-index /dev/null .env', 'only of wildcards'],
     // `\'` does not end a `$'...'` string, so the substitution after it is read.
     ["echo $'\\'' $(git diff --no-index /dev/null .env)", 'no-index'],
+    // `\c` does not take the quote that ends a `$'...'` string, nor the first
+    // backslash of a `\\`, so the command after it is read; and a `$'\''`
+    // inside a substitution does not hide the `)` that closes it.
+    ["echo $'\\c' ; git diff --no-index /dev/null .env", 'no-index'],
+    ["echo $'\\c\\\\' ; git diff --no-index /dev/null .env", 'no-index'],
+    ["echo $(echo $'\\'') $(git diff --no-index /dev/null .env)", 'no-index'],
 ];
 
 for (const command of allowed) {
