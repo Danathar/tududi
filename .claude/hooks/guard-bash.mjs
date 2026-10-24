@@ -93,12 +93,10 @@
 // .claude/hooks/tests/shell-reader.test.mjs); a reading fix is made in
 // Danathar/akmods first and then copied here. This file holds this
 // repository's rules (the list above), its messages and the hook's entry
-// point, and imports the reader. A few readings this guard made before it
-// adopted the shared reader are stricter than the shared one, and are kept
-// here as policy until the shared reader makes them too: extended glob groups
-// after `shopt -s extglob` (`g@(i)t`), brace sequences and comma-less groups
-// in a command name (`{f..h}it`, `g{i}t`), a POSIX class in a bracket
-// (`g[[:alpha:]]t`), `NAME+=value` prefixes, and sudo's option table.
+// point, and imports the reader. Two readings are kept here as this
+// repository's policy, stricter than the shared reader: sudo's option table,
+// and the refusal of any git option that starts with `--out`, `--no-ind` or
+// `--orde` (see checkGitFileOptions()).
 
 import { basename } from 'node:path';
 import { readFileSync, realpathSync } from 'node:fs';
@@ -108,8 +106,8 @@ import { fileURLToPath } from 'node:url';
 import {
     ARGUMENT_ONLY_PROGRAMS, BUDGET_MS, commandNameReader, commandStrings, COMMAND_STRING_SEPARATORS,
     EXEC_GIT_CONFIG, expandWrapperOptions, extractSubstitutions, fishScripts, GIT_EXEC_OPTION,
-    GIT_SHORT_UPLOAD_PACK, GIT_UPLOAD_PACK_OPTION, GIT_UPLOAD_PACK_SUBCOMMANDS, KEYWORDS, MAX_BRACE_FORMS,
-    MAX_UNLISTED_INNER, NOOP_PROGRAMS, OverBudget, PROGRAM_ENV, REFUSED_GIT_OPTION, RISKY_GIT_CONFIG, SHELLS,
+    EXTGLOB_OPEN, GIT_SHORT_UPLOAD_PACK, GIT_UPLOAD_PACK_OPTION, GIT_UPLOAD_PACK_SUBCOMMANDS, isAssignment,
+    KEYWORDS, MAX_UNLISTED_INNER, NOOP_PROGRAMS, OverBudget, PROGRAM_ENV, REFUSED_GIT_OPTION, RISKY_GIT_CONFIG, SHELLS,
     spend, startBudget, tokenize, unquoted, WRAPPERS, wrapperTarget,
 } from './shell-reader.mjs';
 
@@ -212,7 +210,7 @@ const SUDO_GETOPT = {
 function sudoTarget(w) {
     for (let k = 1; k < w.length; k++) {
         const a = w[k];
-        if (isPrefixAssignment(a)) continue;
+        if (isAssignment(a)) continue;
         if (a === '--') return k + 1 < w.length ? k + 1 : -1;
         if (!a.startsWith('-') || a === '-') return k;
         if (a.startsWith('--')) {
@@ -236,11 +234,6 @@ function sudoTarget(w) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-// `NAME=value` and bash's `NAME+=value` in front of a command both set NAME
-// for it. The shared reader's isAssignment() reads only the first; this guard
-// reads both, so `NODE_OPTIONS+=--import=x npm test` is refused.
-const isPrefixAssignment = (w) => /^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(w);
 
 /** Normalise OWNER/REPO, HOST/OWNER/REPO, or a github URL to "owner/repo". */
 export function normalizeRepo(value) {
@@ -511,8 +504,11 @@ function runsUploadPack(sub, a) {
  * path (`--output=`, format-patch `-o`), read any file on the machine
  * (`diff --no-index`, `--orderfile`/`-O`) or run a program (`--ext-diff`,
  * `--open-files-in-pager`, `fetch --upload-pack`). Pathspecs after `--` are not
- * options. Any prefix of `--output`, `--no-index` and `--orderfile` is refused,
- * which is stricter than the shared REFUSED_GIT_OPTION (full spelling only).
+ * options. Any option that starts with `--out`, `--no-ind` or `--orde` is
+ * refused, which is stricter than the shared REFUSED_GIT_OPTION (the prefixes
+ * git accepts of `--output` and `--no-index`): it also refuses
+ * `--output-directory` and spellings that brace expansion completes
+ * (`--outpu{t,t}=FILE`).
  */
 function checkGitFileOptions(sub, rest) {
     for (const a of rest) {
@@ -863,70 +859,11 @@ function checkNpm(args) {
 // Command names the shell builds
 // ---------------------------------------------------------------------------
 
-// How the shell may build one of CHECKED_NAMES out of a word (brace groups,
-// wildcards); see commandNameReader() in shell-reader.mjs.
-const { builtCommandName } = commandNameReader(CHECKED_NAMES);
-
-// Readings of a command name this guard made before it adopted the shared
-// reader, which the shared reader does not make. They only refuse more, so
-// they are kept here until a reading fix in Danathar/akmods covers them: a
-// brace sequence (`{f..h}it` is fit git hit), a group without a comma read as
-// if its braces were gone (`g{i}t`), and a bracket expression holding a POSIX
-// class read as any one character (`g[[:alpha:]]t`).
-const BRACE_SEQUENCE = /\{(-?\d+|[A-Za-z])\.\.(-?\d+|[A-Za-z])(?:\.\.(-?\d+))?\}/;
-
-/** The members of a brace sequence `{from..to[..step]}`, at most MAX_BRACE_FORMS of them. */
-function sequenceMembers(from, to, step) {
-    const numeric = /^-?\d+$/.test(from);
-    const a = numeric ? Number(from) : from.charCodeAt(0);
-    const b = numeric ? Number(to) : to.charCodeAt(0);
-    const by = Math.max(1, Math.abs(Number(step ?? 1)) || 1) * (a <= b ? 1 : -1);
-    const out = [];
-    for (let k = a; (by > 0 ? k <= b : k >= b) && out.length < MAX_BRACE_FORMS; k += by) {
-        out.push(numeric ? String(k) : String.fromCharCode(k));
-    }
-    return out;
-}
-
-/** The words the brace sequences in `word` expand to (other groups left as they are), at most MAX_BRACE_FORMS. */
-function sequenceForms(word) {
-    const forms = [];
-    const pending = [word];
-    while (pending.length && forms.length < MAX_BRACE_FORMS) {
-        spend();
-        const form = pending.pop();
-        const m = BRACE_SEQUENCE.exec(form);
-        if (m === null) {
-            if (form !== word) forms.push(form);
-            continue;
-        }
-        for (const member of sequenceMembers(m[1], m[2], m[3])) {
-            pending.push(form.slice(0, m.index) + member + form.slice(m.index + m[0].length));
-        }
-    }
-    return forms;
-}
-
-/**
- * How the shell could build a checked command name out of this word:
- * { braces: true } or { globs: [names] } as commandNameReader() reads it,
- * then the local readings above. Null when it builds none.
- */
-function builtName(word, commandWord = false) {
-    const shared = builtCommandName(word, commandWord);
-    if (shared !== null) return shared;
-    const braced = /[{}]/.test(word);
-    const forms = [];
-    if (braced) forms.push(word.replace(/[{},]/g, ''), ...sequenceForms(word));
-    if (word.includes('[:')) forms.push(word.replace(/\[[^\]]*\]+/g, '?'));
-    for (const form of forms) {
-        if (form === word) continue;
-        const name = basename(form);
-        const built = CHECKED_NAMES.has(name) ? { globs: [name] } : builtCommandName(form, commandWord);
-        if (built !== null) return braced ? { braces: true } : built;
-    }
-    return null;
-}
+// How the shell may build one of CHECKED_NAMES out of a word (brace groups
+// and sequences, wildcards, POSIX classes, extended glob groups); see
+// commandNameReader() in shell-reader.mjs. Returns { braces: true } or
+// { globs: [names] }, or null when the word builds none.
+const { builtCommandName: builtName } = commandNameReader(CHECKED_NAMES);
 
 /** Whether this word names a checked command, also once the shell has expanded it. */
 function namesChecked(word) {
@@ -944,44 +881,6 @@ function commandName(word) {
 /** Whether a command name is made only of wildcards (`*`, `./???`, `@(git)` read with extglob). */
 const onlyWildcards = (word) => /^[*?]+$/.test(basename(word));
 
-// Claude Code runs a command line by line, so a `shopt -s extglob` (or a shell
-// started with it on) changes how a later line is read: a `(` right after `?`,
-// `*`, `+`, `@` or `!` then opens an extended glob group that stays in the
-// word, and `/usr/bin/g@(i)t` is one word that runs git, not `/usr/bin/g@`
-// followed by a subshell. The shared reader does not read extglob, so a line
-// holding such a group is read a second time with each group replaced by `*`,
-// which matches at least every name the group can (`g@(i)t` is read as
-// `g*t`, `@(git)` as `*`).
-const EXTGLOB_OPEN = /[?*+@!]\(/;
-
-/** The text with each extended glob group (`@(...)`, `!(...)`, ...) read as `*`. */
-function extglobAsStar(text) {
-    spend();
-    let out = '';
-    let i = 0;
-    while (i < text.length) {
-        if ('?*+@!'.includes(text[i]) && text[i + 1] === '(') {
-            let depth = 0;
-            let j = i + 1;
-            do {
-                if (text[j] === '\\') j++;
-                else if (text[j] === "'" || text[j] === '"') {
-                    const end = text.indexOf(text[j], j + 1);
-                    j = end === -1 ? text.length : end;
-                } else if (text[j] === '(') depth++;
-                else if (text[j] === ')') depth--;
-                j++;
-            } while (depth > 0 && j < text.length);
-            out += '*';
-            i = j;
-        } else {
-            out += text[i];
-            i++;
-        }
-    }
-    return out;
-}
-
 /**
  * The checked command a command string names, or null: in the text cut at its
  * punctuation and quotes, or in its words as the shell reads them, where
@@ -995,11 +894,10 @@ function checkedNameIn(text) {
     // Only text the cut above can misread is read as words: tokenizing every
     // tail of a long short-option cluster costs as much again.
     if (!/\$['"]|[{}*?[]/.test(text) && !EXTGLOB_OPEN.test(text)) return null;
-    for (const form of new Set([text, extglobAsStar(text)])) {
-        for (const word of tokenize(form).flat()) {
-            const name = commandName(word);
-            if (name !== null) return name;
-        }
+    // tokenize() also reads each extended glob group as `*`.
+    for (const word of tokenize(text).flat()) {
+        const name = commandName(word);
+        if (name !== null) return name;
     }
     return null;
 }
@@ -1066,7 +964,7 @@ function checkUnlistedProgram(w, inlineEnv, state) {
                 );
             }
             let start = n;
-            while (start > 1 && isPrefixAssignment(w[start - 1])) start--;
+            while (start > 1 && isAssignment(w[start - 1])) start--;
             refusal = checkSegment([...env, ...w.slice(start, n), word, ...w.slice(n + 1)], state);
         }
         if (!refusal) {
@@ -1115,8 +1013,8 @@ function checkSegment(words, state) {
     // run time, so no argument check below sees the real command line.
     let xargsFed = false;
     for (;;) {
-        while (w.length && (isPrefixAssignment(w[0]) || KEYWORDS.has(w[0]))) {
-            if (isPrefixAssignment(w[0])) assign(w[0]);
+        while (w.length && (isAssignment(w[0]) || KEYWORDS.has(w[0]))) {
+            if (isAssignment(w[0])) assign(w[0]);
             w.shift();
         }
         const envBlock = checkCodeEnv(Object.keys(inlineEnv));
@@ -1163,7 +1061,7 @@ function checkSegment(words, state) {
         if (cmd === 'env') {
             for (let k = 1; k < w.length; k++) {
                 const a = w[k];
-                if (isPrefixAssignment(a)) continue;
+                if (isAssignment(a)) continue;
                 if (!a.startsWith('-')) break; // first word of the wrapped command
                 if (['-u', '--unset', '-C', '--chdir', '-a', '--argv0'].includes(a)) {
                     k++;
@@ -1192,7 +1090,7 @@ function checkSegment(words, state) {
         // only of wildcards in the wrapper's command position (`nice * diff`)
         // is refused above.
         const idx = cmd === 'sudo' ? sudoTarget(w) : wrapperTarget(w);
-        for (const x of w.slice(1, idx === -1 ? w.length : idx)) if (isPrefixAssignment(x)) assign(x);
+        for (const x of w.slice(1, idx === -1 ? w.length : idx)) if (isAssignment(x)) assign(x);
         if (idx === -1) return checkCodeEnv(Object.keys(inlineEnv));
         // Any xargs on the way to the real command counts, so an outer wrapper
         // (`nice xargs git log`, `timeout 5 xargs git log`) does not hide it.
@@ -1301,18 +1199,12 @@ export function checkCommand(command, state = {}) {
         const r = checkCommand(sub, state);
         if (r) return r;
     }
+    // tokenize() reads a line holding an extended glob group both ways: Claude
+    // Code runs a command line by line, so after `shopt -s extglob` (or in a
+    // shell started with it on) `/usr/bin/g@(i)t push --force` runs git.
     for (const words of tokenize(command)) {
         const r = checkSegment(words, state);
         if (r) return r;
-    }
-    // Claude Code runs a command line by line, so a `shopt -s extglob` (or a
-    // shell started with it on) changes how a later line is read, and
-    // `/usr/bin/g@(i)t push --force` runs git. Such a line is read both ways.
-    if (EXTGLOB_OPEN.test(command)) {
-        for (const words of tokenize(extglobAsStar(command))) {
-            const r = checkSegment(words, state);
-            if (r) return r;
-        }
     }
     return null;
 }
