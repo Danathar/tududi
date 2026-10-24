@@ -76,6 +76,10 @@ import format, so it applies as-is.
   starts. `integration_id` 15368 is GitHub Actions. Renaming any of these
   jobs, or giving either workflow a path filter, blocks every merge until this
   file and the live ruleset are updated to match.
+- **Not required: the `mutation` job in `ci.yml`.** It is advisory
+  (`continue-on-error: true`), runs only on pull requests, and skips upstream
+  syncs, so it must not be added to the required checks while it stays
+  advisory ([quality.md](quality.md#mutation-check)).
 - **A pull request merges only with `main`'s current head in it**
   (`strict_required_status_checks_policy: true`). The required checks have
   then run on what will land, not on a stale base.
