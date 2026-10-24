@@ -103,6 +103,9 @@ const allowed = [
     'git status && git diff --stat',
     'npm run lint',
     'cat <<EOF\ngh pr create\nEOF',
+    // a `$'...'` heredoc delimiter is decoded the way bash decodes it, and quotes the body
+    "cat <<$'EOF'\ngh pr create\nEOF",
+    "cat <<-$'EOF'\n\tgh pr create\n\tEOF",
     'git commit -m "$(cat <<\'EOF\'\nuse gh pr create --repo Danathar/tududi\nEOF\n)"',
     // The auto-approved test and read-only git commands in their normal forms (#65, #69).
     'node --test .claude/hooks/tests/guard-bash.test.mjs',
@@ -590,6 +593,11 @@ const blockedLocal = [
     ["echo $'\\c' ; git diff --no-index /dev/null .env", 'no-index'],
     ["echo $'\\c\\\\' ; git diff --no-index /dev/null .env", 'no-index'],
     ["echo $(echo $'\\'') $(git diff --no-index /dev/null .env)", 'no-index'],
+    // `\'` does not end a `$'...'` heredoc delimiter: `<<$'\''` is the delimiter
+    // `'`, so the rest of the line is a command bash runs.
+    ["cat <<$'\\'' ; git push --force origin main", 'force push'],
+    ["cat <<-$'\\'' ; git push --force origin main", 'force push'],
+    ["cat <<$'\\x45OF'\nx\nEOF\ngit push --force origin main", 'force push'],
 ];
 
 for (const command of allowed) {
