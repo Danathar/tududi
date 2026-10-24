@@ -195,6 +195,32 @@ describe('Upcoming due time (#1932)', () => {
     });
 
     describe('DST transition wall-clock (Europe/Berlin)', () => {
+        // These cases name fixed dates around the 2026-10-25 shift, and
+        // Upcoming only lists the next 7 days from the real clock, so pin
+        // the clock to a day before the shift. Only Date is faked:
+        // supertest and the database driver need real timers.
+        beforeEach(() => {
+            jest.useFakeTimers({
+                now: new Date('2026-10-22T12:00:00Z'),
+                doNotFake: [
+                    'hrtime',
+                    'nextTick',
+                    'performance',
+                    'queueMicrotask',
+                    'setImmediate',
+                    'clearImmediate',
+                    'setInterval',
+                    'clearInterval',
+                    'setTimeout',
+                    'clearTimeout',
+                ],
+            });
+        });
+
+        afterEach(() => {
+            jest.useRealTimers();
+        });
+
         it('keeps 09:00 across the autumn DST shift on Upcoming', async () => {
             const agent = await login('Europe/Berlin');
             const created = await agent.post('/api/task').send({
