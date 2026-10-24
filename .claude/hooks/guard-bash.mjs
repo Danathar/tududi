@@ -28,7 +28,10 @@
 //   - gh api with a mutating method (or -f/-F/--input body) against anything
 //     outside repos/Danathar/tududi; GraphQL mutations.
 //   - git push with force, --mirror, a remote other than `origin`, a URL
-//     remote, or no explicit remote.
+//     remote, or no explicit remote; git push that deletes remote refs
+//     (--delete, -d, --prune, an `origin :ref` refspec). A long push option is
+//     also refused when abbreviated, as git accepts it (`--force-w`, `--mirr`,
+//     `--del`, `--rep=URL`).
 //   - git remote set-url that points a push URL at a real upstream.
 //
 // It also keeps the commands that .claude/settings.json auto-approves
@@ -625,19 +628,35 @@ function checkGitConfig(rest) {
     return null;
 }
 
+// Long `git push` options that force, mirror, delete or redirect. git accepts any
+// unambiguous abbreviation of a long option (`--force-w`, `--del`, `--mirr`), so a
+// word that is a prefix of one of these is refused, not just the full spelling.
+const PUSH_DANGER = [
+    ['--force', 'force push'],
+    ['--force-with-lease', 'force push'],
+    ['--force-if-includes', 'force push'],
+    ['--mirror', '`git push --mirror` overwrites the remote'],
+    ['--delete', 'deleting remote refs'],
+    ['--prune', 'deleting remote refs (--prune)'],
+    ['--repo', '`git push --repo` redirects the push; name the remote `origin` instead'],
+];
+
 function checkGitPush(rest) {
     const positionals = [];
     for (let i = 0; i < rest.length; i++) {
         const a = rest[i];
-        if (['-o', '--push-option', '--receive-pack', '--exec'].includes(a)) i++;
-        else if (a === '--repo' || a.startsWith('--repo=')) {
-            return block('Blocked: `git push --repo` redirects the push; name the remote `origin` instead.');
-        } else if (a === '--force' || a.startsWith('--force-with-lease') || a === '--force-if-includes') {
-            return block('Blocked: force push.');
-        } else if (a === '--mirror') {
-            return block('Blocked: `git push --mirror` overwrites the remote.');
+        if (['-o', '--push-option', '--receive-pack', '--exec'].includes(a)) {
+            i++;
+            continue;
+        }
+        if (a.startsWith('--') && a.length > 2) {
+            const name = a.split('=')[0];
+            const hit = name.length >= 3 ? PUSH_DANGER.find(([full]) => full.startsWith(name)) : undefined;
+            if (hit) return block(`Blocked: \`git push ${a}\`: ${hit[1]}.`);
         } else if (/^-[a-zA-Z]*f[a-zA-Z]*$/.test(a)) {
             return block('Blocked: force push (-f).');
+        } else if (/^-[a-zA-Z]*d[a-zA-Z]*$/.test(a)) {
+            return block('Blocked: `git push -d` deletes remote refs.');
         } else if (!a.startsWith('-')) positionals.push(a);
     }
     const [remote, ...refspecs] = positionals;
@@ -649,6 +668,9 @@ function checkGitPush(rest) {
     }
     if (refspecs.some((r) => r.startsWith('+'))) {
         return block('Blocked: force push via "+" refspec.');
+    }
+    if (refspecs.some((r) => r.startsWith(':'))) {
+        return block('Blocked: `git push origin :ref` deletes a remote ref.');
     }
     return null;
 }
