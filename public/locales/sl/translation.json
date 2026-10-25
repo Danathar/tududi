@@ -1092,7 +1092,18 @@
     "editBanner": "Uredi banner projekta",
     "currentBanner": "Trenutni banner",
     "choosePreset": "Izberite prednastavljen banner:",
-    "orUploadOwn": "Ali naložite svojega:"
+    "orUploadOwn": "Ali naložite svojega:",
+    "markComplete": "Zaključi",
+    "completedOn": "Zaključeno {{date}}",
+    "completedToast": "Projekt zaključen",
+    "completedWithTasks_one": "Projekt zaključen, {{count}} opravilo označeno kot opravljeno",
+    "completedWithTasks_two": "Projekt zaključen, {{count}} opravili označeni kot opravljeni",
+    "completedWithTasks_few": "Projekt zaključen, {{count}} opravila označena kot opravljena",
+    "completedWithTasks_other": "Projekt zaključen, {{count}} opravil označenih kot opravljenih",
+    "completeTitle": "Zaključim »{{name}}«?",
+    "completeOpenTasks": "Ta projekt ima še odprta opravila. Jih označim tudi kot opravljena ali pustim odprta? Ponavljajoča se opravila v vsakem primeru ohranijo svoj urnik.",
+    "leaveTasksOpen": "Pusti jih odprta",
+    "completeTasksToo": "Označi jih kot opravljena"
   },
   "errors": {
     "failedToDeleteProject": "Failed to delete project.",
@@ -1131,7 +1142,8 @@
     "failedToSaveGoal": "Cilja ni bilo mogoče shraniti.",
     "failedToDeleteGoal": "Cilja ni bilo mogoče izbrisati.",
     "failedToDeleteNote": "Opombe ni bilo mogoče izbrisati.",
-    "failedToDeleteTag": "Oznake ni bilo mogoče izbrisati."
+    "failedToDeleteTag": "Oznake ni bilo mogoče izbrisati.",
+    "projectStatusUpdateFailed": "Stanja projekta ni bilo mogoče posodobiti"
   },
   "inbox": {
     "title": "Prejeto",
@@ -1458,7 +1470,22 @@
     "blankSlateTemplate": "Začnite s predlogo",
     "blankSlateAreas": "Nastavite področja",
     "blankSlateShowAll": "Pokaži vse projekte",
-    "viewAs": "Pogled"
+    "viewAs": "Pogled",
+    "history": "Zgodovina",
+    "historyHint": "Zaključeni projekti, najnovejši najprej",
+    "historyTitle": "Zaključeni projekti",
+    "historyCount": "Zaključeno: {{count}}",
+    "historyShowCancelled": "Pokaži preklicane",
+    "historyEmptyTitle": "Nič še ni zaključeno",
+    "historyEmptyHint": "Projekti, ki jih označite kot zaključene, so prikazani tukaj, najnovejši najprej, tako da delo ostane zabeleženo, ne da bi zasedalo vaš seznam.",
+    "historyTasks": "{{done}} od {{total}} opravil",
+    "historyDuration_one": "trajal {{count}} dan",
+    "historyDuration_two": "trajal {{count}} dneva",
+    "historyDuration_few": "trajal {{count}} dni",
+    "historyDuration_other": "trajal {{count}} dni",
+    "reopen": "Znova odpri",
+    "reopened": "»{{name}}« je spet v teku",
+    "loadError": "Projektov ni bilo mogoče naložiti"
   },
   "projectItem": {
     "edit": "Uredi",
@@ -1506,7 +1533,8 @@
     "noAreasYet": "Še ni področij.",
     "blankSlateHint": "Področja so deli vašega življenja, za katere skrbite dlje časa, na primer Delo, Zdravje ali Dom. Vanje dodajte projekte in cilje, da vsak del vidite na enem mestu.",
     "blankSlateNew": "Ustvarite prvo področje",
-    "blankSlateProjects": "Pojdi na projekte"
+    "blankSlateProjects": "Pojdi na projekte",
+    "finishedProjects": "Zaključeni ({{count}})"
   },
   "notes": {
     "toggleDropdownMenu": "Preklopi spustni meni",
@@ -2276,6 +2304,66 @@
     "info": {
       "title": "Opomba:",
       "message": "Obvestila po e-pošti in potisna obvestila kmalu prihajajo. Obvestila v aplikaciji in na Telegramu so trenutno na voljo."
+    },
+    "webhooks": {
+      "events": {
+        "taskDueSoon": "Naloga kmalu zapade",
+        "taskOverdue": "Naloga je zapadla",
+        "taskReminder": "Opomnik za nalogo",
+        "taskDeferredReady": "Odložena naloga je aktivna",
+        "taskAssigned": "Naloga, dodeljena vam",
+        "projectDueSoon": "Projekt kmalu zapade",
+        "projectOverdue": "Projekt je zapadel",
+        "habitReminder": "Opomnik za navado",
+        "commentAdded": "Nov komentar",
+        "commentMention": "Omemba",
+        "shareInvitation": "Povabilo k deljenju",
+        "taskCreated": "Naloga ustvarjena",
+        "taskUpdated": "Naloga spremenjena",
+        "taskCompleted": "Naloga dokončana",
+        "taskDeleted": "Naloga izbrisana",
+        "dailySummary": "Dnevni povzetek",
+        "test": "Test"
+      },
+      "groups": {
+        "alerts": "Opomniki in opozorila",
+        "changes": "Spremembe nalog",
+        "summary": "Dnevni povzetek"
+      },
+      "namePlaceholder": "Ime, npr. n8n",
+      "nameLabel": "Ime",
+      "urlKeepPlaceholder": "Nov naslov (pustite prazno, da ga ohranite)",
+      "urlLabel": "Naslov webhooka",
+      "summaryAt": "ob",
+      "saving": "Shranjevanje...",
+      "save": "Shrani",
+      "deliveriesFailed": "Dostav ni bilo mogoče naložiti.",
+      "noDeliveries": "Nič še ni bilo poslano.",
+      "status": {
+        "delivered": "Dostavljeno",
+        "failed": "Ni uspelo ({{error}})",
+        "pending": "Čaka na ponovni poskus"
+      },
+      "testSent": "{{name}} je sprejel testno sporočilo.",
+      "disabledFailures": "Izklopljeno po preveč neuspelih dostavah. Preverite naslov in ga nato znova vklopite.",
+      "off": "Izklopljeno",
+      "lastFailed": "Zadnja dostava ni uspela.",
+      "lastDelivered": "Nazadnje dostavljeno {{when}}.",
+      "notUsed": "Nič še ni bilo poslano.",
+      "title": "Webhooki",
+      "description": "Pošiljajte dogodke kot JSON v n8n, Home Assistant, Slack, Discord ali na svoj strežnik. Vsak webhook izbere svoje dogodke.",
+      "add": "Dodaj webhook",
+      "secretOnce": "Skrivnost za podpis. Kopirajte jo zdaj: ne bo več prikazana.",
+      "copy": "Kopiraj",
+      "done": "Končano",
+      "secretHelp": "Vsaka zahteva vsebuje X-Tududi-Signature: sha256 HMAC od \"timestamp.body\" s to skrivnostjo, in časovni žig v X-Tududi-Timestamp.",
+      "turnOff": "Izklopi",
+      "turnOn": "Vklopi",
+      "edit": "Uredi",
+      "newSecret": "Nova skrivnost",
+      "history": "Zgodovina",
+      "confirmDelete": "Izbrišem?",
+      "delete": "Izbriši"
     }
   },
   "projectStatus": {
@@ -2576,7 +2664,11 @@
     "readOnlyUntil": "Vaši podatki so samo za branje do {{date}}, nato bo račun izbrisan. Naročite se, da boste tududi Cloud lahko še naprej uporabljali.",
     "trialIncludes": "Preizkusno obdobje se izteče {{date}}. Pomočnik AI, javni zapiski in dodajanje članov se odklenejo z naročnino.",
     "backToApp": "Nazaj v tududi",
-    "trialBanner": "Brezplačni preizkus, preostali dnevi: {{count}}"
+    "trialBanner": "Brezplačni preizkus, preostali dnevi: {{count}}",
+    "trialLock": {
+      "webhooks": "Webhooki niso del brezplačnega preizkusa. Naročite se, da boste pošiljali dogodke v svoje storitve."
+    },
+    "lockedWebhooks": "Webhooki so del plačljivega paketa."
   },
   "demo": {
     "opening": "Odpiranje demota...",
@@ -3013,5 +3105,13 @@
     "locked": "Nastavljeno z vašim fokusom. Počistite ga v čipu v zgornji vrstici.",
     "emptyHint": "Prikazano samo {{label}}",
     "saveError": "Fokusa ni bilo mogoče shraniti."
+  },
+  "datePicker": {
+    "shortcuts": {
+      "today": "Danes",
+      "tomorrow": "Jutri",
+      "weekend": "Vikend",
+      "nextWeek": "Naslednji teden"
+    }
   }
 }

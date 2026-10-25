@@ -209,6 +209,7 @@ See [docs/architecture.md](docs/architecture.md) for full diagrams; the essentia
     - Status lifecycle and stalled detection
     - Completion tracking and progress metrics
     - Project sharing and collaboration permissions
+    - Completing projects (open-task prompt) and the completed history page
     - Due dates, notifications, and priorities
     - Deletion behavior (orphaning vs cascading)
     - Filtering, grouping, and sidebar pinning
@@ -339,6 +340,11 @@ See [docs/architecture.md](docs/architecture.md) for full diagrams; the essentia
     - Sends notifications through a self-hosted apprise-api server, which reaches 100+ services
     - Per-type opt-in in Profile → Notifications; address and config key encrypted at rest
     - Private addresses follow the `CALDAV_ALLOW_PRIVATE_HOSTS` rule used by calendar feeds
+
+36. **[Webhooks](docs/27-webhooks.md)**
+    - Signed JSON POSTs to n8n, Home Assistant, Slack, Discord or any server; up to 10 per user, each with its own events
+    - Reminder/alert events, task created/updated/completed/deleted, and a daily summary at a chosen local hour
+    - Queue with retries in `webhook_deliveries`; turns off after 10 failures in a row; not in the Cloud trial
 
 ---
 

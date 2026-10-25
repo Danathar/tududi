@@ -1092,7 +1092,20 @@
     "editBanner": "تعديل لافتة المشروع",
     "currentBanner": "اللافتة الحالية",
     "choosePreset": "اختر لافتة مسبقة:",
-    "orUploadOwn": "أو قم بتحميل لافتتك الخاصة:"
+    "orUploadOwn": "أو قم بتحميل لافتتك الخاصة:",
+    "markComplete": "إكمال",
+    "completedOn": "اكتمل في {{date}}",
+    "completedToast": "اكتمل المشروع",
+    "completedWithTasks_zero": "اكتمل المشروع، ولم يتم تعليم أي مهمة كمنجزة",
+    "completedWithTasks_one": "اكتمل المشروع، وتم تعليم مهمة واحدة كمنجزة",
+    "completedWithTasks_two": "اكتمل المشروع، وتم تعليم مهمتين كمنجزتين",
+    "completedWithTasks_few": "اكتمل المشروع، وتم تعليم {{count}} مهام كمنجزة",
+    "completedWithTasks_many": "اكتمل المشروع، وتم تعليم {{count}} مهمة كمنجزة",
+    "completedWithTasks_other": "اكتمل المشروع، وتم تعليم {{count}} مهمة كمنجزة",
+    "completeTitle": "إكمال \"{{name}}\"؟",
+    "completeOpenTasks": "لا يزال في هذا المشروع مهام مفتوحة. هل تريد تعليمها كمنجزة أيضًا، أم تركها مفتوحة؟ تحتفظ المهام المتكررة بجدولها في كلتا الحالتين.",
+    "leaveTasksOpen": "اتركها مفتوحة",
+    "completeTasksToo": "علّمها كمنجزة أيضًا"
   },
   "errors": {
     "failedToDeleteProject": "Failed to delete project.",
@@ -1131,7 +1144,8 @@
     "failedToSaveGoal": "تعذر حفظ الهدف.",
     "failedToDeleteGoal": "تعذر حذف الهدف.",
     "failedToDeleteNote": "تعذر حذف الملاحظة.",
-    "failedToDeleteTag": "تعذر حذف الوسم."
+    "failedToDeleteTag": "تعذر حذف الوسم.",
+    "projectStatusUpdateFailed": "فشل تحديث حالة المشروع"
   },
   "inbox": {
     "title": "صندوق الوارد",
@@ -1458,7 +1472,24 @@
     "blankSlateTemplate": "ابدأ من قالب",
     "blankSlateAreas": "إعداد المناطق",
     "blankSlateShowAll": "عرض كل المشاريع",
-    "viewAs": "العرض"
+    "viewAs": "العرض",
+    "history": "السجل",
+    "historyHint": "المشاريع المكتملة، الأحدث أولًا",
+    "historyTitle": "المشاريع المكتملة",
+    "historyCount": "المكتملة: {{count}}",
+    "historyShowCancelled": "إظهار الملغاة",
+    "historyEmptyTitle": "لم يكتمل شيء بعد",
+    "historyEmptyHint": "تظهر هنا المشاريع التي تعلّمها كمكتملة، الأحدث أولًا، فيبقى العمل مسجلًا دون أن يزدحم قائمتك.",
+    "historyTasks": "{{done}} من {{total}} مهام",
+    "historyDuration_zero": "استغرق {{count}} يوم",
+    "historyDuration_one": "استغرق يومًا واحدًا",
+    "historyDuration_two": "استغرق يومين",
+    "historyDuration_few": "استغرق {{count}} أيام",
+    "historyDuration_many": "استغرق {{count}} يومًا",
+    "historyDuration_other": "استغرق {{count}} يوم",
+    "reopen": "إعادة فتح",
+    "reopened": "عاد \"{{name}}\" قيد التنفيذ",
+    "loadError": "فشل تحميل المشاريع"
   },
   "projectItem": {
     "edit": "تعديل",
@@ -1506,7 +1537,8 @@
     "noAreasYet": "لا توجد مناطق بعد.",
     "blankSlateHint": "المناطق هي جوانب حياتك التي تعتني بها على المدى الطويل، مثل العمل أو الصحة أو المنزل. ضع فيها مشاريعك وأهدافك لترى كل جانب في مكان واحد.",
     "blankSlateNew": "أنشئ منطقتك الأولى",
-    "blankSlateProjects": "الانتقال إلى المشاريع"
+    "blankSlateProjects": "الانتقال إلى المشاريع",
+    "finishedProjects": "المكتملة ({{count}})"
   },
   "notes": {
     "toggleDropdownMenu": "تبديل قائمة السحب",
@@ -2278,6 +2310,66 @@
     "info": {
       "title": "ملاحظة:",
       "message": "ستكون إشعارات البريد الإلكتروني وإشعارات الدفع متاحة قريبًا. الإشعارات داخل التطبيق وإشعارات تليجرام متاحة حاليًا."
+    },
+    "webhooks": {
+      "events": {
+        "taskDueSoon": "مهمة يقترب موعدها",
+        "taskOverdue": "مهمة متأخرة",
+        "taskReminder": "تذكير بمهمة",
+        "taskDeferredReady": "المهمة المؤجلة أصبحت نشطة",
+        "taskAssigned": "مهمة مسندة إليك",
+        "projectDueSoon": "مشروع يقترب موعده",
+        "projectOverdue": "مشروع متأخر",
+        "habitReminder": "تذكير بعادة",
+        "commentAdded": "تعليق جديد",
+        "commentMention": "إشارة",
+        "shareInvitation": "دعوة مشاركة",
+        "taskCreated": "تم إنشاء مهمة",
+        "taskUpdated": "تم تغيير مهمة",
+        "taskCompleted": "تم إكمال مهمة",
+        "taskDeleted": "تم حذف مهمة",
+        "dailySummary": "الملخص اليومي",
+        "test": "اختبار"
+      },
+      "groups": {
+        "alerts": "التذكيرات والتنبيهات",
+        "changes": "تغييرات المهام",
+        "summary": "الملخص اليومي"
+      },
+      "namePlaceholder": "الاسم، مثل n8n",
+      "nameLabel": "الاسم",
+      "urlKeepPlaceholder": "عنوان جديد (اتركه فارغًا للإبقاء عليه)",
+      "urlLabel": "عنوان webhook",
+      "summaryAt": "في",
+      "saving": "جارٍ الحفظ...",
+      "save": "حفظ",
+      "deliveriesFailed": "تعذر تحميل عمليات الإرسال.",
+      "noDeliveries": "لم يُرسل شيء بعد.",
+      "status": {
+        "delivered": "تم التسليم",
+        "failed": "فشل ({{error}})",
+        "pending": "بانتظار إعادة المحاولة"
+      },
+      "testSent": "قبل {{name}} رسالة الاختبار.",
+      "disabledFailures": "تم إيقافه بعد عدد كبير من عمليات الإرسال الفاشلة. تحقق من العنوان ثم أعد تشغيله.",
+      "off": "متوقف",
+      "lastFailed": "فشلت آخر عملية إرسال.",
+      "lastDelivered": "آخر تسليم {{when}}.",
+      "notUsed": "لم يُرسل شيء بعد.",
+      "title": "Webhooks",
+      "description": "أرسل الأحداث بصيغة JSON إلى n8n أو Home Assistant أو Slack أو Discord أو خادمك الخاص. كل webhook يختار أحداثه الخاصة.",
+      "add": "إضافة webhook",
+      "secretOnce": "مفتاح التوقيع. انسخه الآن: لن يظهر مرة أخرى.",
+      "copy": "نسخ",
+      "done": "تم",
+      "secretHelp": "يحمل كل طلب X-Tududi-Signature: قيمة HMAC sha256 لـ \"timestamp.body\" بهذا المفتاح، والطابع الزمني في X-Tududi-Timestamp.",
+      "turnOff": "إيقاف",
+      "turnOn": "تشغيل",
+      "edit": "تعديل",
+      "newSecret": "مفتاح جديد",
+      "history": "السجل",
+      "confirmDelete": "حذفه؟",
+      "delete": "حذف"
     }
   },
   "projectStatus": {
@@ -2580,7 +2672,11 @@
     "readOnlyUntil": "بياناتك للقراءة فقط حتى {{date}}، ثم يُحذف الحساب. اشترك لمواصلة استخدام tududi Cloud.",
     "trialIncludes": "تنتهي فترتك التجريبية في {{date}}. يُفتح مساعد الذكاء الاصطناعي والملاحظات العامة وإضافة الأعضاء عند الاشتراك.",
     "backToApp": "العودة إلى tududi",
-    "trialBanner": "الفترة التجريبية المجانية، الأيام المتبقية: {{count}}"
+    "trialBanner": "الفترة التجريبية المجانية، الأيام المتبقية: {{count}}",
+    "trialLock": {
+      "webhooks": "الـ Webhooks ليست ضمن الفترة التجريبية المجانية. اشترك لإرسال الأحداث إلى خدماتك الخاصة."
+    },
+    "lockedWebhooks": "الـ Webhooks جزء من الخطة المدفوعة."
   },
   "demo": {
     "opening": "فتح العرض التوضيحي...",
@@ -3019,5 +3115,13 @@
     "locked": "محدد بواسطة التركيز. امسحه من الشريحة في الشريط العلوي.",
     "emptyHint": "يعرض {{label}} فقط",
     "saveError": "تعذر حفظ التركيز."
+  },
+  "datePicker": {
+    "shortcuts": {
+      "today": "اليوم",
+      "tomorrow": "غدًا",
+      "weekend": "عطلة نهاية الأسبوع",
+      "nextWeek": "الأسبوع القادم"
+    }
   }
 }

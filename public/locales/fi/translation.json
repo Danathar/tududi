@@ -1092,7 +1092,16 @@
     "editBanner": "Muokkaa projektin banneria",
     "currentBanner": "Nykyinen banneri",
     "choosePreset": "Valitse esiasetettu banneri:",
-    "orUploadOwn": "Tai lataa oma:"
+    "orUploadOwn": "Tai lataa oma:",
+    "markComplete": "Valmis",
+    "completedOn": "Valmistui {{date}}",
+    "completedToast": "Projekti valmis",
+    "completedWithTasks_one": "Projekti valmis, {{count}} tehtävä merkitty tehdyksi",
+    "completedWithTasks_other": "Projekti valmis, {{count}} tehtävää merkitty tehdyiksi",
+    "completeTitle": "Merkitäänkö \"{{name}}\" valmiiksi?",
+    "completeOpenTasks": "Projektissa on vielä avoimia tehtäviä. Merkitäänkö nekin tehdyiksi vai jätetäänkö avoimiksi? Toistuvat tehtävät säilyttävät aikataulunsa joka tapauksessa.",
+    "leaveTasksOpen": "Jätä avoimiksi",
+    "completeTasksToo": "Merkitse nekin tehdyiksi"
   },
   "errors": {
     "failedToDeleteProject": "Failed to delete project.",
@@ -1131,7 +1140,8 @@
     "failedToSaveGoal": "Tavoitteen tallentaminen epäonnistui.",
     "failedToDeleteGoal": "Tavoitteen poistaminen epäonnistui.",
     "failedToDeleteNote": "Muistiinpanon poistaminen epäonnistui.",
-    "failedToDeleteTag": "Tunnisteen poistaminen epäonnistui."
+    "failedToDeleteTag": "Tunnisteen poistaminen epäonnistui.",
+    "projectStatusUpdateFailed": "Projektin tilan päivitys epäonnistui"
   },
   "inbox": {
     "title": "Saapuneet",
@@ -1458,7 +1468,20 @@
     "blankSlateTemplate": "Aloita mallista",
     "blankSlateAreas": "Määritä alueet",
     "blankSlateShowAll": "Näytä kaikki projektit",
-    "viewAs": "Näkymä"
+    "viewAs": "Näkymä",
+    "history": "Historia",
+    "historyHint": "Valmiit projektit, uusimmat ensin",
+    "historyTitle": "Valmiit projektit",
+    "historyCount": "{{count}} valmiina",
+    "historyShowCancelled": "Näytä perutut",
+    "historyEmptyTitle": "Ei vielä mitään valmista",
+    "historyEmptyHint": "Valmiiksi merkitsemäsi projektit näkyvät täällä uusimmat ensin, joten työ jää talteen täyttämättä listaasi.",
+    "historyTasks": "{{done}}/{{total}} tehtävää",
+    "historyDuration_one": "kesti {{count}} päivän",
+    "historyDuration_other": "kesti {{count}} päivää",
+    "reopen": "Avaa uudelleen",
+    "reopened": "\"{{name}}\" on taas käynnissä",
+    "loadError": "Projektien lataus epäonnistui"
   },
   "projectItem": {
     "edit": "Muokkaa",
@@ -1506,7 +1529,8 @@
     "noAreasYet": "Ei vielä alueita.",
     "blankSlateHint": "Alueet ovat elämäsi osia, joista huolehdit jatkuvasti, kuten Työ, Terveys tai Koti. Lisää niihin projektisi ja tavoitteesi nähdäksesi jokaisen osan yhdessä paikassa.",
     "blankSlateNew": "Luo ensimmäinen alueesi",
-    "blankSlateProjects": "Siirry projekteihin"
+    "blankSlateProjects": "Siirry projekteihin",
+    "finishedProjects": "Valmiit ({{count}})"
   },
   "notes": {
     "toggleDropdownMenu": "Vaihda avattavaa valikkoa",
@@ -2274,6 +2298,66 @@
     "info": {
       "title": "Huom:",
       "message": "Sähköposti- ja Push-ilmoitukset ovat tulossa pian. Sovelluksen sisäiset ja Telegram-ilmoitukset ovat tällä hetkellä saatavilla."
+    },
+    "webhooks": {
+      "events": {
+        "taskDueSoon": "Tehtävä erääntyy pian",
+        "taskOverdue": "Tehtävä myöhässä",
+        "taskReminder": "Tehtävämuistutus",
+        "taskDeferredReady": "Siirretty tehtävä on aktiivinen",
+        "taskAssigned": "Sinulle määritetty tehtävä",
+        "projectDueSoon": "Projekti erääntyy pian",
+        "projectOverdue": "Projekti myöhässä",
+        "habitReminder": "Tapamuistutus",
+        "commentAdded": "Uusi kommentti",
+        "commentMention": "Maininta",
+        "shareInvitation": "Jakokutsu",
+        "taskCreated": "Tehtävä luotu",
+        "taskUpdated": "Tehtävä muutettu",
+        "taskCompleted": "Tehtävä valmis",
+        "taskDeleted": "Tehtävä poistettu",
+        "dailySummary": "Päivän yhteenveto",
+        "test": "Testi"
+      },
+      "groups": {
+        "alerts": "Muistutukset ja hälytykset",
+        "changes": "Tehtävien muutokset",
+        "summary": "Päivän yhteenveto"
+      },
+      "namePlaceholder": "Nimi, esim. n8n",
+      "nameLabel": "Nimi",
+      "urlKeepPlaceholder": "Uusi osoite (jätä tyhjäksi, niin se säilyy)",
+      "urlLabel": "Webhookin osoite",
+      "summaryAt": "klo",
+      "saving": "Tallennetaan...",
+      "save": "Tallenna",
+      "deliveriesFailed": "Toimituksia ei voitu ladata.",
+      "noDeliveries": "Mitään ei ole vielä lähetetty.",
+      "status": {
+        "delivered": "Toimitettu",
+        "failed": "Epäonnistui ({{error}})",
+        "pending": "Odottaa uutta yritystä"
+      },
+      "testSent": "{{name}} hyväksyi testiviestin.",
+      "disabledFailures": "Poistettu käytöstä liian monen epäonnistuneen toimituksen jälkeen. Tarkista osoite ja ota se sitten uudelleen käyttöön.",
+      "off": "Pois",
+      "lastFailed": "Viimeisin toimitus epäonnistui.",
+      "lastDelivered": "Viimeksi toimitettu {{when}}.",
+      "notUsed": "Mitään ei ole vielä lähetetty.",
+      "title": "Webhookit",
+      "description": "Lähetä tapahtumia JSON-muodossa palveluihin n8n, Home Assistant, Slack, Discord tai omalle palvelimellesi. Jokainen webhook valitsee omat tapahtumansa.",
+      "add": "Lisää webhook",
+      "secretOnce": "Allekirjoitusavain. Kopioi se nyt: sitä ei näytetä uudelleen.",
+      "copy": "Kopioi",
+      "done": "Valmis",
+      "secretHelp": "Jokainen pyyntö sisältää otsakkeen X-Tududi-Signature: sha256 HMAC merkkijonosta \"timestamp.body\" tällä avaimella, ja aikaleiman otsakkeessa X-Tududi-Timestamp.",
+      "turnOff": "Poista käytöstä",
+      "turnOn": "Ota käyttöön",
+      "edit": "Muokkaa",
+      "newSecret": "Uusi avain",
+      "history": "Historia",
+      "confirmDelete": "Poistetaanko?",
+      "delete": "Poista"
     }
   },
   "projectStatus": {
@@ -2572,7 +2656,11 @@
     "readOnlyUntil": "Tietosi ovat vain luku -tilassa {{date}} asti, minkä jälkeen tili poistetaan. Tilaa jatkaaksesi tududi Cloudin käyttöä.",
     "trialIncludes": "Kokeilujaksosi päättyy {{date}}. AI-avustaja, julkiset muistiinpanot ja jäsenten lisääminen avautuvat, kun tilaat.",
     "backToApp": "Takaisin tududiin",
-    "trialBanner": "Ilmainen kokeilu, päiviä jäljellä: {{count}}"
+    "trialBanner": "Ilmainen kokeilu, päiviä jäljellä: {{count}}",
+    "trialLock": {
+      "webhooks": "Webhookit eivät sisälly ilmaiseen kokeilujaksoon. Tilaa, niin voit lähettää tapahtumia omiin palveluihisi."
+    },
+    "lockedWebhooks": "Webhookit kuuluvat maksulliseen tilaukseen."
   },
   "demo": {
     "opening": "Avaamassa demoa...",
@@ -3007,5 +3095,13 @@
     "locked": "Fokuksesi asettama. Poista se yläpalkin merkistä.",
     "emptyHint": "Näytetään vain {{label}}",
     "saveError": "Fokusta ei voitu tallentaa."
+  },
+  "datePicker": {
+    "shortcuts": {
+      "today": "Tänään",
+      "tomorrow": "Huomenna",
+      "weekend": "Viikonloppu",
+      "nextWeek": "Ensi viikko"
+    }
   }
 }
