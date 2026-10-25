@@ -1072,7 +1072,8 @@
     "failedToSaveGoal": "目標を保存できませんでした。",
     "failedToDeleteGoal": "目標を削除できませんでした。",
     "failedToDeleteNote": "ノートを削除できませんでした。",
-    "failedToDeleteTag": "タグを削除できませんでした。"
+    "failedToDeleteTag": "タグを削除できませんでした。",
+    "projectStatusUpdateFailed": "プロジェクトのステータスを更新できませんでした"
   },
   "success": {
     "noteUpdated": "ノートが正常に更新されました！",
@@ -1192,7 +1193,19 @@
     "blankSlateTemplate": "テンプレートから始める",
     "blankSlateAreas": "エリアを設定",
     "blankSlateShowAll": "すべてのプロジェクトを表示",
-    "viewAs": "表示形式"
+    "viewAs": "表示形式",
+    "history": "履歴",
+    "historyHint": "完了したプロジェクト（新しい順）",
+    "historyTitle": "完了したプロジェクト",
+    "historyCount": "{{count}} 件完了",
+    "historyShowCancelled": "キャンセル済みを表示",
+    "historyEmptyTitle": "まだ完了したものはありません",
+    "historyEmptyHint": "完了にしたプロジェクトは新しい順にここに表示されます。リストを散らかさずに作業の記録を残せます。",
+    "historyTasks": "{{total}} 件中 {{done}} 件のタスク",
+    "historyDuration_other": "{{count}} 日かかりました",
+    "reopen": "再開",
+    "reopened": "「{{name}}」を進行中に戻しました",
+    "loadError": "プロジェクトを読み込めませんでした"
   },
   "projectItem": {
     "edit": "編集",
@@ -1240,7 +1253,8 @@
     "noAreasYet": "まだエリアはありません。",
     "blankSlateHint": "エリアは、仕事・健康・家など、長く向き合っていく生活の領域です。プロジェクトや目標をエリアに入れると、それぞれの領域をひとつの場所で見渡せます。",
     "blankSlateNew": "最初のエリアを作成",
-    "blankSlateProjects": "プロジェクトへ"
+    "blankSlateProjects": "プロジェクトへ",
+    "finishedProjects": "完了 ({{count}})"
   },
   "notes": {
     "toggleDropdownMenu": "ドロップダウンメニューを切り替え",
@@ -1463,7 +1477,15 @@
     "editBanner": "プロジェクトバナーを編集",
     "currentBanner": "現在のバナー",
     "choosePreset": "プリセットバナーを選択:",
-    "orUploadOwn": "または自分のバナーをアップロード:"
+    "orUploadOwn": "または自分のバナーをアップロード:",
+    "markComplete": "完了",
+    "completedOn": "{{date}} に完了",
+    "completedToast": "プロジェクトを完了しました",
+    "completedWithTasks_other": "プロジェクトを完了し、{{count}} 件のタスクを完了にしました",
+    "completeTitle": "「{{name}}」を完了しますか？",
+    "completeOpenTasks": "このプロジェクトにはまだ未完了のタスクがあります。あわせて完了にしますか、それとも残しますか？繰り返しタスクはどちらの場合もスケジュールを維持します。",
+    "leaveTasksOpen": "未完了のまま残す",
+    "completeTasksToo": "あわせて完了にする"
   },
   "task": {
     "suggestions": {
@@ -2164,11 +2186,17 @@
     "deferUntil": "、遅延するまで",
     "extrasFilter": {
       "isRecurring": "繰り返し",
+      "isNotRecurring": "繰り返しなし",
       "isOverdue": "期限切れ",
       "hasContent": "コンテンツあり",
+      "hasNoContent": "コンテンツなし",
       "isDeferred": "保留中",
+      "isNotDeferred": "保留なし",
       "hasTags": "タグあり",
-      "isAssignedToProject": "プロジェクトに割り当てられている"
+      "hasNoTags": "タグなし",
+      "hasNoDueDate": "期限なし",
+      "isAssignedToProject": "プロジェクトに割り当てられている",
+      "hasNoProject": "プロジェクトなし"
     }
   },
   "subtasks": {
@@ -2268,6 +2296,66 @@
     "info": {
       "title": "注意:",
       "message": "メールおよびプッシュ通知は近日中に提供予定です。アプリ内およびTelegram通知は現在利用可能です。"
+    },
+    "webhooks": {
+      "events": {
+        "taskDueSoon": "タスクの期限が近づいています",
+        "taskOverdue": "タスクの期限切れ",
+        "taskReminder": "タスクのリマインダー",
+        "taskDeferredReady": "延期したタスクが有効になりました",
+        "taskAssigned": "あなたに割り当てられたタスク",
+        "projectDueSoon": "プロジェクトの期限が近づいています",
+        "projectOverdue": "プロジェクトの期限切れ",
+        "habitReminder": "習慣のリマインダー",
+        "commentAdded": "新しいコメント",
+        "commentMention": "メンション",
+        "shareInvitation": "共有の招待",
+        "taskCreated": "タスクの作成",
+        "taskUpdated": "タスクの変更",
+        "taskCompleted": "タスクの完了",
+        "taskDeleted": "タスクの削除",
+        "dailySummary": "デイリーサマリー",
+        "test": "テスト"
+      },
+      "groups": {
+        "alerts": "リマインダーとアラート",
+        "changes": "タスクの変更",
+        "summary": "デイリーサマリー"
+      },
+      "namePlaceholder": "名前（例: n8n）",
+      "nameLabel": "名前",
+      "urlKeepPlaceholder": "新しいアドレス（空欄のままにすると変更しません）",
+      "urlLabel": "Webhook のアドレス",
+      "summaryAt": "時刻",
+      "saving": "保存中...",
+      "save": "保存",
+      "deliveriesFailed": "配信履歴を読み込めませんでした。",
+      "noDeliveries": "まだ何も送信していません。",
+      "status": {
+        "delivered": "配信済み",
+        "failed": "失敗（{{error}}）",
+        "pending": "再試行を待機中"
+      },
+      "testSent": "{{name}} がテストメッセージを受け付けました。",
+      "disabledFailures": "配信の失敗が続いたためオフになりました。アドレスを確認してから、もう一度オンにしてください。",
+      "off": "オフ",
+      "lastFailed": "前回の配信は失敗しました。",
+      "lastDelivered": "最終配信 {{when}}。",
+      "notUsed": "まだ何も送信していません。",
+      "title": "Webhook",
+      "description": "イベントを JSON で n8n、Home Assistant、Slack、Discord、または自分のサーバーに送信します。Webhook ごとに送信するイベントを選べます。",
+      "add": "Webhook を追加",
+      "secretOnce": "署名用シークレット。今すぐコピーしてください: 再表示されません。",
+      "copy": "コピー",
+      "done": "完了",
+      "secretHelp": "各リクエストには X-Tududi-Signature（このシークレットによる \"timestamp.body\" の sha256 HMAC）と、X-Tududi-Timestamp にタイムスタンプが含まれます。",
+      "turnOff": "オフにする",
+      "turnOn": "オンにする",
+      "edit": "編集",
+      "newSecret": "新しいシークレット",
+      "history": "履歴",
+      "confirmDelete": "削除しますか？",
+      "delete": "削除"
     }
   },
   "projectStatus": {
@@ -2566,7 +2654,11 @@
     "readOnlyUntil": "データは {{date}} まで読み取り専用で、その後アカウントは削除されます。tududi Cloud を引き続き使うには購読してください。",
     "trialIncludes": "試用期間は {{date}} に終了します。AI アシスタント、公開ノート、メンバーの追加は購読すると使えるようになります。",
     "backToApp": "tududi に戻る",
-    "trialBanner": "無料試用中、残り日数：{{count}}"
+    "trialBanner": "無料試用中、残り日数：{{count}}",
+    "trialLock": {
+      "webhooks": "Webhook は無料トライアルには含まれていません。自分のサービスにイベントを送るには、サブスクリプションに登録してください。"
+    },
+    "lockedWebhooks": "Webhook は有料プランに含まれています。"
   },
   "demo": {
     "opening": "デモを開いています...",
@@ -3000,5 +3092,13 @@
     "locked": "フォーカスで設定されています。上部バーのチップから解除してください。",
     "emptyHint": "{{label}} のみ表示中",
     "saveError": "フォーカスを保存できませんでした。"
+  },
+  "datePicker": {
+    "shortcuts": {
+      "today": "今日",
+      "tomorrow": "明日",
+      "weekend": "週末",
+      "nextWeek": "来週"
+    }
   }
 }

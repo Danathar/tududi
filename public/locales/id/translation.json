@@ -1092,7 +1092,15 @@
     "editBanner": "Edit spanduk proyek",
     "currentBanner": "Spanduk saat ini",
     "choosePreset": "Pilih spanduk preset:",
-    "orUploadOwn": "Atau unggah milik Anda sendiri:"
+    "orUploadOwn": "Atau unggah milik Anda sendiri:",
+    "markComplete": "Selesaikan",
+    "completedOn": "Selesai {{date}}",
+    "completedToast": "Proyek selesai",
+    "completedWithTasks_other": "Proyek selesai, {{count}} tugas ditandai selesai",
+    "completeTitle": "Selesaikan \"{{name}}\"?",
+    "completeOpenTasks": "Proyek ini masih punya tugas terbuka. Tandai juga sebagai selesai, atau biarkan terbuka? Tugas berulang tetap mengikuti jadwalnya.",
+    "leaveTasksOpen": "Biarkan terbuka",
+    "completeTasksToo": "Tandai juga selesai"
   },
   "errors": {
     "failedToDeleteProject": "Failed to delete project.",
@@ -1131,7 +1139,8 @@
     "failedToSaveGoal": "Gagal menyimpan tujuan.",
     "failedToDeleteGoal": "Gagal menghapus tujuan.",
     "failedToDeleteNote": "Gagal menghapus catatan.",
-    "failedToDeleteTag": "Gagal menghapus tag."
+    "failedToDeleteTag": "Gagal menghapus tag.",
+    "projectStatusUpdateFailed": "Gagal memperbarui status proyek"
   },
   "inbox": {
     "title": "Kotak Masuk",
@@ -1458,7 +1467,19 @@
     "blankSlateTemplate": "Mulai dari templat",
     "blankSlateAreas": "Siapkan area",
     "blankSlateShowAll": "Tampilkan semua proyek",
-    "viewAs": "Tampilan"
+    "viewAs": "Tampilan",
+    "history": "Riwayat",
+    "historyHint": "Proyek selesai, terbaru dulu",
+    "historyTitle": "Proyek selesai",
+    "historyCount": "{{count}} selesai",
+    "historyShowCancelled": "Tampilkan yang dibatalkan",
+    "historyEmptyTitle": "Belum ada yang selesai",
+    "historyEmptyHint": "Proyek yang kamu tandai selesai muncul di sini, terbaru dulu, sehingga pekerjaan tetap tercatat tanpa memenuhi daftarmu.",
+    "historyTasks": "{{done}} dari {{total}} tugas",
+    "historyDuration_other": "memakan waktu {{count}} hari",
+    "reopen": "Buka kembali",
+    "reopened": "\"{{name}}\" kembali berjalan",
+    "loadError": "Gagal memuat proyek"
   },
   "projectItem": {
     "edit": "Sunting",
@@ -1506,7 +1527,8 @@
     "noAreasYet": "Belum ada area.",
     "blankSlateHint": "Area adalah bagian hidup yang Anda rawat dari waktu ke waktu, seperti Kerja, Kesehatan, atau Rumah. Masukkan proyek dan tujuan Anda ke dalamnya untuk melihat setiap bagian di satu tempat.",
     "blankSlateNew": "Buat area pertama Anda",
-    "blankSlateProjects": "Buka proyek"
+    "blankSlateProjects": "Buka proyek",
+    "finishedProjects": "Selesai ({{count}})"
   },
   "notes": {
     "toggleDropdownMenu": "Alihkan menu dropdown",
@@ -2164,11 +2186,17 @@
     "deferUntil": ", tunda hingga",
     "extrasFilter": {
       "isRecurring": "adalah Berulang",
+      "isNotRecurring": "tidak Berulang",
       "isOverdue": "adalah Terlambat",
       "hasContent": "memiliki Konten",
+      "hasNoContent": "tidak memiliki Konten",
       "isDeferred": "adalah Ditunda",
+      "isNotDeferred": "tidak Ditunda",
       "hasTags": "memiliki Tag",
-      "isAssignedToProject": "adalah Ditugaskan ke Proyek"
+      "hasNoTags": "tidak memiliki Tag",
+      "hasNoDueDate": "tidak memiliki Tenggat",
+      "isAssignedToProject": "adalah Ditugaskan ke Proyek",
+      "hasNoProject": "tidak memiliki Proyek"
     }
   },
   "subtasks": {
@@ -2268,6 +2296,66 @@
     "info": {
       "title": "Catatan:",
       "message": "Notifikasi Email dan Push akan segera hadir. Notifikasi di dalam aplikasi dan Telegram saat ini tersedia."
+    },
+    "webhooks": {
+      "events": {
+        "taskDueSoon": "Tugas segera jatuh tempo",
+        "taskOverdue": "Tugas terlambat",
+        "taskReminder": "Pengingat tugas",
+        "taskDeferredReady": "Tugas yang ditunda sudah aktif",
+        "taskAssigned": "Tugas diberikan kepada Anda",
+        "projectDueSoon": "Proyek segera jatuh tempo",
+        "projectOverdue": "Proyek terlambat",
+        "habitReminder": "Pengingat kebiasaan",
+        "commentAdded": "Komentar baru",
+        "commentMention": "Sebutan",
+        "shareInvitation": "Undangan berbagi",
+        "taskCreated": "Tugas dibuat",
+        "taskUpdated": "Tugas diubah",
+        "taskCompleted": "Tugas selesai",
+        "taskDeleted": "Tugas dihapus",
+        "dailySummary": "Ringkasan harian",
+        "test": "Tes"
+      },
+      "groups": {
+        "alerts": "Pengingat dan peringatan",
+        "changes": "Perubahan tugas",
+        "summary": "Ringkasan harian"
+      },
+      "namePlaceholder": "Nama, mis. n8n",
+      "nameLabel": "Nama",
+      "urlKeepPlaceholder": "Alamat baru (kosongkan untuk mempertahankannya)",
+      "urlLabel": "Alamat webhook",
+      "summaryAt": "pukul",
+      "saving": "Menyimpan...",
+      "save": "Simpan",
+      "deliveriesFailed": "Tidak dapat memuat pengiriman.",
+      "noDeliveries": "Belum ada yang dikirim.",
+      "status": {
+        "delivered": "Terkirim",
+        "failed": "Gagal ({{error}})",
+        "pending": "Menunggu percobaan ulang"
+      },
+      "testSent": "{{name}} menerima pesan tes.",
+      "disabledFailures": "Dimatikan setelah terlalu banyak pengiriman gagal. Periksa alamatnya, lalu nyalakan kembali.",
+      "off": "Mati",
+      "lastFailed": "Pengiriman terakhir gagal.",
+      "lastDelivered": "Terakhir terkirim {{when}}.",
+      "notUsed": "Belum ada yang dikirim.",
+      "title": "Webhook",
+      "description": "Kirim peristiwa sebagai JSON ke n8n, Home Assistant, Slack, Discord, atau server Anda sendiri. Setiap webhook memilih peristiwanya sendiri.",
+      "add": "Tambah webhook",
+      "secretOnce": "Kunci penandatanganan. Salin sekarang: kunci ini tidak akan ditampilkan lagi.",
+      "copy": "Salin",
+      "done": "Selesai",
+      "secretHelp": "Setiap permintaan membawa X-Tududi-Signature: HMAC sha256 dari \"timestamp.body\" dengan kunci ini, dan stempel waktu di X-Tududi-Timestamp.",
+      "turnOff": "Matikan",
+      "turnOn": "Nyalakan",
+      "edit": "Edit",
+      "newSecret": "Kunci baru",
+      "history": "Riwayat",
+      "confirmDelete": "Hapus?",
+      "delete": "Hapus"
     }
   },
   "projectStatus": {
@@ -2566,7 +2654,11 @@
     "readOnlyUntil": "Data Anda hanya bisa dibaca hingga {{date}}, lalu akun akan dihapus. Berlanggananlah untuk terus menggunakan tududi Cloud.",
     "trialIncludes": "Masa uji coba Anda berakhir pada {{date}}. Asisten AI, catatan publik, dan menambahkan anggota terbuka saat Anda berlangganan.",
     "backToApp": "Kembali ke tududi",
-    "trialBanner": "Uji coba gratis, sisa hari: {{count}}"
+    "trialBanner": "Uji coba gratis, sisa hari: {{count}}",
+    "trialLock": {
+      "webhooks": "Webhook tidak termasuk dalam uji coba gratis. Berlangganan untuk mengirim peristiwa ke layanan Anda sendiri."
+    },
+    "lockedWebhooks": "Webhook termasuk dalam paket berbayar."
   },
   "demo": {
     "opening": "Membuka demo...",
@@ -3000,5 +3092,13 @@
     "locked": "Diatur oleh fokus Anda. Hapus dari chip di bilah atas.",
     "emptyHint": "Hanya menampilkan {{label}}",
     "saveError": "Fokus tidak dapat disimpan."
+  },
+  "datePicker": {
+    "shortcuts": {
+      "today": "Hari ini",
+      "tomorrow": "Besok",
+      "weekend": "Akhir pekan",
+      "nextWeek": "Minggu depan"
+    }
   }
 }

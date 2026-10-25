@@ -1092,7 +1092,16 @@
     "editBanner": "Proje afişini düzenle",
     "currentBanner": "Mevcut afiş",
     "choosePreset": "Bir ön ayar afişi seçin:",
-    "orUploadOwn": "Ya da kendi afişinizi yükleyin:"
+    "orUploadOwn": "Ya da kendi afişinizi yükleyin:",
+    "markComplete": "Tamamla",
+    "completedOn": "{{date}} tarihinde tamamlandı",
+    "completedToast": "Proje tamamlandı",
+    "completedWithTasks_one": "Proje tamamlandı, {{count}} görev tamamlandı olarak işaretlendi",
+    "completedWithTasks_other": "Proje tamamlandı, {{count}} görev tamamlandı olarak işaretlendi",
+    "completeTitle": "\"{{name}}\" tamamlansın mı?",
+    "completeOpenTasks": "Bu projede hâlâ açık görevler var. Onlar da tamamlandı olarak işaretlensin mi, yoksa açık mı kalsın? Tekrarlanan görevler her durumda planlarını korur.",
+    "leaveTasksOpen": "Açık bırak",
+    "completeTasksToo": "Onları da tamamla"
   },
   "errors": {
     "failedToDeleteProject": "Failed to delete project.",
@@ -1131,7 +1140,8 @@
     "failedToSaveGoal": "Hedef kaydedilemedi.",
     "failedToDeleteGoal": "Hedef silinemedi.",
     "failedToDeleteNote": "Not silinemedi.",
-    "failedToDeleteTag": "Etiket silinemedi."
+    "failedToDeleteTag": "Etiket silinemedi.",
+    "projectStatusUpdateFailed": "Proje durumu güncellenemedi"
   },
   "inbox": {
     "title": "Gelen Kutusu",
@@ -1458,7 +1468,20 @@
     "blankSlateTemplate": "Bir şablondan başlayın",
     "blankSlateAreas": "Alanları ayarlayın",
     "blankSlateShowAll": "Tüm projeleri göster",
-    "viewAs": "Görünüm"
+    "viewAs": "Görünüm",
+    "history": "Geçmiş",
+    "historyHint": "Tamamlanan projeler, en yeniler önce",
+    "historyTitle": "Tamamlanan projeler",
+    "historyCount": "{{count}} tamamlandı",
+    "historyShowCancelled": "İptal edilenleri göster",
+    "historyEmptyTitle": "Henüz tamamlanan bir şey yok",
+    "historyEmptyHint": "Tamamlandı olarak işaretlediğin projeler burada en yeniler önce görünür, böylece yapılan iş listeni kalabalıklaştırmadan kayıtlı kalır.",
+    "historyTasks": "{{total}} görevden {{done}} tanesi",
+    "historyDuration_one": "{{count}} gün sürdü",
+    "historyDuration_other": "{{count}} gün sürdü",
+    "reopen": "Yeniden aç",
+    "reopened": "\"{{name}}\" yeniden devam ediyor",
+    "loadError": "Projeler yüklenemedi"
   },
   "projectItem": {
     "edit": "Düzenle",
@@ -1506,7 +1529,8 @@
     "noAreasYet": "Henüz alan yok.",
     "blankSlateHint": "Alanlar, zaman içinde ilgilendiğiniz yaşam bölümleridir; örneğin İş, Sağlık veya Ev. Her bölümü tek yerde görmek için projelerinizi ve hedeflerinizi bu alanlara koyun.",
     "blankSlateNew": "İlk alanınızı oluşturun",
-    "blankSlateProjects": "Projelere git"
+    "blankSlateProjects": "Projelere git",
+    "finishedProjects": "Tamamlanan ({{count}})"
   },
   "notes": {
     "toggleDropdownMenu": "Açılır menüyü aç/kapa",
@@ -2164,11 +2188,17 @@
     "deferUntil": ", ertele",
     "extrasFilter": {
       "isRecurring": "Tekrarlayan",
+      "isNotRecurring": "Tekrarlamayan",
       "isOverdue": "Vadesi Geçmiş",
       "hasContent": "İçerik Var",
+      "hasNoContent": "İçerik Yok",
       "isDeferred": "Ertelenmiş",
+      "isNotDeferred": "Ertelenmemiş",
       "hasTags": "Etiket Var",
-      "isAssignedToProject": "Projeye Atanmış"
+      "hasNoTags": "Etiket Yok",
+      "hasNoDueDate": "Bitiş Tarihi Yok",
+      "isAssignedToProject": "Projeye Atanmış",
+      "hasNoProject": "Proje Yok"
     }
   },
   "subtasks": {
@@ -2268,6 +2298,66 @@
     "info": {
       "title": "Not:",
       "message": "E-posta ve Push bildirimleri yakında geliyor. Uygulama içi ve Telegram bildirimleri şu anda mevcuttur."
+    },
+    "webhooks": {
+      "events": {
+        "taskDueSoon": "Görevin süresi yaklaşıyor",
+        "taskOverdue": "Görevin süresi geçti",
+        "taskReminder": "Görev hatırlatıcısı",
+        "taskDeferredReady": "Ertelenen görev etkin",
+        "taskAssigned": "Size atanan görev",
+        "projectDueSoon": "Projenin süresi yaklaşıyor",
+        "projectOverdue": "Projenin süresi geçti",
+        "habitReminder": "Alışkanlık hatırlatıcısı",
+        "commentAdded": "Yeni yorum",
+        "commentMention": "Bahsetme",
+        "shareInvitation": "Paylaşım daveti",
+        "taskCreated": "Görev oluşturuldu",
+        "taskUpdated": "Görev değişti",
+        "taskCompleted": "Görev tamamlandı",
+        "taskDeleted": "Görev silindi",
+        "dailySummary": "Günlük özet",
+        "test": "Test"
+      },
+      "groups": {
+        "alerts": "Hatırlatıcılar ve uyarılar",
+        "changes": "Görev değişiklikleri",
+        "summary": "Günlük özet"
+      },
+      "namePlaceholder": "Ad, ör. n8n",
+      "nameLabel": "Ad",
+      "urlKeepPlaceholder": "Yeni adres (korumak için boş bırakın)",
+      "urlLabel": "Webhook adresi",
+      "summaryAt": "saat",
+      "saving": "Kaydediliyor...",
+      "save": "Kaydet",
+      "deliveriesFailed": "Gönderimler yüklenemedi.",
+      "noDeliveries": "Henüz bir şey gönderilmedi.",
+      "status": {
+        "delivered": "Teslim edildi",
+        "failed": "Başarısız ({{error}})",
+        "pending": "Yeniden deneme bekleniyor"
+      },
+      "testSent": "{{name}} test mesajını kabul etti.",
+      "disabledFailures": "Çok fazla başarısız gönderimden sonra kapatıldı. Adresi kontrol edin, ardından yeniden açın.",
+      "off": "Kapalı",
+      "lastFailed": "Son gönderim başarısız oldu.",
+      "lastDelivered": "Son teslim {{when}}.",
+      "notUsed": "Henüz bir şey gönderilmedi.",
+      "title": "Webhook'lar",
+      "description": "Olayları JSON olarak n8n, Home Assistant, Slack, Discord veya kendi sunucunuza gönderin. Her webhook kendi olaylarını seçer.",
+      "add": "Webhook ekle",
+      "secretOnce": "İmzalama anahtarı. Şimdi kopyalayın: tekrar gösterilmeyecek.",
+      "copy": "Kopyala",
+      "done": "Tamam",
+      "secretHelp": "Her istek X-Tududi-Signature içerir: bu anahtarla \"timestamp.body\" üzerinden sha256 HMAC, zaman damgası ise X-Tududi-Timestamp içindedir.",
+      "turnOff": "Kapat",
+      "turnOn": "Aç",
+      "edit": "Düzenle",
+      "newSecret": "Yeni anahtar",
+      "history": "Geçmiş",
+      "confirmDelete": "Silinsin mi?",
+      "delete": "Sil"
     }
   },
   "projectStatus": {
@@ -2566,7 +2656,11 @@
     "readOnlyUntil": "Verileriniz {{date}} tarihine kadar salt okunur, ardından hesap silinir. tududi Cloud'u kullanmaya devam etmek için abone olun.",
     "trialIncludes": "Deneme süreniz {{date}} tarihinde bitiyor. Yapay zeka asistanı, herkese açık notlar ve üye ekleme abone olduğunuzda açılır.",
     "backToApp": "tududi'ye dön",
-    "trialBanner": "Ücretsiz deneme, kalan gün: {{count}}"
+    "trialBanner": "Ücretsiz deneme, kalan gün: {{count}}",
+    "trialLock": {
+      "webhooks": "Webhook'lar ücretsiz denemeye dahil değildir. Olayları kendi hizmetlerinize göndermek için abone olun."
+    },
+    "lockedWebhooks": "Webhook'lar ücretli plana dahildir."
   },
   "demo": {
     "opening": "Demoyu açıyor...",
@@ -3001,5 +3095,13 @@
     "locked": "Odağınız tarafından ayarlandı. Üst çubuktaki çipten temizleyin.",
     "emptyHint": "Yalnızca {{label}} gösteriliyor",
     "saveError": "Odak kaydedilemedi."
+  },
+  "datePicker": {
+    "shortcuts": {
+      "today": "Bugün",
+      "tomorrow": "Yarın",
+      "weekend": "Hafta sonu",
+      "nextWeek": "Gelecek hafta"
+    }
   }
 }
