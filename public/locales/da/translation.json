@@ -1092,7 +1092,16 @@
     "editBanner": "Rediger projektbanner",
     "currentBanner": "Nuværende banner",
     "choosePreset": "Vælg et forudindstillet banner:",
-    "orUploadOwn": "Eller upload dit eget:"
+    "orUploadOwn": "Eller upload dit eget:",
+    "markComplete": "Fuldfør",
+    "completedOn": "Fuldført {{date}}",
+    "completedToast": "Projekt fuldført",
+    "completedWithTasks_one": "Projekt fuldført, {{count}} opgave markeret som udført",
+    "completedWithTasks_other": "Projekt fuldført, {{count}} opgaver markeret som udført",
+    "completeTitle": "Fuldfør \"{{name}}\"?",
+    "completeOpenTasks": "Dette projekt har stadig åbne opgaver. Skal de også markeres som udført, eller skal de forblive åbne? Gentagne opgaver beholder deres tidsplan uanset hvad.",
+    "leaveTasksOpen": "Lad dem være åbne",
+    "completeTasksToo": "Markér dem også som udført"
   },
   "errors": {
     "failedToDeleteProject": "Failed to delete project.",
@@ -1131,7 +1140,8 @@
     "failedToSaveGoal": "Kunne ikke gemme målet.",
     "failedToDeleteGoal": "Kunne ikke slette målet.",
     "failedToDeleteNote": "Kunne ikke slette noten.",
-    "failedToDeleteTag": "Kunne ikke slette tagget."
+    "failedToDeleteTag": "Kunne ikke slette tagget.",
+    "projectStatusUpdateFailed": "Kunne ikke opdatere projektstatus"
   },
   "inbox": {
     "title": "Indbakke",
@@ -1458,7 +1468,20 @@
     "blankSlateTemplate": "Start fra en skabelon",
     "blankSlateAreas": "Opsæt områder",
     "blankSlateShowAll": "Vis alle projekter",
-    "viewAs": "Visning"
+    "viewAs": "Visning",
+    "history": "Historik",
+    "historyHint": "Fuldførte projekter, nyeste først",
+    "historyTitle": "Fuldførte projekter",
+    "historyCount": "{{count}} afsluttet",
+    "historyShowCancelled": "Vis annullerede",
+    "historyEmptyTitle": "Intet afsluttet endnu",
+    "historyEmptyHint": "Projekter, du markerer som fuldført, vises her, nyeste først, så arbejdet er gemt uden at fylde din liste.",
+    "historyTasks": "{{done}} af {{total}} opgaver",
+    "historyDuration_one": "tog {{count}} dag",
+    "historyDuration_other": "tog {{count}} dage",
+    "reopen": "Genåbn",
+    "reopened": "\"{{name}}\" er i gang igen",
+    "loadError": "Kunne ikke indlæse projekter"
   },
   "projectItem": {
     "edit": "Rediger",
@@ -1506,7 +1529,8 @@
     "noAreasYet": "Ingen områder endnu.",
     "blankSlateHint": "Områder er de dele af dit liv, du passer på over tid, fx Arbejde, Helbred eller Hjem. Placer dine projekter og mål i dem for at se hver del ét sted.",
     "blankSlateNew": "Opret dit første område",
-    "blankSlateProjects": "Gå til projekter"
+    "blankSlateProjects": "Gå til projekter",
+    "finishedProjects": "Afsluttet ({{count}})"
   },
   "notes": {
     "toggleDropdownMenu": "Skift dropdown-menu",
@@ -2164,11 +2188,17 @@
     "deferUntil": ", udskyd indtil",
     "extrasFilter": {
       "isRecurring": "er tilbagevendende",
+      "isNotRecurring": "er ikke tilbagevendende",
       "isOverdue": "er forfalden",
       "hasContent": "har indhold",
+      "hasNoContent": "har intet indhold",
       "isDeferred": "er udsat",
+      "isNotDeferred": "er ikke udsat",
       "hasTags": "har tags",
-      "isAssignedToProject": "er tildelt projekt"
+      "hasNoTags": "har ingen tags",
+      "hasNoDueDate": "har ingen forfaldsdato",
+      "isAssignedToProject": "er tildelt projekt",
+      "hasNoProject": "har intet projekt"
     }
   },
   "subtasks": {
@@ -2268,6 +2298,66 @@
     "info": {
       "title": "Bemærk:",
       "message": "E-mail og push-notifikationer kommer snart. Notifikationer i appen og Telegram er i øjeblikket tilgængelige."
+    },
+    "webhooks": {
+      "events": {
+        "taskDueSoon": "Opgave forfalder snart",
+        "taskOverdue": "Opgave overskredet",
+        "taskReminder": "Opgavepåmindelse",
+        "taskDeferredReady": "Udskudt opgave er aktiv",
+        "taskAssigned": "Opgave tildelt dig",
+        "projectDueSoon": "Projekt forfalder snart",
+        "projectOverdue": "Projekt overskredet",
+        "habitReminder": "Vanepåmindelse",
+        "commentAdded": "Ny kommentar",
+        "commentMention": "Omtale",
+        "shareInvitation": "Delingsinvitation",
+        "taskCreated": "Opgave oprettet",
+        "taskUpdated": "Opgave ændret",
+        "taskCompleted": "Opgave fuldført",
+        "taskDeleted": "Opgave slettet",
+        "dailySummary": "Daglig oversigt",
+        "test": "Test"
+      },
+      "groups": {
+        "alerts": "Påmindelser og advarsler",
+        "changes": "Opgaveændringer",
+        "summary": "Daglig oversigt"
+      },
+      "namePlaceholder": "Navn, f.eks. n8n",
+      "nameLabel": "Navn",
+      "urlKeepPlaceholder": "Ny adresse (lad stå tom for at beholde den)",
+      "urlLabel": "Webhook-adresse",
+      "summaryAt": "kl.",
+      "saving": "Gemmer...",
+      "save": "Gem",
+      "deliveriesFailed": "Kunne ikke indlæse leveringer.",
+      "noDeliveries": "Intet sendt endnu.",
+      "status": {
+        "delivered": "Leveret",
+        "failed": "Mislykkedes ({{error}})",
+        "pending": "Venter på nyt forsøg"
+      },
+      "testSent": "{{name}} accepterede testbeskeden.",
+      "disabledFailures": "Slået fra efter for mange mislykkede leveringer. Tjek adressen, og slå den så til igen.",
+      "off": "Fra",
+      "lastFailed": "Den seneste levering mislykkedes.",
+      "lastDelivered": "Senest leveret {{when}}.",
+      "notUsed": "Intet sendt endnu.",
+      "title": "Webhooks",
+      "description": "Send hændelser som JSON til n8n, Home Assistant, Slack, Discord eller din egen server. Hver webhook vælger sine egne hændelser.",
+      "add": "Tilføj webhook",
+      "secretOnce": "Signeringsnøgle. Kopiér den nu: den vises ikke igen.",
+      "copy": "Kopiér",
+      "done": "Færdig",
+      "secretHelp": "Hver anmodning indeholder X-Tududi-Signature: sha256 HMAC af \"timestamp.body\" med denne nøgle, og tidsstemplet i X-Tududi-Timestamp.",
+      "turnOff": "Slå fra",
+      "turnOn": "Slå til",
+      "edit": "Rediger",
+      "newSecret": "Ny nøgle",
+      "history": "Historik",
+      "confirmDelete": "Slet den?",
+      "delete": "Slet"
     }
   },
   "projectStatus": {
@@ -2566,7 +2656,11 @@
     "readOnlyUntil": "Dine data er skrivebeskyttede indtil {{date}}, derefter slettes kontoen. Abonnér for at fortsætte med tududi Cloud.",
     "trialIncludes": "Din prøveperiode slutter den {{date}}. AI-assistenten, offentlige noter og tilføjelse af medlemmer låses op, når du abonnerer.",
     "backToApp": "Tilbage til tududi",
-    "trialBanner": "Gratis prøveperiode, dage tilbage: {{count}}"
+    "trialBanner": "Gratis prøveperiode, dage tilbage: {{count}}",
+    "trialLock": {
+      "webhooks": "Webhooks er ikke en del af den gratis prøveperiode. Abonner for at sende hændelser til dine egne tjenester."
+    },
+    "lockedWebhooks": "Webhooks er en del af det betalte abonnement."
   },
   "demo": {
     "opening": "Åbner demoen...",
@@ -3001,5 +3095,13 @@
     "locked": "Sat af dit fokus. Ryd det fra chippen i topbjælken.",
     "emptyHint": "Viser kun {{label}}",
     "saveError": "Fokus kunne ikke gemmes."
+  },
+  "datePicker": {
+    "shortcuts": {
+      "today": "I dag",
+      "tomorrow": "I morgen",
+      "weekend": "Weekend",
+      "nextWeek": "Næste uge"
+    }
   }
 }

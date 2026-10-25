@@ -1092,7 +1092,15 @@
     "editBanner": "编辑项目横幅",
     "currentBanner": "当前横幅",
     "choosePreset": "选择一个预设横幅：",
-    "orUploadOwn": "或上传您自己的："
+    "orUploadOwn": "或上传您自己的：",
+    "markComplete": "完成",
+    "completedOn": "完成于 {{date}}",
+    "completedToast": "项目已完成",
+    "completedWithTasks_other": "项目已完成，{{count}} 个任务已标记为完成",
+    "completeTitle": "完成“{{name}}”？",
+    "completeOpenTasks": "此项目仍有未完成的任务。要一并标记为完成，还是保留？重复任务无论如何都会保留其计划。",
+    "leaveTasksOpen": "保留未完成",
+    "completeTasksToo": "一并标记完成"
   },
   "errors": {
     "failedToDeleteProject": "Failed to delete project.",
@@ -1131,7 +1139,8 @@
     "failedToSaveGoal": "无法保存目标。",
     "failedToDeleteGoal": "无法删除目标。",
     "failedToDeleteNote": "无法删除笔记。",
-    "failedToDeleteTag": "无法删除标签。"
+    "failedToDeleteTag": "无法删除标签。",
+    "projectStatusUpdateFailed": "更新项目状态失败"
   },
   "inbox": {
     "title": "收件箱",
@@ -1458,7 +1467,19 @@
     "blankSlateTemplate": "从模板开始",
     "blankSlateAreas": "设置区域",
     "blankSlateShowAll": "显示所有项目",
-    "viewAs": "视图"
+    "viewAs": "视图",
+    "history": "历史",
+    "historyHint": "已完成的项目，最新的在前",
+    "historyTitle": "已完成的项目",
+    "historyCount": "已完成 {{count}} 个",
+    "historyShowCancelled": "显示已取消",
+    "historyEmptyTitle": "还没有完成的项目",
+    "historyEmptyHint": "你标记为完成的项目会按最新优先显示在这里，工作记录得以保留，又不会让列表变得拥挤。",
+    "historyTasks": "{{done}}/{{total}} 个任务",
+    "historyDuration_other": "用时 {{count}} 天",
+    "reopen": "重新打开",
+    "reopened": "“{{name}}”已恢复为进行中",
+    "loadError": "加载项目失败"
   },
   "projectItem": {
     "edit": "编辑",
@@ -1506,7 +1527,8 @@
     "noAreasYet": "还没有区域。",
     "blankSlateHint": "区域是你长期经营的生活领域，比如工作、健康或家庭。把项目和目标放进区域，就能在一个地方看到每个领域。",
     "blankSlateNew": "创建第一个区域",
-    "blankSlateProjects": "前往项目"
+    "blankSlateProjects": "前往项目",
+    "finishedProjects": "已完成 ({{count}})"
   },
   "notes": {
     "toggleDropdownMenu": "切换下拉菜单",
@@ -2164,11 +2186,17 @@
     "deferUntil": "，延迟到",
     "extrasFilter": {
       "isRecurring": "是重复的",
+      "isNotRecurring": "不重复",
       "isOverdue": "已逾期",
       "hasContent": "有内容",
+      "hasNoContent": "无内容",
       "isDeferred": "已延迟",
+      "isNotDeferred": "未推迟",
       "hasTags": "有标签",
-      "isAssignedToProject": "已分配给项目"
+      "hasNoTags": "无标签",
+      "hasNoDueDate": "无截止日期",
+      "isAssignedToProject": "已分配给项目",
+      "hasNoProject": "无项目"
     }
   },
   "subtasks": {
@@ -2268,6 +2296,66 @@
     "info": {
       "title": "注意：",
       "message": "电子邮件和推送通知即将推出。应用内和 Telegram 通知目前可用。"
+    },
+    "webhooks": {
+      "events": {
+        "taskDueSoon": "任务即将到期",
+        "taskOverdue": "任务已逾期",
+        "taskReminder": "任务提醒",
+        "taskDeferredReady": "推迟的任务已生效",
+        "taskAssigned": "分配给你的任务",
+        "projectDueSoon": "项目即将到期",
+        "projectOverdue": "项目已逾期",
+        "habitReminder": "习惯提醒",
+        "commentAdded": "新评论",
+        "commentMention": "提及",
+        "shareInvitation": "共享邀请",
+        "taskCreated": "任务已创建",
+        "taskUpdated": "任务已更改",
+        "taskCompleted": "任务已完成",
+        "taskDeleted": "任务已删除",
+        "dailySummary": "每日摘要",
+        "test": "测试"
+      },
+      "groups": {
+        "alerts": "提醒和警报",
+        "changes": "任务变更",
+        "summary": "每日摘要"
+      },
+      "namePlaceholder": "名称，例如 n8n",
+      "nameLabel": "名称",
+      "urlKeepPlaceholder": "新地址（留空则保持不变）",
+      "urlLabel": "Webhook 地址",
+      "summaryAt": "时间",
+      "saving": "正在保存...",
+      "save": "保存",
+      "deliveriesFailed": "无法加载发送记录。",
+      "noDeliveries": "尚未发送任何内容。",
+      "status": {
+        "delivered": "已送达",
+        "failed": "失败（{{error}}）",
+        "pending": "等待重试"
+      },
+      "testSent": "{{name}} 已接收测试消息。",
+      "disabledFailures": "因发送失败次数过多已关闭。请检查地址，然后重新开启。",
+      "off": "已关闭",
+      "lastFailed": "上次发送失败。",
+      "lastDelivered": "上次送达 {{when}}。",
+      "notUsed": "尚未发送任何内容。",
+      "title": "Webhook",
+      "description": "将事件以 JSON 格式发送到 n8n、Home Assistant、Slack、Discord 或你自己的服务器。每个 Webhook 可选择自己的事件。",
+      "add": "添加 Webhook",
+      "secretOnce": "签名密钥。请立即复制：之后将不再显示。",
+      "copy": "复制",
+      "done": "完成",
+      "secretHelp": "每个请求都带有 X-Tududi-Signature（用此密钥对 \"timestamp.body\" 计算的 sha256 HMAC），时间戳位于 X-Tududi-Timestamp。",
+      "turnOff": "关闭",
+      "turnOn": "开启",
+      "edit": "编辑",
+      "newSecret": "新密钥",
+      "history": "历史记录",
+      "confirmDelete": "确定删除？",
+      "delete": "删除"
     }
   },
   "projectStatus": {
@@ -2566,7 +2654,11 @@
     "readOnlyUntil": "您的数据在 {{date}} 之前为只读，之后账户将被删除。订阅即可继续使用 tududi Cloud。",
     "trialIncludes": "您的试用将于 {{date}} 结束。订阅后即可使用 AI 助手、公开笔记和添加成员。",
     "backToApp": "返回 tududi",
-    "trialBanner": "免费试用，剩余天数：{{count}}"
+    "trialBanner": "免费试用，剩余天数：{{count}}",
+    "trialLock": {
+      "webhooks": "免费试用不包含 Webhook。订阅后即可将事件发送到你自己的服务。"
+    },
+    "lockedWebhooks": "Webhook 属于付费套餐。"
   },
   "demo": {
     "opening": "正在打开演示...",
@@ -3000,5 +3092,13 @@
     "locked": "由你的专注设定。可在顶部栏的标签中清除。",
     "emptyHint": "仅显示 {{label}}",
     "saveError": "无法保存专注设置。"
+  },
+  "datePicker": {
+    "shortcuts": {
+      "today": "今天",
+      "tomorrow": "明天",
+      "weekend": "周末",
+      "nextWeek": "下周"
+    }
   }
 }
