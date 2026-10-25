@@ -71,7 +71,9 @@ import format, so it applies as-is.
   [`ci.yml`](../.github/workflows/ci.yml); `agent-tooling` is the job in
   [`agent-tooling.yml`](../.github/workflows/agent-tooling.yml), which runs the
   tests of the Bash guard hook (`.claude/hooks/tests/`) and of the helper
-  scripts (`scripts/tests/`). Both workflows run on every pull request to
+  scripts (`scripts/tests/`), then runs `node scripts/check-fork-delta.mjs` on
+  a full-history checkout so a change to an upstream-owned file without a row
+  in [fork-delta.md](fork-delta.md) fails the pull request. Both workflows run on every pull request to
   `main` with no path filter, so no pull request waits for a check that never
   starts. `integration_id` 15368 is GitHub Actions. Renaming any of these
   jobs, or giving either workflow a path filter, blocks every merge until this

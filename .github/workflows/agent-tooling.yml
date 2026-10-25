@@ -1,6 +1,8 @@
 # Runs the Node built-in tests for the repo's agent tooling: the Claude Code
 # hooks under .claude/hooks/ (notably guard-bash.mjs, which keeps agents from
-# touching chrisvel/tududi) and the helper scripts under scripts/.
+# touching chrisvel/tududi) and the helper scripts under scripts/. It also runs
+# scripts/check-fork-delta.mjs, which keeps docs/fork-delta.md in step with the
+# fork's changes to upstream-owned files.
 # These tests need no npm install; only Node is used.
 #
 # Other slices add test files over time, so the file list is built in shell
@@ -32,6 +34,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          # check-fork-delta.mjs compares against the upstream commit of the
+          # last sync merge, which a shallow clone does not contain.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -51,3 +57,8 @@ jobs:
           printf 'Running %s test file(s):\n' "${#files[@]}"
           printf '  %s\n' "${files[@]}"
           node --test "${files[@]}"
+
+      - name: Check the fork-delta ledger
+        # Fails when a change to a file upstream also has is missing from
+        # docs/fork-delta.md, or a listed file now matches upstream again.
+        run: node scripts/check-fork-delta.mjs
