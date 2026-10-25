@@ -1092,7 +1092,18 @@
     "editBanner": "Редактировать баннер проекта",
     "currentBanner": "Текущий баннер",
     "choosePreset": "Выберите предустановленный баннер:",
-    "orUploadOwn": "Или загрузите свой:"
+    "orUploadOwn": "Или загрузите свой:",
+    "markComplete": "Завершить",
+    "completedOn": "Завершён {{date}}",
+    "completedToast": "Проект завершён",
+    "completedWithTasks_one": "Проект завершён, {{count}} задача отмечена выполненной",
+    "completedWithTasks_few": "Проект завершён, {{count}} задачи отмечены выполненными",
+    "completedWithTasks_many": "Проект завершён, {{count}} задач отмечено выполненными",
+    "completedWithTasks_other": "Проект завершён, {{count}} задачи отмечены выполненными",
+    "completeTitle": "Завершить «{{name}}»?",
+    "completeOpenTasks": "В этом проекте ещё есть открытые задачи. Отметить их тоже выполненными или оставить открытыми? Повторяющиеся задачи в любом случае сохранят своё расписание.",
+    "leaveTasksOpen": "Оставить открытыми",
+    "completeTasksToo": "Отметить выполненными"
   },
   "errors": {
     "failedToDeleteProject": "Failed to delete project.",
@@ -1131,7 +1142,8 @@
     "failedToSaveGoal": "Не удалось сохранить цель.",
     "failedToDeleteGoal": "Не удалось удалить цель.",
     "failedToDeleteNote": "Не удалось удалить заметку.",
-    "failedToDeleteTag": "Не удалось удалить тег."
+    "failedToDeleteTag": "Не удалось удалить тег.",
+    "projectStatusUpdateFailed": "Не удалось обновить статус проекта"
   },
   "inbox": {
     "title": "Входящие",
@@ -1458,7 +1470,22 @@
     "blankSlateTemplate": "Начать с шаблона",
     "blankSlateAreas": "Настроить области",
     "blankSlateShowAll": "Показать все проекты",
-    "viewAs": "Вид"
+    "viewAs": "Вид",
+    "history": "История",
+    "historyHint": "Завершённые проекты, сначала новые",
+    "historyTitle": "Завершённые проекты",
+    "historyCount": "Завершено: {{count}}",
+    "historyShowCancelled": "Показать отменённые",
+    "historyEmptyTitle": "Пока ничего не завершено",
+    "historyEmptyHint": "Проекты, которые вы отметите завершёнными, появятся здесь, сначала новые. Работа остаётся в истории и не загромождает список.",
+    "historyTasks": "{{done}} из {{total}} задач",
+    "historyDuration_one": "занял {{count}} день",
+    "historyDuration_few": "занял {{count}} дня",
+    "historyDuration_many": "занял {{count}} дней",
+    "historyDuration_other": "занял {{count}} дня",
+    "reopen": "Открыть снова",
+    "reopened": "«{{name}}» снова в работе",
+    "loadError": "Не удалось загрузить проекты"
   },
   "projectItem": {
     "edit": "Редактировать",
@@ -1506,7 +1533,8 @@
     "noAreasYet": "Пока нет областей.",
     "blankSlateHint": "Области — это части жизни, о которых вы заботитесь постоянно, например «Работа», «Здоровье» или «Дом». Поместите в них проекты и цели, чтобы видеть каждую часть в одном месте.",
     "blankSlateNew": "Создать первую область",
-    "blankSlateProjects": "Перейти к проектам"
+    "blankSlateProjects": "Перейти к проектам",
+    "finishedProjects": "Завершённые ({{count}})"
   },
   "notes": {
     "toggleDropdownMenu": "Переключить выпадающее меню",
@@ -2166,11 +2194,17 @@
     "deferUntil": ", отложить до",
     "extrasFilter": {
       "isRecurring": "является повторяющимся",
+      "isNotRecurring": "не является повторяющимся",
       "isOverdue": "просрочено",
       "hasContent": "имеет содержимое",
+      "hasNoContent": "не имеет содержимого",
       "isDeferred": "отложено",
+      "isNotDeferred": "не отложено",
       "hasTags": "имеет теги",
-      "isAssignedToProject": "назначено на проект"
+      "hasNoTags": "не имеет тегов",
+      "hasNoDueDate": "не имеет срока",
+      "isAssignedToProject": "назначено на проект",
+      "hasNoProject": "не имеет проекта"
     }
   },
   "subtasks": {
@@ -2270,6 +2304,66 @@
     "info": {
       "title": "Примечание:",
       "message": "Уведомления по электронной почте и Push скоро будут доступны. Уведомления в приложении и Telegram в настоящее время доступны."
+    },
+    "webhooks": {
+      "events": {
+        "taskDueSoon": "Скоро срок задачи",
+        "taskOverdue": "Задача просрочена",
+        "taskReminder": "Напоминание о задаче",
+        "taskDeferredReady": "Отложенная задача активна",
+        "taskAssigned": "Вам назначена задача",
+        "projectDueSoon": "Скоро срок проекта",
+        "projectOverdue": "Проект просрочен",
+        "habitReminder": "Напоминание о привычке",
+        "commentAdded": "Новый комментарий",
+        "commentMention": "Упоминание",
+        "shareInvitation": "Приглашение к совместному доступу",
+        "taskCreated": "Задача создана",
+        "taskUpdated": "Задача изменена",
+        "taskCompleted": "Задача выполнена",
+        "taskDeleted": "Задача удалена",
+        "dailySummary": "Ежедневная сводка",
+        "test": "Тест"
+      },
+      "groups": {
+        "alerts": "Напоминания и оповещения",
+        "changes": "Изменения задач",
+        "summary": "Ежедневная сводка"
+      },
+      "namePlaceholder": "Название, например n8n",
+      "nameLabel": "Название",
+      "urlKeepPlaceholder": "Новый адрес (оставьте пустым, чтобы сохранить текущий)",
+      "urlLabel": "Адрес вебхука",
+      "summaryAt": "в",
+      "saving": "Сохранение...",
+      "save": "Сохранить",
+      "deliveriesFailed": "Не удалось загрузить доставки.",
+      "noDeliveries": "Пока ничего не отправлено.",
+      "status": {
+        "delivered": "Доставлено",
+        "failed": "Ошибка ({{error}})",
+        "pending": "Ожидает повтора"
+      },
+      "testSent": "{{name}} принял тестовое сообщение.",
+      "disabledFailures": "Отключён после слишком многих неудачных доставок. Проверьте адрес и включите его снова.",
+      "off": "Выкл.",
+      "lastFailed": "Последняя доставка не удалась.",
+      "lastDelivered": "Последняя доставка {{when}}.",
+      "notUsed": "Пока ничего не отправлено.",
+      "title": "Вебхуки",
+      "description": "Отправляйте события в формате JSON в n8n, Home Assistant, Slack, Discord или на свой сервер. Для каждого вебхука выбираются свои события.",
+      "add": "Добавить вебхук",
+      "secretOnce": "Секрет подписи. Скопируйте его сейчас: больше он показан не будет.",
+      "copy": "Копировать",
+      "done": "Готово",
+      "secretHelp": "Каждый запрос содержит X-Tududi-Signature: sha256 HMAC от \"timestamp.body\" с этим секретом, а также метку времени в X-Tududi-Timestamp.",
+      "turnOff": "Выключить",
+      "turnOn": "Включить",
+      "edit": "Изменить",
+      "newSecret": "Новый секрет",
+      "history": "История",
+      "confirmDelete": "Удалить?",
+      "delete": "Удалить"
     }
   },
   "projectStatus": {
@@ -2570,7 +2664,11 @@
     "readOnlyUntil": "Ваши данные доступны только для чтения до {{date}}, затем аккаунт будет удалён. Оформите подписку, чтобы продолжить пользоваться tududi Cloud.",
     "trialIncludes": "Пробный период закончится {{date}}. AI-ассистент, публичные заметки и добавление участников станут доступны после оформления подписки.",
     "backToApp": "Вернуться в tududi",
-    "trialBanner": "Бесплатный пробный период, осталось дней: {{count}}"
+    "trialBanner": "Бесплатный пробный период, осталось дней: {{count}}",
+    "trialLock": {
+      "webhooks": "Вебхуки не входят в бесплатный пробный период. Оформите подписку, чтобы отправлять события в свои сервисы."
+    },
+    "lockedWebhooks": "Вебхуки входят в платный тариф."
   },
   "demo": {
     "opening": "Открытие демо...",
@@ -3007,5 +3105,13 @@
     "locked": "Задано вашим фокусом. Сбросьте его в чипе на верхней панели.",
     "emptyHint": "Показано только {{label}}",
     "saveError": "Не удалось сохранить фокус."
+  },
+  "datePicker": {
+    "shortcuts": {
+      "today": "Сегодня",
+      "tomorrow": "Завтра",
+      "weekend": "Выходные",
+      "nextWeek": "Следующая неделя"
+    }
   }
 }

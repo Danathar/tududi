@@ -619,7 +619,7 @@
     },
     "planning": {
       "title": "Planification",
-      "description": "Comment « Que pourriez-vous faire aujourd'hui ? » ordonne vos tâches quand vous planifiez votre journée. Faites glisser les lignes dans l’ordre voulu ; les mêmes tâches apparaissent toujours dans le même ordre.",
+      "description": "Comment « Que pourriez-vous faire aujourd'hui ? » ordonne vos tâches quand vous planifiez votre journée. Faites glisser les lignes dans l'ordre voulu ; les mêmes tâches apparaissent toujours dans le même ordre.",
       "orderTitle": "Ordre (glisser pour modifier)",
       "reset": "Rétablir par défaut",
       "overdue": "En retard",
@@ -632,13 +632,13 @@
       "inProject": "dans un projet",
       "noProject": "sans projet",
       "withinTitle": "Dans chaque groupe",
-      "rulePriority": "Priorité la plus haute d’abord.",
-      "ruleRows": "Puis l’ordre des lignes ci-dessus, pour qu’une tâche dans un projet ne passe jamais devant une tâche de priorité plus haute.",
+      "rulePriority": "Priorité la plus haute d'abord.",
+      "ruleRows": "Puis l'ordre des lignes ci-dessus, pour qu'une tâche dans un projet ne passe jamais devant une tâche de priorité plus haute.",
       "dragRow": "Déplacer {{name}}",
       "moveUp": "Monter {{name}}",
       "moveDown": "Descendre {{name}}",
-      "loadError": "Impossible de charger l’ordre de planification",
-      "saveError": "Impossible d’enregistrer l’ordre de planification",
+      "loadError": "Impossible de charger l'ordre de planification",
+      "saveError": "Impossible d'enregistrer l'ordre de planification",
       "open": "Planifier ma journée",
       "hoursLoadError": "Impossible de charger vos heures de journée",
       "hoursSaveError": "Impossible d'enregistrer vos heures de journée",
@@ -1092,7 +1092,17 @@
     "editBanner": "Modifier la bannière du projet",
     "currentBanner": "Bannière actuelle",
     "choosePreset": "Choisissez une bannière prédéfinie :",
-    "orUploadOwn": "Ou téléchargez la vôtre :"
+    "orUploadOwn": "Ou téléchargez la vôtre :",
+    "markComplete": "Terminer",
+    "completedOn": "Terminé le {{date}}",
+    "completedToast": "Projet terminé",
+    "completedWithTasks_one": "Projet terminé, {{count}} tâche marquée comme faite",
+    "completedWithTasks_many": "Projet terminé, {{count}} tâches marquées comme faites",
+    "completedWithTasks_other": "Projet terminé, {{count}} tâches marquées comme faites",
+    "completeTitle": "Terminer « {{name}} » ?",
+    "completeOpenTasks": "Ce projet a encore des tâches ouvertes. Les marquer aussi comme faites, ou les laisser ouvertes ? Les tâches récurrentes gardent leur planification dans tous les cas.",
+    "leaveTasksOpen": "Les laisser ouvertes",
+    "completeTasksToo": "Les marquer comme faites"
   },
   "errors": {
     "failedToDeleteProject": "Failed to delete project.",
@@ -1131,7 +1141,8 @@
     "failedToSaveGoal": "Impossible d'enregistrer l'objectif.",
     "failedToDeleteGoal": "Impossible de supprimer l'objectif.",
     "failedToDeleteNote": "Impossible de supprimer la note.",
-    "failedToDeleteTag": "Impossible de supprimer l'étiquette."
+    "failedToDeleteTag": "Impossible de supprimer l'étiquette.",
+    "projectStatusUpdateFailed": "Échec de la mise à jour du statut du projet"
   },
   "inbox": {
     "title": "Boîte de réception",
@@ -1458,7 +1469,21 @@
     "blankSlateTemplate": "Partir d'un modèle",
     "blankSlateAreas": "Configurer les zones",
     "blankSlateShowAll": "Afficher tous les projets",
-    "viewAs": "Affichage"
+    "viewAs": "Affichage",
+    "history": "Historique",
+    "historyHint": "Projets terminés, les plus récents d'abord",
+    "historyTitle": "Projets terminés",
+    "historyCount": "{{count}} terminé(s)",
+    "historyShowCancelled": "Afficher les annulés",
+    "historyEmptyTitle": "Rien de terminé pour l'instant",
+    "historyEmptyHint": "Les projets que vous marquez comme terminés apparaissent ici, les plus récents d'abord. Le travail reste archivé sans encombrer votre liste.",
+    "historyTasks": "{{done}} tâches sur {{total}}",
+    "historyDuration_one": "a duré {{count}} jour",
+    "historyDuration_many": "a duré {{count}} jours",
+    "historyDuration_other": "a duré {{count}} jours",
+    "reopen": "Rouvrir",
+    "reopened": "« {{name}} » est de nouveau en cours",
+    "loadError": "Échec du chargement des projets"
   },
   "projectItem": {
     "edit": "Modifier",
@@ -1506,7 +1531,8 @@
     "noAreasYet": "Aucune zone pour l'instant.",
     "blankSlateHint": "Les zones sont les parties de votre vie dont vous vous occupez dans la durée, comme Travail, Santé ou Maison. Placez-y vos projets et objectifs pour voir chaque partie au même endroit.",
     "blankSlateNew": "Créer votre première zone",
-    "blankSlateProjects": "Aller aux projets"
+    "blankSlateProjects": "Aller aux projets",
+    "finishedProjects": "Terminés ({{count}})"
   },
   "notes": {
     "toggleDropdownMenu": "Basculer le menu déroulant",
@@ -2165,11 +2191,17 @@
     "deferUntil": ", différer jusqu'à",
     "extrasFilter": {
       "isRecurring": "est Récurrent",
+      "isNotRecurring": "n'est pas Récurrent",
       "isOverdue": "est En Retard",
       "hasContent": "a du Contenu",
+      "hasNoContent": "n'a pas de Contenu",
       "isDeferred": "est Différé",
+      "isNotDeferred": "n'est pas Différé",
       "hasTags": "a des Étiquettes",
-      "isAssignedToProject": "est Assigné au Projet"
+      "hasNoTags": "n'a pas d'Étiquettes",
+      "hasNoDueDate": "n'a pas d'Échéance",
+      "isAssignedToProject": "est Assigné au Projet",
+      "hasNoProject": "n'a pas de Projet"
     }
   },
   "subtasks": {
@@ -2269,6 +2301,66 @@
     "info": {
       "title": "Remarque :",
       "message": "Les notifications par e-mail et push arrivent bientôt. Les notifications dans l'application et sur Telegram sont actuellement disponibles."
+    },
+    "webhooks": {
+      "events": {
+        "taskDueSoon": "Tâche bientôt due",
+        "taskOverdue": "Tâche en retard",
+        "taskReminder": "Rappel de tâche",
+        "taskDeferredReady": "La tâche reportée est active",
+        "taskAssigned": "Tâche qui vous est assignée",
+        "projectDueSoon": "Projet bientôt dû",
+        "projectOverdue": "Projet en retard",
+        "habitReminder": "Rappel d'habitude",
+        "commentAdded": "Nouveau commentaire",
+        "commentMention": "Mention",
+        "shareInvitation": "Invitation de partage",
+        "taskCreated": "Tâche créée",
+        "taskUpdated": "Tâche modifiée",
+        "taskCompleted": "Tâche terminée",
+        "taskDeleted": "Tâche supprimée",
+        "dailySummary": "Résumé quotidien",
+        "test": "Test"
+      },
+      "groups": {
+        "alerts": "Rappels et alertes",
+        "changes": "Modifications de tâches",
+        "summary": "Résumé quotidien"
+      },
+      "namePlaceholder": "Nom, par ex. n8n",
+      "nameLabel": "Nom",
+      "urlKeepPlaceholder": "Nouvelle adresse (laisser vide pour la conserver)",
+      "urlLabel": "Adresse du webhook",
+      "summaryAt": "à",
+      "saving": "Enregistrement...",
+      "save": "Enregistrer",
+      "deliveriesFailed": "Impossible de charger les envois.",
+      "noDeliveries": "Rien n'a encore été envoyé.",
+      "status": {
+        "delivered": "Livré",
+        "failed": "Échec ({{error}})",
+        "pending": "En attente d'un nouvel essai"
+      },
+      "testSent": "{{name}} a accepté le message de test.",
+      "disabledFailures": "Désactivé après trop d'envois échoués. Vérifiez l'adresse, puis réactivez-le.",
+      "off": "Désactivé",
+      "lastFailed": "Le dernier envoi a échoué.",
+      "lastDelivered": "Dernier envoi {{when}}.",
+      "notUsed": "Rien n'a encore été envoyé.",
+      "title": "Webhooks",
+      "description": "Envoyez des événements en JSON vers n8n, Home Assistant, Slack, Discord ou votre propre serveur. Chaque webhook choisit ses propres événements.",
+      "add": "Ajouter un webhook",
+      "secretOnce": "Secret de signature. Copiez-le maintenant : il ne sera plus affiché.",
+      "copy": "Copier",
+      "done": "Terminé",
+      "secretHelp": "Chaque requête contient X-Tududi-Signature : HMAC sha256 de \"timestamp.body\" avec ce secret, et l'horodatage dans X-Tududi-Timestamp.",
+      "turnOff": "Désactiver",
+      "turnOn": "Activer",
+      "edit": "Modifier",
+      "newSecret": "Nouveau secret",
+      "history": "Historique",
+      "confirmDelete": "Le supprimer ?",
+      "delete": "Supprimer"
     }
   },
   "projectStatus": {
@@ -2567,7 +2659,11 @@
     "readOnlyUntil": "Vos données sont en lecture seule jusqu'au {{date}}, puis le compte sera supprimé. Abonnez-vous pour continuer à utiliser tududi Cloud.",
     "trialIncludes": "Votre essai se termine le {{date}}. L'assistant IA, les notes publiques et l'ajout de membres se débloquent avec un abonnement.",
     "backToApp": "Retour à tududi",
-    "trialBanner": "Essai gratuit, jours restants : {{count}}"
+    "trialBanner": "Essai gratuit, jours restants : {{count}}",
+    "trialLock": {
+      "webhooks": "Les webhooks ne font pas partie de l'essai gratuit. Abonnez-vous pour envoyer des événements à vos propres services."
+    },
+    "lockedWebhooks": "Les webhooks font partie de l'offre payante."
   },
   "demo": {
     "opening": "Ouverture de la démo...",
@@ -3002,5 +3098,13 @@
     "locked": "Défini par votre focus. Effacez-le depuis la puce de la barre du haut.",
     "emptyHint": "Affiche uniquement {{label}}",
     "saveError": "Impossible d'enregistrer le focus."
+  },
+  "datePicker": {
+    "shortcuts": {
+      "today": "Aujourd'hui",
+      "tomorrow": "Demain",
+      "weekend": "Week-end",
+      "nextWeek": "Semaine prochaine"
+    }
   }
 }

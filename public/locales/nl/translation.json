@@ -1092,7 +1092,16 @@
     "editBanner": "Bewerk projectbanner",
     "currentBanner": "Huidige banner",
     "choosePreset": "Kies een vooraf ingestelde banner:",
-    "orUploadOwn": "Of upload je eigen:"
+    "orUploadOwn": "Of upload je eigen:",
+    "markComplete": "Voltooien",
+    "completedOn": "Voltooid op {{date}}",
+    "completedToast": "Project voltooid",
+    "completedWithTasks_one": "Project voltooid, {{count}} taak afgerond",
+    "completedWithTasks_other": "Project voltooid, {{count}} taken afgerond",
+    "completeTitle": "\"{{name}}\" voltooien?",
+    "completeOpenTasks": "Dit project heeft nog open taken. Ook afronden of open laten? Terugkerende taken houden hoe dan ook hun schema.",
+    "leaveTasksOpen": "Open laten",
+    "completeTasksToo": "Ook afronden"
   },
   "errors": {
     "failedToDeleteProject": "Failed to delete project.",
@@ -1131,7 +1140,8 @@
     "failedToSaveGoal": "Doel opslaan mislukt.",
     "failedToDeleteGoal": "Doel verwijderen mislukt.",
     "failedToDeleteNote": "Notitie verwijderen mislukt.",
-    "failedToDeleteTag": "Tag verwijderen mislukt."
+    "failedToDeleteTag": "Tag verwijderen mislukt.",
+    "projectStatusUpdateFailed": "Projectstatus bijwerken mislukt"
   },
   "inbox": {
     "title": "Inbox",
@@ -1458,7 +1468,20 @@
     "blankSlateTemplate": "Begin met een sjabloon",
     "blankSlateAreas": "Gebieden instellen",
     "blankSlateShowAll": "Alle projecten tonen",
-    "viewAs": "Weergave"
+    "viewAs": "Weergave",
+    "history": "Geschiedenis",
+    "historyHint": "Voltooide projecten, nieuwste eerst",
+    "historyTitle": "Voltooide projecten",
+    "historyCount": "{{count}} afgerond",
+    "historyShowCancelled": "Geannuleerde tonen",
+    "historyEmptyTitle": "Nog niets afgerond",
+    "historyEmptyHint": "Projecten die je als voltooid markeert verschijnen hier, nieuwste eerst, zodat het werk bewaard blijft zonder je lijst vol te maken.",
+    "historyTasks": "{{done}} van {{total}} taken",
+    "historyDuration_one": "duurde {{count}} dag",
+    "historyDuration_other": "duurde {{count}} dagen",
+    "reopen": "Heropenen",
+    "reopened": "\"{{name}}\" is weer bezig",
+    "loadError": "Projecten laden mislukt"
   },
   "projectItem": {
     "edit": "Bewerken",
@@ -1506,7 +1529,8 @@
     "noAreasYet": "Nog geen gebieden.",
     "blankSlateHint": "Gebieden zijn de delen van je leven waar je doorlopend aandacht aan geeft, zoals Werk, Gezondheid of Thuis. Zet er je projecten en doelen in om elk deel op één plek te zien.",
     "blankSlateNew": "Maak je eerste gebied",
-    "blankSlateProjects": "Naar projecten"
+    "blankSlateProjects": "Naar projecten",
+    "finishedProjects": "Afgerond ({{count}})"
   },
   "notes": {
     "toggleDropdownMenu": "Schakel dropdownmenu in",
@@ -2164,11 +2188,17 @@
     "deferUntil": ", uitstellen tot",
     "extrasFilter": {
       "isRecurring": "is Herhalend",
+      "isNotRecurring": "is niet Herhalend",
       "isOverdue": "is Achterstallig",
       "hasContent": "heeft Inhoud",
+      "hasNoContent": "heeft geen Inhoud",
       "isDeferred": "is Uitgesteld",
+      "isNotDeferred": "is niet Uitgesteld",
       "hasTags": "heeft Tags",
-      "isAssignedToProject": "is Toegewezen aan Project"
+      "hasNoTags": "heeft geen Tags",
+      "hasNoDueDate": "heeft geen Vervaldatum",
+      "isAssignedToProject": "is Toegewezen aan Project",
+      "hasNoProject": "heeft geen Project"
     }
   },
   "subtasks": {
@@ -2268,6 +2298,66 @@
     "info": {
       "title": "Opmerking:",
       "message": "E-mail- en pushmeldingen komen binnenkort. In-app en Telegram-meldingen zijn momenteel beschikbaar."
+    },
+    "webhooks": {
+      "events": {
+        "taskDueSoon": "Taak binnenkort verlopen",
+        "taskOverdue": "Taak achterstallig",
+        "taskReminder": "Taakherinnering",
+        "taskDeferredReady": "Uitgestelde taak is actief",
+        "taskAssigned": "Taak aan jou toegewezen",
+        "projectDueSoon": "Project binnenkort verlopen",
+        "projectOverdue": "Project achterstallig",
+        "habitReminder": "Gewoonteherinnering",
+        "commentAdded": "Nieuwe opmerking",
+        "commentMention": "Vermelding",
+        "shareInvitation": "Uitnodiging om te delen",
+        "taskCreated": "Taak aangemaakt",
+        "taskUpdated": "Taak gewijzigd",
+        "taskCompleted": "Taak voltooid",
+        "taskDeleted": "Taak verwijderd",
+        "dailySummary": "Dagelijkse samenvatting",
+        "test": "Test"
+      },
+      "groups": {
+        "alerts": "Herinneringen en meldingen",
+        "changes": "Taakwijzigingen",
+        "summary": "Dagelijkse samenvatting"
+      },
+      "namePlaceholder": "Naam, bijv. n8n",
+      "nameLabel": "Naam",
+      "urlKeepPlaceholder": "Nieuw adres (leeg laten om het te behouden)",
+      "urlLabel": "Webhook-adres",
+      "summaryAt": "om",
+      "saving": "Opslaan...",
+      "save": "Opslaan",
+      "deliveriesFailed": "Leveringen konden niet worden geladen.",
+      "noDeliveries": "Nog niets verzonden.",
+      "status": {
+        "delivered": "Afgeleverd",
+        "failed": "Mislukt ({{error}})",
+        "pending": "Wacht op nieuwe poging"
+      },
+      "testSent": "{{name}} heeft het testbericht geaccepteerd.",
+      "disabledFailures": "Uitgeschakeld na te veel mislukte leveringen. Controleer het adres en schakel hem daarna weer in.",
+      "off": "Uit",
+      "lastFailed": "De laatste levering is mislukt.",
+      "lastDelivered": "Laatst afgeleverd {{when}}.",
+      "notUsed": "Nog niets verzonden.",
+      "title": "Webhooks",
+      "description": "Verstuur gebeurtenissen als JSON naar n8n, Home Assistant, Slack, Discord of je eigen server. Elke webhook kiest zijn eigen gebeurtenissen.",
+      "add": "Webhook toevoegen",
+      "secretOnce": "Ondertekeningsgeheim. Kopieer het nu: het wordt niet opnieuw getoond.",
+      "copy": "Kopiëren",
+      "done": "Klaar",
+      "secretHelp": "Elk verzoek bevat X-Tududi-Signature: sha256 HMAC van \"timestamp.body\" met dit geheim, en de tijdstempel in X-Tududi-Timestamp.",
+      "turnOff": "Uitschakelen",
+      "turnOn": "Inschakelen",
+      "edit": "Bewerken",
+      "newSecret": "Nieuw geheim",
+      "history": "Geschiedenis",
+      "confirmDelete": "Verwijderen?",
+      "delete": "Verwijderen"
     }
   },
   "projectStatus": {
@@ -2566,7 +2656,11 @@
     "readOnlyUntil": "Je gegevens zijn alleen-lezen tot {{date}}, daarna wordt het account verwijderd. Neem een abonnement om tududi Cloud te blijven gebruiken.",
     "trialIncludes": "Je proefperiode eindigt op {{date}}. De AI-assistent, openbare notities en leden toevoegen worden ontgrendeld met een abonnement.",
     "backToApp": "Terug naar tududi",
-    "trialBanner": "Gratis proefperiode, resterende dagen: {{count}}"
+    "trialBanner": "Gratis proefperiode, resterende dagen: {{count}}",
+    "trialLock": {
+      "webhooks": "Webhooks zitten niet in de gratis proefperiode. Neem een abonnement om gebeurtenissen naar je eigen diensten te sturen."
+    },
+    "lockedWebhooks": "Webhooks horen bij het betaalde abonnement."
   },
   "demo": {
     "opening": "De demo wordt geopend...",
@@ -3001,5 +3095,13 @@
     "locked": "Ingesteld door je focus. Wis hem via de chip in de bovenbalk.",
     "emptyHint": "Toont alleen {{label}}",
     "saveError": "De focus kon niet worden opgeslagen."
+  },
+  "datePicker": {
+    "shortcuts": {
+      "today": "Vandaag",
+      "tomorrow": "Morgen",
+      "weekend": "Weekend",
+      "nextWeek": "Volgende week"
+    }
   }
 }

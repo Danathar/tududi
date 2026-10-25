@@ -15,6 +15,7 @@ import { getCsrfToken } from '../../../utils/csrfService';
 import { getApiPath } from '../../../config/paths';
 import PushDeviceCard from './PushDeviceCard';
 import AppriseCard from './AppriseCard';
+import WebhooksCard from './WebhooksCard';
 import { PushState, countPushDevices } from '../../../utils/pushService';
 
 interface NotificationsTabProps {
@@ -586,6 +587,8 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                     {testResult.text}
                 </p>
             )}
+
+            <WebhooksCard />
 
             {/* Help Text */}
             <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">

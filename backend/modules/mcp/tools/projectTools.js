@@ -180,6 +180,7 @@ function registerProjectTools(server, context, tools) {
                     is_maintenance: !!proj.is_maintenance,
                     tags: proj.Tags ? proj.Tags.map((t) => t.name) : [],
                     due_date_at: proj.due_date_at,
+                    completed_at: proj.completed_at,
                     pin_to_sidebar: proj.pin_to_sidebar,
                     created_at: proj.created_at,
                     updated_at: proj.updated_at,
@@ -253,6 +254,7 @@ function registerProjectTools(server, context, tools) {
                 is_maintenance: !!proj.is_maintenance,
                 tags: proj.Tags ? proj.Tags.map((t) => t.name) : [],
                 due_date_at: proj.due_date_at,
+                completed_at: proj.completed_at,
                 pin_to_sidebar: proj.pin_to_sidebar,
                 created_at: proj.created_at,
                 updated_at: proj.updated_at,
@@ -393,6 +395,7 @@ function registerProjectTools(server, context, tools) {
                     : [],
                 due_date_at: reloadedProject.due_date_at,
                 color: reloadedProject.color,
+                completed_at: reloadedProject.completed_at,
                 created_at: reloadedProject.created_at,
             };
 
@@ -619,6 +622,7 @@ function registerProjectTools(server, context, tools) {
                     : [],
                 due_date_at: reloadedProject.due_date_at,
                 color: reloadedProject.color,
+                completed_at: reloadedProject.completed_at,
                 pin_to_sidebar: reloadedProject.pin_to_sidebar,
                 updated_at: reloadedProject.updated_at,
             };
