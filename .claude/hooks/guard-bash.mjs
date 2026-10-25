@@ -914,8 +914,10 @@ function checkedNameIn(text) {
     const hit = text.split(COMMAND_STRING_SEPARATORS).find((piece) => piece && CHECKED_NAMES.has(basename(piece)));
     if (hit !== undefined) return basename(hit);
     // Only text the cut above can misread is read as words: tokenizing every
-    // tail of a long short-option cluster costs as much again.
-    if (!/\$['"]|[{}*?[]/.test(text) && !EXTGLOB_OPEN.test(text)) return null;
+    // tail of a long short-option cluster costs as much again. A
+    // backslash-newline is one of them: the shell drops it before it reads a
+    // word, so `gi\<newline>t` is git.
+    if (!/\$['"]|[{}*?[]|\\\n/.test(text) && !EXTGLOB_OPEN.test(text)) return null;
     // tokenize() also reads each extended glob group as `*`.
     for (const word of tokenize(text).flat()) {
         const name = commandName(word);

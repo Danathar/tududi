@@ -406,6 +406,15 @@ const blocked = [
     // An extended glob group builds the command name after `shopt -s extglob`.
     ['shopt -s extglob\ng@(i)t push --force origin main', 'force push'],
     ["bash -O extglob -c '/usr/bin/g@(i)t push --force origin main'", 'force push'],
+    // The shell drops a backslash-newline inside a group before it reads the word.
+    ["bash -O extglob -c '/usr/bin/g@\\\n(i)t push --force origin main'", 'force push'],
+    ["bash -O extglob -c 'g@\\\n(i)t push --force origin main'", 'force push'],
+    ["bash -c 'shopt -s extglob\n/usr/bin/g@\\\n(i)t push --force origin main'", 'force push'],
+    ["bash -O extglob -c 'gh@\\\n() pr merge 1'", 'gh pr merge'],
+    // A command string behind a program this hook does not list is read the
+    // same way: `gi\<newline>t` is git.
+    ["script -qc 'gi\\\nt push --force origin main' /dev/null", 'force push'],
+    ["setarch x86_64 script -qc 'g\\\nh pr merge 1' /dev/null", 'gh pr merge'],
     // `\'` does not end a `$'...'` heredoc delimiter: `<<$'\''` is the delimiter
     // `'`, so the rest of the line is a command bash runs.
     ["cat <<$'\\'' ; git push --force origin main", 'force push'],
@@ -556,6 +565,7 @@ const blockedLocal = [
     ['setarch x86_64 npm test -- --require ./x.js', '`setarch` runs a command'],
     ['script -qc "git diff --no-index /dev/null .env" /dev/null', '`script` runs a command'],
     ["script -qc'git diff --no-index /dev/null .env' /dev/null", '`script` runs a command'],
+    ["script -c 'gi\\\nt diff --no-index /dev/null .env' /dev/null", '`script` runs a command'],
     // The shell drops quotes, backslashes and `$'` before it looks a name up,
     // so a name split by them inside a command string still runs (#366).
     ["script -qc 'g\"\"it diff --no-index /dev/null .env' /dev/null", '`script` runs a command'],
