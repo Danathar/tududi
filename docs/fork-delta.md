@@ -96,3 +96,4 @@ out.
 | [#331](https://github.com/Danathar/tududi/pull/331) | `backend/modules/search/validation.js`, `backend/tests/integration/search.test.js` | fix(search): use shared limit/offset parser | fork only |
 | [#380](https://github.com/Danathar/tududi/pull/380) | `backend/modules/mcp/tools/projectTools.js`, `backend/modules/mcp/tools/taskTools.js`, `backend/services/scopeService.js` | fix(mcp): show the caller's own area for a shared project in task and project tools | fork only |
 | [#396](https://github.com/Danathar/tududi/pull/396) | `.github/workflows/ci.yml`, `.gitignore`, `package-lock.json`, `package.json` | ci: report changed lines whose tests would not notice them breaking (advisory mutation job) | fork only |
+| [#406](https://github.com/Danathar/tududi/pull/406) | `backend/tests/integration/upcoming-due-time.test.js` | test(upcoming): pin the clock for the Berlin DST cases, which started failing once the real date passed the 2026-10-25 shift | fork only |
