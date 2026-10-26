@@ -181,6 +181,10 @@ const allowed = [
     'shopt -s extglob\nls @(a|b).js',
     'ls !(node_modules)',
     '! (git status)',
+    // A case statement inside a substitution: its pattern's `)` does not end it.
+    'echo "$(case a in a) echo hi;; esac) done"',
+    'x=$(case a in (a) echo hi;; b|c) echo no;& d) echo x;;& esac); echo "$x"',
+    'echo $(echo case a in a) git push --force origin main',
 ];
 
 const blocked = [
@@ -420,6 +424,19 @@ const blocked = [
     ["cat <<$'\\'' ; git push --force origin main", 'force push'],
     ["cat <<-$'\\'' ; git push --force origin main", 'force push'],
     ["cat <<$'\\x45OF'\nx\nEOF\ngit push --force origin main", 'force push'],
+    // A case pattern's `)` inside a substitution is not the substitution's end.
+    ['echo $(case a in a) git push --force origin main;; esac)', 'force push'],
+    ['echo "$(case a in a) gh pr merge 1;; esac)"', 'no --repo'],
+    ['echo $(case a in (a) gh pr merge 1;; esac)', 'no --repo'],
+    ['echo $(case a in b) true;; a|c) git push --force origin main;; esac)', 'force push'],
+    ['echo $(case a in b) true;& a) gh pr merge 1;;& esac)', 'no --repo'],
+    ['echo $(if true; then case a in a) git push --force origin main;; esac; fi)', 'force push'],
+    ['echo $(case a in a) case b in b) true;; esac; gh pr merge 1;; esac)', 'no --repo'],
+    ['echo $(case $(echo a) in a) git push --force origin main;; esac)', 'force push'],
+    // `esac` after `|` or `(` in a pattern list is a pattern, not the case's end.
+    ['echo $(case esac in a|esac) gh pr merge 1;; esac)', 'no --repo'],
+    ['echo $(case esac in a | esac) git push --force origin main;; esac)', 'force push'],
+    ['echo $(case esac in (a|esac) gh pr merge 1;; esac)', 'no --repo'],
 ];
 
 // Code execution / file writes through auto-approved commands (#65, #69).
