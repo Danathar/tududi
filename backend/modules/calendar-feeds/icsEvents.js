@@ -83,14 +83,13 @@ function isBusy(event) {
     );
 }
 
-// Local wall-clock minutes since midnight (09:00 -> 540). Elapsed minutes
-// since midnight are an hour off on DST-change days, where the day is 23 or
-// 25 hours long. The end of the day (next midnight) is 1440.
-function wallClockMinute(instant, dayStart, dayEnd, userTimezone) {
-    if (!instant.isAfter(dayStart)) return 0;
-    if (!instant.isBefore(dayEnd)) return 24 * 60;
-    const local = instant.clone().tz(userTimezone);
-    return local.hour() * 60 + local.minute();
+// Minutes on the user's clock, not elapsed time: on a DST change day 16:00
+// is 15 or 17 hours after midnight, but must still sit at 16:00.
+function wallMinute(at, dayStart, dayEnd) {
+    if (!at.isAfter(dayStart)) return 0;
+    if (!at.isBefore(dayEnd)) return 24 * 60;
+    const local = at.clone().tz(dayStart.tz());
+    return local.hours() * 60 + local.minutes();
 }
 
 function buildOccurrence(event, start, end, date, userTimezone, tzid) {
@@ -135,13 +134,8 @@ function buildOccurrence(event, start, end, date, userTimezone, tzid) {
         busy: isBusy(event),
         start: startAt.toISOString(),
         end: endAt.toISOString(),
-        start_minute: wallClockMinute(
-            clippedStart,
-            dayStart,
-            dayEnd,
-            userTimezone
-        ),
-        end_minute: wallClockMinute(clippedEnd, dayStart, dayEnd, userTimezone),
+        start_minute: wallMinute(clippedStart, dayStart, dayEnd),
+        end_minute: wallMinute(clippedEnd, dayStart, dayEnd),
     };
 }
 
