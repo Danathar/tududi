@@ -12,6 +12,7 @@ import type { ProfileFormData } from '../types';
 import { deleteAccount } from '../../../utils/profileService';
 import { getCurrentUser } from '../../../utils/userUtils';
 import { getAssetPath } from '../../../config/paths';
+import TwoFactorCard from './TwoFactorCard';
 
 interface SecurityTabProps {
     isActive: boolean;
@@ -203,6 +204,8 @@ const SecurityTab: React.FC<SecurityTabProps> = ({
                     </div>
                 </div>
             </div>
+
+            <TwoFactorCard />
 
             <div className="mt-6 p-4 border border-red-200 dark:border-red-800 rounded-lg">
                 <h4 className="text-lg font-medium text-red-700 dark:text-red-400 mb-2 flex items-center">
