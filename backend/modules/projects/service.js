@@ -37,13 +37,13 @@ const { extractUidFromSlug } = require('../../utils/slug-utils');
 const { logError } = require('../../services/logService');
 const {
     syncProjectSharesFromContainer,
-    revokeProjectContainerShares,
+    dropProjectSharesFromContainer,
 } = require('../../services/containerShareSync');
 const {
     validateAreaAccess,
     validateGoalAccess,
 } = require('../tasks/utils/validation');
-const { Project } = require('../../models');
+const { Project, Area } = require('../../models');
 
 const PROJECT_STATUSES = Project.rawAttributes.status.values;
 
@@ -68,6 +68,79 @@ async function resolveContainerId(validate, value, userId, label, current) {
     }
 }
 const MAX_REORDER_PROJECTS = 5000;
+const VISIBILITIES = ['area', 'restricted'];
+
+function validateVisibility(visibility) {
+    if (!VISIBILITIES.includes(visibility)) {
+        throw new ValidationError(
+            `Invalid visibility. Must be one of: ${VISIBILITIES.join(', ')}.`
+        );
+    }
+    return visibility;
+}
+
+// Whether the user may restrict the project or open it back up to its area:
+// its owner, or the owner of the area it is kept in.
+async function mayChangeVisibility(project, userId) {
+    if (project.user_id === userId) return true;
+    if (!project.area_id) return false;
+    const area = await Area.findByPk(project.area_id, {
+        attributes: ['user_id'],
+    });
+    return !!area && area.user_id === userId;
+}
+
+// Checks a requested visibility change and, when restricting, takes the area
+// and goal shares back before the project is saved, so a project is never
+// marked restricted while those people still have it. Returns the new
+// visibility, or undefined when it does not change.
+async function prepareVisibilityChange(project, userId, visibility) {
+    if (visibility === undefined) return undefined;
+    if (validateVisibility(visibility) === project.visibility) return undefined;
+    if (!(await mayChangeVisibility(project, userId))) {
+        throw new ForbiddenError(
+            'Only the project owner or the area owner can change who sees this project.'
+        );
+    }
+    if (visibility === 'restricted') {
+        await dropProjectSharesFromContainer(project.id);
+    }
+    return visibility;
+}
+
+// After a project is saved: leaving an area or goal takes back what that
+// container's grant gave, and moving into one (or opening a restricted project
+// back up) mirrors the container's collaborators onto it. `before` holds the
+// project's area_id, goal_id and visibility from before the save.
+async function syncContainerShares(projectId, before, changes) {
+    const left = {
+        area_id:
+            changes.area_id !== undefined && changes.area_id != before.area_id
+                ? before.area_id
+                : null,
+        goal_id:
+            changes.goal_id !== undefined && changes.goal_id != before.goal_id
+                ? before.goal_id
+                : null,
+    };
+    if (left.area_id || left.goal_id) {
+        try {
+            await dropProjectSharesFromContainer(projectId, left);
+        } catch (error) {
+            logError(
+                error,
+                `Failed to drop container shares (project ${projectId})`
+            );
+        }
+    }
+    if (
+        changes.area_id !== undefined ||
+        changes.goal_id !== undefined ||
+        (changes.visibility === 'area' && before.visibility !== 'area')
+    ) {
+        await syncProjectSharesFromContainer(projectId);
+    }
+}
 
 /**
  * Update project tags.
@@ -470,6 +543,7 @@ class ProjectsService {
             color,
             status,
             state,
+            visibility,
             tags,
             Tags,
         } = data;
@@ -503,6 +577,10 @@ class ProjectsService {
             image_url: image_url || null,
             color: color || null,
             status: status || state || 'not_started',
+            visibility:
+                visibility === undefined
+                    ? 'area'
+                    : validateVisibility(visibility),
             user_id: userId,
         };
         applyStart(projectData, data, userTimezone);
@@ -557,12 +635,25 @@ class ProjectsService {
             color,
             status,
             state,
+            visibility,
             tags,
             Tags,
         } = data;
 
         const tagsData = tags || Tags;
         const updateData = {};
+        const before = {
+            area_id: project.area_id,
+            goal_id: project.goal_id,
+            visibility: project.visibility,
+        };
+        const nextVisibility = await prepareVisibilityChange(
+            project,
+            userId,
+            visibility
+        );
+        if (nextVisibility !== undefined)
+            updateData.visibility = nextVisibility;
 
         if (name !== undefined) updateData.name = validateName(name);
         if (description !== undefined) updateData.description = description;
@@ -625,39 +716,19 @@ class ProjectsService {
             }
         }
 
-        // The area and goal the project is leaving, if any.
-        const leftContainer = {
-            area_id:
-                updateData.area_id !== undefined &&
-                `${updateData.area_id}` !== `${project.area_id}`
-                    ? project.area_id
-                    : null,
-            goal_id:
-                updateData.goal_id !== undefined &&
-                `${updateData.goal_id}` !== `${project.goal_id}`
-                    ? project.goal_id
-                    : null,
-        };
-
         await projectsRepository.update(project, updateData);
         // Tags belong to the project's owner, so a collaborator's edit
         // resolves names in the owner's tag list instead of swapping the
         // owner's tags for the collaborator's own.
         await updateProjectTags(project, tagsData, project.user_id);
 
-        // Moving the project out of a shared area or goal takes away the
-        // access that container's collaborators had to it; moving it into
-        // one mirrors that container's collaborators onto the project.
-        if (leftContainer.area_id || leftContainer.goal_id) {
-            await revokeProjectContainerShares(project.id, leftContainer);
-        }
-        if (
-            isOwner &&
-            (updateData.area_id !== undefined ||
-                updateData.goal_id !== undefined)
-        ) {
-            await syncProjectSharesFromContainer(project.id);
-        }
+        // Only the owner moves the project itself; other people's area
+        // choice is their own placement and changes nobody's access.
+        await syncContainerShares(project.id, before, {
+            area_id: isOwner ? updateData.area_id : undefined,
+            goal_id: isOwner ? updateData.goal_id : undefined,
+            visibility: updateData.visibility,
+        });
 
         const projectWithAssociations =
             await projectsRepository.findByUidWithTagsAndArea(validatedUid);
@@ -716,3 +787,6 @@ class ProjectsService {
 
 module.exports = new ProjectsService();
 module.exports.updateProjectTags = updateProjectTags;
+module.exports.validateVisibility = validateVisibility;
+module.exports.prepareVisibilityChange = prepareVisibilityChange;
+module.exports.syncContainerShares = syncContainerShares;

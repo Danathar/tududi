@@ -21,6 +21,8 @@ const {
 } = require('./passwordResetService');
 const { MIN_LENGTH_POLICY_MESSAGE } = require('../users/userService');
 const peopleService = require('../people/service');
+const mfaService = require('../mfa/service');
+const mfaSession = require('../mfa/session');
 const packageJson = require('../../../package.json');
 const { getBuildInfo } = require('../../services/buildInfo');
 const { getRoleInfo } = require('../../services/rolesService');
@@ -257,6 +259,12 @@ class AuthService {
                         ui_settings: uiSettings || null,
                         sidebar_settings: sidebarSettings || null,
                         is_admin: admin,
+                        // Hosted superadmin without 2FA: the admin panel is
+                        // closed until it is on (modules/admin/mfaGate.js).
+                        admin_mfa_required:
+                            admin &&
+                            getConfig().hosted?.enabled === true &&
+                            !(await mfaService.isEnabled(session.userId)),
                         ...(await getRoleInfo(user.uid)),
                         has_collaborators: hasCollaborators,
                         onboarded_at: user.onboarded_at || null,
@@ -266,9 +274,17 @@ class AuthService {
             }
         }
 
+        // Half signed in (password or SSO done, code still to come): the
+        // sign-in page picks up at the code prompt after a reload.
+        if (mfaSession.getPendingLogin(session)) {
+            return { user: null, mfa_pending: true };
+        }
+
         return { user: null };
     }
 
+    // Takes req, not req.session: a sign-in regenerates the session, which
+    // puts a new object on req.session.
     async login(email, password, req) {
         if (!isPasswordAuthEnabled()) {
             throw new ForbiddenError(
@@ -317,20 +333,16 @@ class AuthService {
             throw error;
         }
 
-        // A fresh session id at sign-in. Without it, a session id planted in
-        // the browser before sign-in (session fixation) would become the
-        // victim's authenticated session.
-        await new Promise((resolve, reject) =>
-            req.session.regenerate((err) => (err ? reject(err) : resolve()))
-        );
-        req.session.userId = user.id;
-
-        await new Promise((resolve, reject) => {
-            req.session.save((err) => {
-                if (err) reject(err);
-                else resolve();
+        // With two-factor sign-in on, the password only gets the session as
+        // far as the code prompt (POST /api/login/mfa).
+        if (await mfaService.isEnabled(user.id)) {
+            await mfaSession.startPendingLogin(req, user, {
+                method: 'email_password',
             });
-        });
+            return { mfa_required: true };
+        }
+
+        await mfaSession.signIn(req, user);
 
         return this.buildLoginResult(user);
     }
