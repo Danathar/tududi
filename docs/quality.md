@@ -56,9 +56,29 @@ the lines each pull request adds or changes:
 
 Exit status: `0` nothing new, `1` at least one new survivor, `2` the check
 could not run (bad arguments, git or Stryker failure, malformed ledger). The
-job is advisory (`continue-on-error: true`) and not a required check, so a red
-mutation step marks the job but never blocks a merge; whether to make it
-required is a later decision.
+job is advisory (`continue-on-error: true`) and not a required check. Note that
+`continue-on-error` does not change the check's own result: a red mutation
+check still shows as failed on the pull request, and the hive's merge gate
+reads a failed check as blocking. Whether to make it required is a later
+decision.
+
+**Time limits (#435).** A change to a file most of the backend loads (one that
+`backend/models/user.js` imports, say) makes Stryker's first, unmutated test
+run cover most of the backend integration suite, about 10 minutes on CI.
+
+- `stryker.config.mjs` sets `dryRunTimeoutMinutes: 55` for that first run;
+  Stryker's default of 5 minutes stopped it before any mutant ran.
+- The job passes `--budget-minutes 50`, a wall-clock limit for the Stryker runs
+  together, inside a 60 minute job timeout that is left as a backstop (a job
+  cut off by its timeout fails the check). At the budget the Stryker run in
+  progress is stopped with its whole process group (SIGTERM, then SIGKILL
+  after 5 seconds), the other suite is not started, and the log, a
+  `::warning::` annotation and the step summary say the result is incomplete.
+  The check then exits `0`, unless a suite that finished before the budget
+  found a new survivor (`1`, as usual). A green check with that warning means
+  "no result", not "no survivors".
+- Without `--budget-minutes` there is no limit, which is how a local run works
+  unless you pass it.
 
 For each new survivor, add a test that fails on it. Only when the mutant is
 equivalent (the code behaves the same) or harmless, copy the ledger entry the
@@ -73,6 +93,8 @@ Locally, after `npm install`:
 node scripts/mutation-check.mjs --base origin/main --dry-run
 # the full check
 node scripts/mutation-check.mjs --base origin/main
+# the same, stopped with an "incomplete" notice after 20 minutes
+node scripts/mutation-check.mjs --base origin/main --budget-minutes 20
 # re-read reports from an earlier run against the ledger
 node scripts/mutation-check.mjs --report reports/mutation/backend.json
 ```

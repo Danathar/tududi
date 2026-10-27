@@ -61,6 +61,14 @@ export default {
     // ledger, so Stryker's own score threshold never fails the run.
     thresholds: { high: 80, low: 60, break: null },
     timeoutMS: 60000,
+    // The initial test run (the dry run) runs every test related to the
+    // mutated files. A file most of the backend loads, such as one
+    // backend/models/user.js imports, pulls in most of the integration suite,
+    // about 10 minutes on CI; Stryker's default of 5 minutes stopped it before
+    // any mutant ran (#435). This is longer than the CI job's
+    // --budget-minutes (ci.yml), so in CI the budget, which ends the check
+    // with an "incomplete" notice instead of a failure, always comes first.
+    dryRunTimeoutMinutes: 55,
     tempDirName: '.stryker-tmp',
     cleanTempDir: true,
 };

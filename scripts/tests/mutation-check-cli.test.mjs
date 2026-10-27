@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +17,9 @@ const SCRIPT = path.resolve(
 // survivor, 2 the check could not run. These cases run the script the way the
 // workflow does, against Stryker JSON reports written to a throwaway root
 // (--report), or against a throwaway git repository (--dry-run and the
-// nothing-to-mutate path), so no Stryker run is needed.
+// nothing-to-mutate path), so no Stryker run is needed. The Stryker runs and
+// the time budget (--budget-minutes) are tested with a stand-in for Stryker
+// at the end of this file.
 
 function layout(files) {
     const dir = mkdtempSync(path.join(tmpdir(), 'mutation-check-'));
@@ -28,10 +31,24 @@ function layout(files) {
     return dir;
 }
 
-function run(args, cwd) {
-    const env = { ...process.env };
-    delete env.GITHUB_STEP_SUMMARY;
-    return spawnSync(process.execPath, [SCRIPT, ...args], { cwd, env, encoding: 'utf8' });
+// The runner sets GITHUB_ACTIONS and GITHUB_STEP_SUMMARY for this test run
+// too; a test that wants them passes them in extraEnv.
+function childEnv(extraEnv = {}) {
+    const env = { ...process.env, ...extraEnv };
+    for (const k of ['GITHUB_ACTIONS', 'GITHUB_STEP_SUMMARY']) if (!(k in extraEnv)) delete env[k];
+    return env;
+}
+
+function run(args, cwd, extraEnv = {}) {
+    // The timeout stops a script that hangs, well after every budget these
+    // tests use and the 5 s grace before SIGKILL.
+    return spawnSync(process.execPath, [SCRIPT, ...args], {
+        cwd,
+        env: childEnv(extraEnv),
+        encoding: 'utf8',
+        timeout: 60_000,
+        maxBuffer: 64 * 1024 * 1024,
+    });
 }
 
 const SOURCE = 'function f(x) {\n    return x > 0;\n}\n';
@@ -140,6 +157,21 @@ test('exits 2 on a malformed ledger, a missing report and bad arguments', () => 
         assert.equal(unknown.status, 2);
         assert.match(unknown.stderr, /unknown argument --frobnicate/);
         assert.equal(run(['--base'], dir).status, 2);
+        const noBudget = run(['--budget-minutes'], dir);
+        assert.equal(noBudget.status, 2);
+        assert.match(noBudget.stderr, /--budget-minutes needs a value/);
+        for (const bad of ['0', '0.0', 'abc', '1e3', '1.', '-5', '']) {
+            const r = run(['--budget-minutes', bad, '--report', 'r.json'], dir);
+            assert.equal(r.status, 2, bad);
+            assert.ok(
+                r.stderr.includes(`--budget-minutes needs a positive number of minutes, got ${bad}\n`),
+                `${bad}: ${r.stderr}`
+            );
+        }
+        for (const good of ['50', '0.5']) {
+            const r = run(['--budget-minutes', good, '--report', 'r.json'], dir);
+            assert.equal(r.status, 0, `${good}: ${r.stderr}`);
+        }
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
@@ -205,5 +237,378 @@ test('exits 2 when the base ref does not exist', () => {
         assert.match(r.stderr, /git diff against no-such-ref failed/);
     } finally {
         rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+// ------------------------------------------------------------ Stryker runs and the time budget (#435)
+
+// A stand-in for Stryker, installed where the script looks for it. It logs
+// each start with its suite and process group. For the suite named in
+// FAKE_HANG it starts a child process of its own (as Stryker starts Jest
+// workers), records that child's pid once its signal handlers are in place,
+// and does not finish: SIGTERM or SIGINT is logged and ends it, or with
+// FAKE_IGNORE_TERM is only logged. Every other suite exits with FAKE_EXIT
+// when that is set, and otherwise writes a report (one survivor, or with
+// FAKE_CLEAN one killed mutant) and exits 0; with FAKE_ORPHAN it first starts
+// a child that ignores SIGTERM and outlives it. Nothing it starts lives longer
+// than 30 s, so a broken kill cannot leave processes behind for long.
+const FAKE_STRYKER = `
+const { appendFileSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+const { spawn } = require('node:child_process');
+const project = process.env.MUTATION_PROJECT;
+const stat = readFileSync('/proc/self/stat', 'utf8');
+const group = stat.slice(stat.lastIndexOf(')') + 2).split(' ')[2];
+appendFileSync('stryker-starts.log', project + ' ' + group + ' ' + process.env.NODE_ENV + '\\n');
+const SOURCE = ${JSON.stringify(SOURCE)};
+const FILES = { backend: 'backend/services/a.js', frontend: 'frontend/components/X.tsx' };
+function writeReport() {
+    mkdirSync('reports/mutation', { recursive: true });
+    const m = {
+        id: '1',
+        mutatorName: 'EqualityOperator',
+        replacement: 'x >= 0',
+        status: process.env.FAKE_CLEAN ? 'Killed' : 'Survived',
+        location: { start: { line: 2, column: 12 }, end: { line: 2, column: 17 } },
+    };
+    const files = { [FILES[project]]: { language: 'javascript', source: SOURCE, mutants: [m] } };
+    writeFileSync('reports/mutation/' + project + '.json', JSON.stringify({ schemaVersion: '2', files }));
+}
+if (project === process.env.FAKE_HANG) {
+    for (const sig of ['SIGTERM', 'SIGINT']) {
+        process.on(sig, () => {
+            appendFileSync('signals.log', sig + '\\n');
+            if (!process.env.FAKE_IGNORE_TERM) process.exit(128 + require('node:os').constants.signals[sig]);
+        });
+    }
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { stdio: 'ignore' });
+    writeFileSync('child.pid', String(child.pid));
+    setTimeout(() => {
+        appendFileSync('signals.log', 'gave up\\n');
+        process.exit(0);
+    }, 30000);
+} else if (process.env.FAKE_EXIT) {
+    process.exit(Number(process.env.FAKE_EXIT));
+} else if (process.env.FAKE_ORPHAN) {
+    // It ignores SIGTERM, so only a SIGKILL to the group ends it; wait until
+    // its handler is in place.
+    const orphan = spawn(
+        process.execPath,
+        ['-e', "process.on('SIGTERM', () => {}); console.log('ready'); setTimeout(() => {}, 30000)"],
+        { stdio: ['ignore', 'pipe', 'ignore'] }
+    );
+    writeFileSync('orphan.pid', String(orphan.pid));
+    orphan.stdout.once('data', () => {
+        orphan.stdout.destroy();
+        orphan.unref();
+        writeReport();
+    });
+} else {
+    writeReport();
+}
+`;
+
+const STRYKER_BIN = 'node_modules/@stryker-mutator/core/bin/stryker.js';
+
+// A branch that changes one backend and one frontend line, with the fake
+// Stryker installed (untracked, as node_modules is).
+function strykerRepo() {
+    const dir = repo();
+    writeFileSync(path.join(dir, 'backend/services/a.js'), 'const a = 1;\nconst b = 3;\n');
+    mkdirSync(path.join(dir, 'frontend/components'), { recursive: true });
+    writeFileSync(path.join(dir, 'frontend/components/X.tsx'), 'export const x = 1;\n');
+    git(dir, 'add', '.');
+    git(dir, 'commit', '-q', '-m', 'change');
+    mkdirSync(path.join(dir, path.dirname(STRYKER_BIN)), { recursive: true });
+    writeFileSync(path.join(dir, STRYKER_BIN), FAKE_STRYKER);
+    return dir;
+}
+
+const strykerArgs = (dir, budget) => [
+    '--root',
+    dir,
+    '--base',
+    'main',
+    ...(budget === null ? [] : ['--budget-minutes', budget]),
+];
+const strykerRun = (dir, budget, env = {}) => run(strykerArgs(dir, budget), tmpdir(), env);
+
+const startLog = (dir) =>
+    readFileSync(path.join(dir, 'stryker-starts.log'), 'utf8')
+        .trim()
+        .split('\n')
+        .map((l) => l.split(' '));
+const starts = (dir) => startLog(dir).map(([project]) => project);
+const signals = (dir) => readFileSync(path.join(dir, 'signals.log'), 'utf8');
+const pidIn = (dir, file) => Number(readFileSync(path.join(dir, file), 'utf8'));
+const ownGroup = () => {
+    const stat = readFileSync('/proc/self/stat', 'utf8');
+    return stat.slice(stat.lastIndexOf(')') + 2).split(' ')[2];
+};
+
+const alive = (pid) => {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+
+async function assertGone(pid, what) {
+    for (let i = 0; i < 40 && alive(pid); i++) await sleep(50);
+    assert.equal(alive(pid), false, `${what} is still running`);
+}
+
+const killIfAlive = (dir, file) => {
+    if (!existsSync(path.join(dir, file))) return;
+    try {
+        process.kill(pidIn(dir, file), 'SIGKILL');
+    } catch {
+        // Already gone.
+    }
+};
+
+const cleanup = (dir) => {
+    killIfAlive(dir, 'child.pid');
+    killIfAlive(dir, 'orphan.pid');
+    rmSync(dir, { recursive: true, force: true });
+};
+
+// The fake reads its process group from /proc.
+const linuxOnly = { skip: !existsSync('/proc/self/stat') && 'needs /proc' };
+
+test('runs Stryker for the backend, then the frontend, and reports the survivors of both', linuxOnly, () => {
+    const dir = strykerRepo();
+    try {
+        const r = strykerRun(dir, null);
+        assert.equal(r.status, 1, r.stdout + r.stderr);
+        assert.deepEqual(startLog(dir), [
+            ['backend', ownGroup(), 'test'],
+            ['frontend', ownGroup(), process.env.NODE_ENV ?? 'undefined'],
+        ]);
+        assert.match(r.stdout, /== backend: mutating 1 range\(s\)\n {3}backend\/services\/a\.js:2-2\n/);
+        assert.match(r.stdout, /== frontend: mutating 1 range\(s\)\n {3}frontend\/components\/X\.tsx:1-1\n/);
+        assert.match(r.stdout, /backend\/services\/a\.js:2:12 EqualityOperator \(Survived\)/);
+        assert.match(r.stdout, /frontend\/components\/X\.tsx:2:12 EqualityOperator \(Survived\)/);
+        assert.doesNotMatch(r.stdout, /time budget|incomplete/);
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('a run that finishes inside its budget prints the same as one without a budget', linuxOnly, () => {
+    const dir = strykerRepo();
+    try {
+        const withBudget = strykerRun(dir, '10');
+        assert.equal(withBudget.status, 1, withBudget.stdout + withBudget.stderr);
+        assert.deepEqual(starts(dir), ['backend', 'frontend']);
+        assert.doesNotMatch(withBudget.stdout, /time budget|incomplete/);
+        const without = strykerRun(dir, null);
+        assert.equal(without.status, 1, without.stderr);
+        assert.equal(without.stdout, withBudget.stdout);
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('a clean run inside its budget exits 0 at once, without waiting for the budget', linuxOnly, () => {
+    const dir = strykerRepo();
+    try {
+        const began = Date.now();
+        const r = strykerRun(dir, '10', { FAKE_CLEAN: '1' });
+        assert.equal(r.status, 0, `${r.signal} ${r.stdout}${r.stderr}`);
+        assert.ok(Date.now() - began < 30_000);
+        assert.match(r.stdout, /No new surviving mutants \(0 accepted in the ledger\)\./);
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('with a budget Stryker runs in a process group of its own, without one in ours', linuxOnly, () => {
+    const dir = strykerRepo();
+    try {
+        assert.equal(strykerRun(dir, null).status, 1);
+        assert.deepEqual(
+            startLog(dir).map(([, group]) => group),
+            [ownGroup(), ownGroup()]
+        );
+        rmSync(path.join(dir, 'stryker-starts.log'));
+        assert.equal(strykerRun(dir, '10').status, 1);
+        const groups = startLog(dir).map(([, group]) => group);
+        assert.equal(groups.length, 2);
+        for (const group of groups) assert.notEqual(group, ownGroup());
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('with a budget a process Stryker leaves behind is killed when it finishes', linuxOnly, async () => {
+    const dir = strykerRepo();
+    try {
+        const r = strykerRun(dir, '10', { FAKE_ORPHAN: '1' });
+        assert.equal(r.status, 1, r.stdout + r.stderr);
+        await assertGone(pidIn(dir, 'orphan.pid'), 'the process the finished Stryker run left behind');
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('at the budget the running suite gets SIGTERM with its child processes, and the survivors of the finished suite are reported', linuxOnly, async () => {
+    const dir = strykerRepo();
+    const summary = path.join(dir, 'summary.md');
+    try {
+        const r = strykerRun(dir, '0.03', {
+            FAKE_HANG: 'frontend',
+            GITHUB_ACTIONS: 'true',
+            GITHUB_STEP_SUMMARY: summary,
+        });
+        const notice =
+            'mutation check incomplete — time budget (0.03 min) reached, no result: ' +
+            'frontend was stopped part way and none of its mutants are counted';
+        // The backend survivor is a normal finding, so the usual exit status 1.
+        assert.equal(r.status, 1, r.stdout + r.stderr);
+        assert.deepEqual(starts(dir), ['backend', 'frontend']);
+        assert.equal(signals(dir), 'SIGTERM\n');
+        assert.ok(r.stdout.includes(`\n${notice}\n`), r.stdout);
+        assert.ok(r.stdout.includes(`\n::warning::${notice}\n`), r.stdout);
+        assert.match(r.stdout, /backend\/services\/a\.js:2:12 EqualityOperator \(Survived\)/);
+        assert.doesNotMatch(r.stdout, /frontend\/components\/X\.tsx:2:12/);
+        assert.ok(readFileSync(summary, 'utf8').includes(`**${notice}**`));
+        await assertGone(pidIn(dir, 'child.pid'), 'the child process of the stopped Stryker run');
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('a budget stop with nothing new to report exits 0 and says so, without an annotation outside GitHub', linuxOnly, async () => {
+    const dir = strykerRepo();
+    try {
+        // The backend hangs, so nothing finished and the frontend never starts.
+        const r = strykerRun(dir, '0.03', { FAKE_HANG: 'backend' });
+        assert.equal(r.status, 0, r.stdout + r.stderr);
+        assert.deepEqual(starts(dir), ['backend']);
+        assert.equal(signals(dir), 'SIGTERM\n');
+        assert.match(
+            r.stdout,
+            /no result: backend was stopped part way and none of its mutants are counted; frontend not run\n/
+        );
+        assert.match(r.stdout, /No new surviving mutants in the runs that finished \(0 accepted in the ledger\)\./);
+        assert.doesNotMatch(r.stdout, /::warning::/);
+        await assertGone(pidIn(dir, 'child.pid'), 'the child process of the stopped Stryker run');
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('a Stryker run that ignores SIGTERM at the budget gets SIGKILL after the grace period', linuxOnly, () => {
+    const dir = strykerRepo();
+    try {
+        const began = Date.now();
+        const r = strykerRun(dir, '0.03', { FAKE_HANG: 'backend', FAKE_IGNORE_TERM: '1' });
+        assert.equal(r.status, 0, `${r.signal} ${r.stdout}${r.stderr}`);
+        // 1.8 s budget plus the 5 s grace; the fake gives up by itself at 30 s.
+        assert.ok(Date.now() - began >= 6_000);
+        assert.equal(signals(dir), 'SIGTERM\n');
+        assert.match(r.stdout, /no result: backend was stopped part way/);
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('a budget used up before Stryker starts runs neither suite', () => {
+    const dir = strykerRepo();
+    try {
+        const r = strykerRun(dir, '0.00001');
+        assert.equal(r.status, 0, r.stdout + r.stderr);
+        assert.equal(existsSync(path.join(dir, 'stryker-starts.log')), false);
+        assert.match(r.stdout, /no result: backend, frontend not run\n/);
+    } finally {
+        cleanup(dir);
+    }
+});
+
+for (const [sig, status] of [
+    ['SIGTERM', 143],
+    ['SIGINT', 130],
+]) {
+    test(`with a budget ${sig} to the check is passed on to Stryker's group`, linuxOnly, async () => {
+        const dir = strykerRepo();
+        try {
+            const child = spawn(process.execPath, [SCRIPT, ...strykerArgs(dir, '10')], {
+                cwd: tmpdir(),
+                env: childEnv({ FAKE_HANG: 'backend' }),
+                stdio: ['ignore', 'pipe', 'pipe'],
+            });
+            let stderr = '';
+            child.stderr.on('data', (d) => (stderr += d));
+            child.stdout.resume();
+            const closed = once(child, 'close');
+            for (let i = 0; i < 200 && !existsSync(path.join(dir, 'child.pid')); i++) await sleep(50);
+            assert.ok(existsSync(path.join(dir, 'child.pid')), 'the fake Stryker did not start');
+            child.kill(sig);
+            const [code] = await closed;
+            assert.equal(code, status, stderr);
+            assert.match(stderr, new RegExp(`^mutation-check: stopped by ${sig}$`, 'm'));
+            assert.equal(signals(dir), `${sig}\n`);
+            assert.deepEqual(starts(dir), ['backend']);
+            await assertGone(pidIn(dir, 'child.pid'), 'the child process of the stopped Stryker run');
+        } finally {
+            cleanup(dir);
+        }
+    });
+}
+
+test('exits 2 when Stryker fails, with or without a budget', linuxOnly, () => {
+    const dir = strykerRepo();
+    try {
+        for (const budget of [null, '10']) {
+            const r = strykerRun(dir, budget, { FAKE_EXIT: '3' });
+            assert.equal(r.status, 2, r.stdout + r.stderr);
+            assert.match(r.stderr, /^mutation-check: Stryker \(backend\) exited with 3$/m);
+        }
+        assert.deepEqual(starts(dir), ['backend', 'backend']);
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('exits 2 when StrykerJS is not installed', () => {
+    const dir = strykerRepo();
+    try {
+        rmSync(path.join(dir, 'node_modules'), { recursive: true, force: true });
+        const r = strykerRun(dir, '10');
+        assert.equal(r.status, 2);
+        assert.match(r.stderr, /StrykerJS is not installed/);
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('exits 2 when Stryker cannot be started, with or without a budget', () => {
+    const dir = strykerRepo();
+    // Ranges on every other line of a file with a long name make one --mutate
+    // argument of several hundred kB, more than Linux lets one argument hold,
+    // so spawn fails (E2BIG).
+    const file = `backend/services/${'n'.repeat(200)}.js`;
+    const lines = Array.from({ length: 4000 }, (_, i) => `x${i};`);
+    try {
+        git(dir, 'checkout', '-q', 'main');
+        writeFileSync(path.join(dir, file), `${lines.join('\n')}\n`);
+        git(dir, 'add', '.');
+        git(dir, 'commit', '-q', '-m', 'long file');
+        git(dir, 'checkout', '-q', 'pr');
+        git(dir, 'merge', '-q', '--no-edit', 'main');
+        writeFileSync(path.join(dir, file), `${lines.map((l, i) => (i % 2 ? l : `y${i};`)).join('\n')}\n`);
+        git(dir, 'commit', '-q', '-am', 'every other line');
+        for (const budget of [null, '10']) {
+            const r = strykerRun(dir, budget);
+            assert.equal(r.status, 2, r.stderr);
+            assert.match(r.stderr, /^mutation-check: cannot start Stryker \(backend\): spawn .*E2BIG/m);
+        }
+        assert.equal(existsSync(path.join(dir, 'stryker-starts.log')), false);
+    } finally {
+        cleanup(dir);
     }
 });
