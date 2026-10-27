@@ -25,6 +25,7 @@
 // is stopped with its whole process group (SIGTERM, then SIGKILL after a
 // grace period), the suites after it are not started, and a notice says the
 // result is incomplete. Without the option there is no limit.
+import { Buffer } from 'node:buffer';
 import { appendFileSync, existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { constants } from 'node:os';
 import { isAbsolute, relative, resolve } from 'node:path';
@@ -473,14 +474,15 @@ async function runStryker(root, project, mutate, limitMs = null) {
     let status;
     let signal;
     // Stryker's output is passed through as it comes and read for the
-    // out-of-memory message. `seen` keeps the end of the previous chunk, so a
+    // out-of-memory message. `tail` keeps the end of the previous chunk, so a
     // message split between two chunks is still found.
     let outOfMemory = false;
-    let seen = '';
+    let tail = Buffer.alloc(0);
     const watch = (to) => (chunk) => {
         to.write(chunk);
-        seen = seen.slice(-64) + chunk.toString('utf8');
-        if (OUT_OF_MEMORY.test(seen)) outOfMemory = true;
+        const text = Buffer.concat([tail, chunk]);
+        if (OUT_OF_MEMORY.test(text.toString())) outOfMemory = true;
+        tail = text.subarray(-64);
     };
     try {
         child = spawn(process.execPath, [bin, 'run', CONFIG, '--mutate', mutate.join(',')], {

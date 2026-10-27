@@ -1,4 +1,19 @@
 {
     "$comment": "Accepted survivors for scripts/mutation-check.mjs: mutants on changed lines that no test kills because the change is equivalent (behaves the same) or harmless. An entry matches on file, mutator, original and replacement text (whitespace collapsed), not on line number. Each entry needs a reason. The check prints a ready-made entry for every new survivor; add one only after deciding a test cannot or should not catch it. See docs/quality.md.",
-    "survivors": []
+    "survivors": [
+        {
+            "file": "scripts/mutation-check.mjs",
+            "mutator": "ArrayDeclaration",
+            "original": "['inherit', 'pipe', 'pipe']",
+            "replacement": "[]",
+            "reason": "Equivalent: with no stdio list spawn pipes all three streams, and the only difference, a pipe instead of the terminal for stdin, does not matter because Stryker never reads stdin."
+        },
+        {
+            "file": "scripts/mutation-check.mjs",
+            "mutator": "ObjectLiteral",
+            "original": "{ files: {} }",
+            "replacement": "{}",
+            "reason": "Equivalent: survivors() reads a report without a files map as empty, so an empty report and {} give the same result (pinned by the test 'survivors of an empty or file-less report is empty')."
+        }
+    ]
 }
