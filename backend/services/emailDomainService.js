@@ -2,15 +2,31 @@
 
 const dns = require('dns');
 const { disposableEmailBlocklist } = require('disposable-email-domains-js');
+const addressparser = require('nodemailer/lib/addressparser');
 
 // Checks on the domain half of an address, shared by account registration
 // and the Cloud waitlist so both turn away the same throwaway addresses.
 
-const domainOf = (email) =>
-    String(email || '')
-        .slice(String(email || '').lastIndexOf('@') + 1)
+// The mailbox Nodemailer will deliver to. An address may carry a comment,
+// quotes, angle brackets or a bare name before a comma ("(x)jane@gmail.com",
+// "<jane@gmail.com>", "x,jane@gmail.com") that change its spelling but not
+// where the mail goes, so the checks below read the parsed address. Text
+// that does not parse to exactly one address is left as it was.
+const mailboxOf = (email) => {
+    const value = String(email || '').trim();
+    const addresses = addressparser(value, { flatten: true }).filter(
+        (entry) => entry.address
+    );
+    return addresses.length === 1 ? addresses[0].address : value;
+};
+
+const domainOf = (email) => {
+    const mailbox = mailboxOf(email);
+    return mailbox
+        .slice(mailbox.lastIndexOf('@') + 1)
         .trim()
         .toLowerCase();
+};
 
 // Domains reserved for documentation and testing (RFC 2606, RFC 6761), plus
 // .local (RFC 6762). Nobody real owns a mailbox on any of them, so a form
@@ -92,9 +108,7 @@ const DOTLESS_DOMAINS = new Set(['gmail.com', 'googlemail.com']);
 // provider delivers to the same inbox), and for Gmail without dots. Two
 // addresses with the same canonical form reach the same person.
 const canonicalEmail = (email) => {
-    const value = String(email || '')
-        .trim()
-        .toLowerCase();
+    const value = mailboxOf(email).trim().toLowerCase();
     const at = value.lastIndexOf('@');
     if (at <= 0) return value || null;
 
