@@ -284,7 +284,11 @@ describe('Billing with Paddle', () => {
     });
 
     it('syncs the subscription of the transaction after the redirect', async () => {
-        paddle.transactions.txn_1 = { id: 'txn_1', subscription_id: 'sub_1' };
+        paddle.transactions.txn_1 = {
+            id: 'txn_1',
+            subscription_id: 'sub_1',
+            custom_data: { user_uid: user.uid, user_id: String(user.id) },
+        };
         paddle.subscriptions.sub_1 = subscription('sub_1', user);
         const res = await agent
             .post('/api/billing/sync')
@@ -298,6 +302,75 @@ describe('Billing with Paddle', () => {
         expect(new Date(a.current_period_end).toISOString()).toBe(
             '2027-10-27T10:00:00.000Z'
         );
+    });
+
+    it("refuses to sync another user's transaction", async () => {
+        const owner = await createTestUser({
+            email: `paddle_owner_${Date.now()}@example.com`,
+        });
+        paddle.transactions.txn_9 = {
+            id: 'txn_9',
+            subscription_id: 'sub_9',
+            custom_data: { user_uid: owner.uid, user_id: String(owner.id) },
+        };
+        paddle.subscriptions.sub_9 = subscription('sub_9', owner, {
+            customer_id: 'ctm_owner',
+        });
+        const res = await agent
+            .post('/api/billing/sync')
+            .send({ session_id: 'txn_9' });
+        expect(res.status).toBe(403);
+        expect(calls.some((c) => c.path === '/subscriptions/sub_9')).toBe(
+            false
+        );
+        const a = await account(user);
+        expect(a?.provider_subscription_id ?? null).toBeNull();
+        expect(a?.provider_customer_id ?? null).toBeNull();
+        expect(a?.plan ?? 'free').toBe('free');
+    });
+
+    it('refuses to sync a transaction without an owner', async () => {
+        paddle.transactions.txn_8 = { id: 'txn_8', subscription_id: 'sub_8' };
+        paddle.subscriptions.sub_8 = subscription('sub_8', user);
+        const res = await agent
+            .post('/api/billing/sync')
+            .send({ session_id: 'txn_8' });
+        expect(res.status).toBe(403);
+        expect(
+            (await account(user))?.provider_subscription_id ?? null
+        ).toBeNull();
+    });
+
+    it("syncs a transaction billed to the account's own Paddle customer", async () => {
+        await subscribed();
+        paddle.transactions.txn_7 = {
+            id: 'txn_7',
+            customer_id: 'ctm_1',
+            subscription_id: 'sub_1',
+        };
+        paddle.subscriptions.sub_1 = subscription('sub_1', user);
+        const res = await agent
+            .post('/api/billing/sync')
+            .send({ session_id: 'txn_7' });
+        expect(res.status).toBe(200);
+        expect((await account(user)).provider_subscription_id).toBe('sub_1');
+    });
+
+    it('refuses a transaction billed to another Paddle customer', async () => {
+        await subscribed();
+        paddle.transactions.txn_6 = {
+            id: 'txn_6',
+            customer_id: 'ctm_other',
+            subscription_id: 'sub_6',
+        };
+        paddle.subscriptions.sub_6 = subscription('sub_6', user, {
+            customer_id: 'ctm_other',
+        });
+        const res = await agent
+            .post('/api/billing/sync')
+            .send({ session_id: 'txn_6' });
+        expect(res.status).toBe(403);
+        expect((await account(user)).provider_subscription_id).toBe('sub_1');
     });
 
     it('opens the customer portal for the subscription', async () => {
