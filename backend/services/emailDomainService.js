@@ -108,7 +108,7 @@ const DOTLESS_DOMAINS = new Set(['gmail.com', 'googlemail.com']);
 // provider delivers to the same inbox), and for Gmail without dots. Two
 // addresses with the same canonical form reach the same person.
 const canonicalEmail = (email) => {
-    const value = mailboxOf(email).trim().toLowerCase();
+    const value = mailboxOf(email).toLowerCase();
     const at = value.lastIndexOf('@');
     if (at <= 0) return value || null;
 

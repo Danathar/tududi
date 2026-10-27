@@ -71,5 +71,7 @@ describe('canonicalEmail', () => {
     it('leaves odd input alone', () => {
         expect(canonicalEmail('+only@example.com')).toBe('+only@example.com');
         expect(canonicalEmail('')).toBeNull();
+        expect(canonicalEmail('   ')).toBeNull();
+        expect(canonicalEmail('  nope  ')).toBe('nope');
     });
 });
