@@ -11,7 +11,11 @@ import { InboxRecurrence } from '../../utils/inboxService';
 import PriorityDropdown from '../Shared/PriorityDropdown';
 import AreaDropdown from '../Shared/AreaDropdown';
 import DateTimePicker from '../Shared/DateTimePicker';
-import { fromDueParts, toDueParts } from '../../utils/dueDateTime';
+import {
+    fromDueParts,
+    toDueParts,
+    isStartAfterDue,
+} from '../../utils/dueDateTime';
 import EntitySidePanel from '../SidePanel/EntitySidePanel';
 import {
     SidePanelField,
@@ -24,6 +28,7 @@ interface TaskModalProps {
     isOpen: boolean;
     onClose: () => void;
     task: Task;
+    onSaved?: (task: Task) => void;
 }
 
 const STATUS_OPTIONS: { value: number; key: string; fallback: string }[] = [
@@ -64,6 +69,8 @@ interface TaskFormState {
     areaId: number | null;
     dueDate: string;
     dueTime: string;
+    startDate: string;
+    startTime: string;
     tags: string[];
     // Set only by a recurrence phrase typed into the name ("every monday");
     // the recurrence fields themselves are edited on the task page.
@@ -79,13 +86,20 @@ const toFormState = (task: Task): TaskFormState => ({
     areaId: task.area_id ?? null,
     dueDate: task.due_date ? String(task.due_date).split('T')[0] : '',
     dueTime: task.due_has_time ? (task.due_time ?? '') : '',
+    startDate: task.start_date ? String(task.start_date).split('T')[0] : '',
+    startTime: task.start_time ?? '',
     tags: task.tags?.map((tag) => tag.name) ?? [],
     recurrence: null,
 });
 
 // Edits the core fields of a task in the side panel. Recurrence, relations,
 // subtasks and reminders stay on the task page.
-const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task }) => {
+const TaskModal: React.FC<TaskModalProps> = ({
+    isOpen,
+    onClose,
+    task,
+    onSaved,
+}) => {
     const { t } = useTranslation();
     const { showSuccessToast, showErrorToast } = useToast();
     const projects = useStore(
@@ -180,6 +194,14 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task }) => {
             changes.due_time =
                 form.dueDate && form.dueTime ? form.dueTime : null;
         }
+        if (
+            form.startDate !== original.startDate ||
+            form.startTime !== original.startTime
+        ) {
+            changes.start_date = form.startDate || null;
+            changes.start_time =
+                form.startDate && form.startTime ? form.startTime : null;
+        }
         if (form.recurrence) Object.assign(changes, form.recurrence);
         if (JSON.stringify(form.tags) !== JSON.stringify(original.tags)) {
             const existing = tagsStore.tags?.map((tag: any) => tag.name) ?? [];
@@ -197,6 +219,22 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task }) => {
             setError(t('task.nameRequired', 'Task name is required'));
             return;
         }
+        if (
+            isStartAfterDue(
+                form.startDate,
+                form.startTime,
+                form.dueDate,
+                form.dueTime
+            )
+        ) {
+            setError(
+                t(
+                    'task.startAfterDueError',
+                    'Start cannot be after the due date'
+                )
+            );
+            return;
+        }
         setSaving(true);
         const changes = buildChanges(await resolveTokens(form));
         if (Object.keys(changes).length === 0) {
@@ -210,6 +248,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task }) => {
             await updateTask(task.uid!, changes as Partial<Task>);
             const fresh = await fetchTaskByUid(task.uid!);
             useStore.getState().tasksStore.updateTaskInStore(fresh);
+            onSaved?.(fresh);
             showSuccessToast(t('success.taskUpdated', 'Task updated!'));
             onClose();
         } catch (err) {
@@ -322,6 +361,21 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task }) => {
                     value={form.areaId}
                     onChange={(value) => setField('areaId', value)}
                     areas={areas}
+                />
+            </SidePanelSection>
+
+            <SidePanelSection title={t('forms.startDate', 'Start')}>
+                <DateTimePicker
+                    value={fromDueParts(form.startDate, form.startTime || null)}
+                    onChange={(iso) => {
+                        const parts = toDueParts(iso);
+                        setField('startDate', parts.date || '');
+                        setField('startTime', parts.time || '');
+                    }}
+                    placeholder={t(
+                        'forms.task.startDatePlaceholder',
+                        'Select start date'
+                    )}
                 />
             </SidePanelSection>
 

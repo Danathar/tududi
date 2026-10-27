@@ -5,11 +5,14 @@
 // tooling (scripts/ and the Bash guard hook, tested with `node --test`), runs
 // Stryker once per suite, and reports every mutant the tests did not notice
 // (status Survived or NoCoverage) that is not an accepted survivor in
-// .mutation-survivors.json.
+// .mutation-survivors.json. A backend file with a unit test of its own at the
+// mirrored path (backend/services/x.js -> backend/tests/unit/services/x.test.js)
+// goes to a `backend-unit` suite that runs only those unit tests; the rest
+// of the backend runs every Jest test related to the file.
 // Exits 0 when there is nothing new, 1 on a new survivor, 2 when the check
 // could not run (bad arguments, git or Stryker failure, unreadable ledger).
-// A run stopped by --budget-minutes exits 0 unless a run that finished
-// before it found a new survivor.
+// A run stopped by --budget-minutes, or a suite whose Stryker run ran out of
+// memory, exits 0 unless a run that finished found a new survivor.
 // Usage: node scripts/mutation-check.mjs [--base <ref>] [--ledger <file>]
 //        [--root <dir>] [--budget-minutes <n>] [--dry-run]
 //        [--report <stryker json report>]...
@@ -22,6 +25,7 @@
 // is stopped with its whole process group (SIGTERM, then SIGKILL after a
 // grace period), the suites after it are not started, and a notice says the
 // result is incomplete. Without the option there is no limit.
+import { Buffer } from 'node:buffer';
 import { appendFileSync, existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { constants } from 'node:os';
 import { isAbsolute, relative, resolve } from 'node:path';
@@ -82,6 +86,29 @@ export function projectFor(file) {
 }
 
 /**
+ * The backend unit test of a backend source file, at the mirrored path under
+ * backend/tests/unit/, whether or not it exists; null for any other file.
+ * @param {string} file repository-relative path
+ * @returns {string|null}
+ */
+export function unitTestFor(file) {
+    if (projectFor(file) !== 'backend') return null;
+    return `backend/tests/unit/${file.slice('backend/'.length, -'.js'.length)}.test.js`;
+}
+
+/**
+ * The unit tests the `backend-unit` suite runs: the own unit test of every
+ * file it mutates, once each and in order. Null for every other suite.
+ * @param {string} project from mutateRanges
+ * @param {string[]} mutate that suite's `file:start-end` entries
+ * @returns {string[]|null}
+ */
+export function jestTestsFor(project, mutate) {
+    if (project !== 'backend-unit') return null;
+    return [...new Set(mutate.map((m) => unitTestFor(m.slice(0, m.lastIndexOf(':')))))];
+}
+
+/**
  * The test files a tooling suite runs, or null for a Jest suite. A script
  * with no test file of its own runs every scripts/tests file, since another
  * script's tests may still load it.
@@ -90,7 +117,7 @@ export function projectFor(file) {
  * @returns {string[]|null}
  */
 export function testsFor(project, scriptTests) {
-    if (project === 'backend' || project === 'frontend') return null;
+    if (project === 'backend' || project === 'backend-unit' || project === 'frontend') return null;
     if (project === 'hooks') return [...HOOK_TESTS];
     const name = project.slice('scripts-'.length);
     const own = [`scripts/tests/${name}.test.mjs`, `scripts/tests/${name}-cli.test.mjs`].filter((f) =>
@@ -163,17 +190,26 @@ export function parseDiff(diff) {
 
 /**
  * Stryker `--mutate` entries per suite, for the files that suite tests. The
- * Jest suites are always present; a tooling suite only when it has entries.
+ * backend and frontend suites are always present; `backend-unit` and a
+ * tooling suite only when they have entries.
  * @param {Map<string, {start: number, end: number}[]>} changed from parseDiff
- * @returns {{backend: string[], frontend: string[], [tooling: string]: string[]}}
+ * @param {(test: string) => boolean} [hasTest] whether a repository-relative
+ *   test file exists; a backend file whose unitTestFor exists goes to
+ *   `backend-unit`
+ * @returns {{backend: string[], frontend: string[], [suite: string]: string[]}}
  */
-export function mutateRanges(changed) {
+export function mutateRanges(changed, hasTest) {
     const out = { backend: [], frontend: [] };
     for (const [file, ranges] of [...changed].sort(([a], [b]) =>
         a < b ? -1 : a > b ? 1 : 0
     )) {
-        const project = projectFor(file);
+        let project = projectFor(file);
         if (!project) continue;
+        // A file most of the backend loads has nearly every backend test
+        // related to it. Run as one in-band Jest process, those ran out of
+        // memory before any mutant ran, so a file with its own unit test is
+        // checked against that test alone.
+        if (project === 'backend' && hasTest?.(unitTestFor(file))) project = 'backend-unit';
         out[project] ??= [];
         for (const r of ranges) out[project].push(`${file}:${r.start}-${r.end}`);
     }
@@ -285,6 +321,21 @@ export function ledgerEntry(s) {
     };
 }
 
+// What Stryker prints when its test runner process dies for lack of memory.
+// It restarts the runner twice and then fails the whole run.
+const OUT_OF_MEMORY = /ran out of memory/;
+
+/**
+ * The one-line notice for suites whose Stryker run ran out of memory.
+ * @param {string[]} suites
+ */
+export function memoryNotice(suites) {
+    return (
+        `mutation check incomplete — ${suites.join(', ')} ran out of memory, no result; ` +
+        'none of its mutants are counted'
+    );
+}
+
 /**
  * The one-line notice for a run that hit its time budget.
  * @param {{minutes: number, cut: string|null, skipped: string[]}} stopped the
@@ -353,7 +404,7 @@ function changedRanges(root, base) {
             ['diff', '-U0', '--no-color', '--no-ext-diff', '--no-renames', '--diff-filter=AM', `${base}...HEAD`],
             { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }
         );
-        return mutateRanges(parseDiff(diff));
+        return mutateRanges(parseDiff(diff), (t) => existsSync(resolve(root, t)));
     } catch (e) {
         fail(`git diff against ${base} failed: ${e.message}`);
     }
@@ -366,8 +417,9 @@ const KILL_GRACE_MS = 5000;
  * Stryker for one suite. With a limit (milliseconds) it runs in a process
  * group of its own and is stopped with that group, the Jest workers it starts
  * included, if it is still running when the limit is up.
- * @returns {Promise<{report: object, cut: boolean}>} `cut` when the limit
- *   stopped it; none of its mutants are counted then
+ * @returns {Promise<{report: object, cut: boolean, outOfMemory?: boolean}>}
+ *   `cut` when the limit stopped it, `outOfMemory` when it failed after its
+ *   test runner ran out of memory; none of its mutants are counted then
  */
 async function runStryker(root, project, mutate, limitMs = null) {
     const bin = resolve(root, 'node_modules/@stryker-mutator/core/bin/stryker.js');
@@ -377,7 +429,7 @@ async function runStryker(root, project, mutate, limitMs = null) {
     console.log(`\n== ${project}: mutating ${mutate.length} range(s)`);
     for (const m of mutate) console.log(`   ${m}`);
     const env = { ...process.env, MUTATION_PROJECT: project };
-    if (project === 'backend') env.NODE_ENV = 'test';
+    if (project === 'backend' || project === 'backend-unit') env.NODE_ENV = 'test';
     const scriptTests = existsSync(resolve(root, 'scripts/tests'))
         ? readdirSync(resolve(root, 'scripts/tests'))
               .filter((f) => f.endsWith('.test.mjs'))
@@ -389,6 +441,11 @@ async function runStryker(root, project, mutate, limitMs = null) {
     // Set for a tooling suite only; a Jest suite never inherits one.
     if (tests) env.MUTATION_TEST_COMMAND = `node --test ${tests.join(' ')}`;
     else delete env.MUTATION_TEST_COMMAND;
+    // Set for the backend-unit suite only, as a JSON list of repository-
+    // relative paths that stryker.config.mjs turns into Jest's testMatch.
+    const jestTests = jestTestsFor(project, mutate);
+    if (jestTests) env.MUTATION_JEST_TESTS = JSON.stringify(jestTests);
+    else delete env.MUTATION_JEST_TESTS;
     // Without a limit Stryker stays in our process group, so Ctrl-C in a
     // terminal reaches it as usual.
     const detached = limitMs !== null;
@@ -416,13 +473,26 @@ async function runStryker(root, project, mutate, limitMs = null) {
     };
     let status;
     let signal;
+    // Stryker's output is passed through as it comes and read for the
+    // out-of-memory message. `tail` keeps the end of the previous chunk, so a
+    // message split between two chunks is still found.
+    let outOfMemory = false;
+    let tail = Buffer.alloc(0);
+    const watch = (to) => (chunk) => {
+        to.write(chunk);
+        const text = Buffer.concat([tail, chunk]);
+        if (OUT_OF_MEMORY.test(text.toString())) outOfMemory = true;
+        tail = text.subarray(-64);
+    };
     try {
         child = spawn(process.execPath, [bin, 'run', CONFIG, '--mutate', mutate.join(',')], {
             cwd: root,
             env,
-            stdio: 'inherit',
+            stdio: ['inherit', 'pipe', 'pipe'],
             detached,
         });
+        child.stdout.on('data', watch(process.stdout));
+        child.stderr.on('data', watch(process.stderr));
         if (detached) {
             timer = setTimeout(() => {
                 cut = true;
@@ -449,21 +519,26 @@ async function runStryker(root, project, mutate, limitMs = null) {
     }
     // Stryker writes its report at the end, so a run that was cut off has none.
     if (cut) return { report: { files: {} }, cut };
+    // A suite too big for one test runner process says nothing about the
+    // change; report it as incomplete, like a run the budget stopped.
+    if (status !== 0 && outOfMemory) return { report: { files: {} }, cut, outOfMemory };
     if (status !== 0) fail(`Stryker (${project}) exited with ${status ?? signal}`);
     // Stryker writes no report when the ranges hold no mutable code.
     return { report: existsSync(report) ? readJson(report, 'Stryker report') : { files: {} }, cut };
 }
 
 /**
- * The step-summary text: the new survivors and how to resolve them, and the
- * budget notice when the time budget stopped the run.
+ * The step-summary text: the new survivors and how to resolve them, the
+ * budget notice when the time budget stopped the run, and the memory notice
+ * for suites that ran out of memory.
  */
-export function summarize(fresh, accepted, stopped = null) {
+export function summarize(fresh, accepted, stopped = null, outOfMemory = []) {
     const lines = ['## Mutation check on changed lines', ''];
     if (stopped) lines.push(`**${budgetNotice(stopped)}**`, '');
+    if (outOfMemory.length) lines.push(`**${memoryNotice(outOfMemory)}**`, '');
     if (!fresh.length) {
         lines.push(
-            stopped
+            stopped || outOfMemory.length
                 ? `No new surviving mutants in the runs that finished (${accepted.length} accepted in the ledger).`
                 : `No new surviving mutants (${accepted.length} accepted in the ledger).`
         );
@@ -489,6 +564,7 @@ async function main(argv) {
 
     const reports = [];
     let stopped = null;
+    const outOfMemory = [];
     if (opts.reports.length) {
         for (const p of opts.reports) reports.push(readJson(resolve(opts.root, p), 'Stryker report'));
     } else {
@@ -512,6 +588,7 @@ async function main(argv) {
             }
             const result = await runStryker(opts.root, project, ranges[project], left);
             reports.push(result.report);
+            if (result.outOfMemory) outOfMemory.push(project);
             if (result.cut) {
                 stopped = { minutes: opts.budgetMinutes, cut: project, skipped: [...queue] };
                 break;
@@ -523,11 +600,15 @@ async function main(argv) {
         reports.flatMap((r) => survivors(r, opts.root)),
         ledger
     );
-    const text = summarize(fresh, accepted, stopped);
+    const text = summarize(fresh, accepted, stopped, outOfMemory);
     console.log(`\n${text}`);
-    if (stopped) {
-        console.log(`\n${budgetNotice(stopped)}`);
-        if (process.env.GITHUB_ACTIONS === 'true') console.log(`::warning::${budgetNotice(stopped)}`);
+    const notices = [
+        ...(stopped ? [budgetNotice(stopped)] : []),
+        ...(outOfMemory.length ? [memoryNotice(outOfMemory)] : []),
+    ];
+    for (const notice of notices) {
+        console.log(`\n${notice}`);
+        if (process.env.GITHUB_ACTIONS === 'true') console.log(`::warning::${notice}`);
     }
     if (process.env.GITHUB_STEP_SUMMARY) {
         try {

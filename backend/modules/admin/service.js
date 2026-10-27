@@ -2,6 +2,7 @@
 
 const adminRepository = require('./repository');
 const { accountStatusOf } = require('./accountStatus');
+const { buildInsights } = require('./insights');
 const membersService = require('../members/service');
 const {
     validateRoleChange,
@@ -21,7 +22,6 @@ const {
     ConflictError,
 } = require('../../shared/errors');
 const rolesService = require('../../services/rolesService');
-const seatsService = require('../../services/seatsService');
 const accountsService = require('../../services/accountsService');
 const { isAdmin } = rolesService;
 const { sequelize } = require('../../models');
@@ -360,10 +360,6 @@ class AdminService {
             return null;
         }
 
-        const target = await adminRepository.findUserById(id);
-        const payerId = target
-            ? await accountsService.getOwnerId(target.id)
-            : null;
         const result = await adminRepository.deleteUserWithData(id);
 
         if (!result.success) {
@@ -371,11 +367,6 @@ class AdminService {
                 throw new NotFoundError(result.error);
             }
             throw new ValidationError(result.error);
-        }
-
-        // Deleting a member frees its seat on the owner's subscription.
-        if (payerId != null && payerId !== id) {
-            await seatsService.reconcile(payerId);
         }
 
         return null;
@@ -942,7 +933,7 @@ class AdminService {
             return !entry || Object.keys(entry.counts).length === 0;
         }).length;
 
-        return {
+        const summary = {
             users: {
                 total: users,
                 admins,
@@ -961,6 +952,11 @@ class AdminService {
                 subscription_required: entitlements.isSubscriptionRequired(),
                 provider: config.hosted?.billing?.provider || null,
             },
+        };
+
+        return {
+            ...summary,
+            insights: buildInsights(summary),
             instance: {
                 registration_enabled: registrationSetting
                     ? registrationSetting.value === 'true'

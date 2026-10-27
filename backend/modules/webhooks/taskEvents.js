@@ -23,6 +23,8 @@ const WATCHED_FIELDS = [
     'due_date',
     'due_has_time',
     'defer_until',
+    'start_date',
+    'start_has_time',
     'reminder_at',
     'project_id',
     'parent_task_id',
@@ -47,6 +49,8 @@ async function taskPayload(task) {
         due_date: iso(task.due_date),
         due_has_time: !!task.due_has_time,
         defer_until: iso(task.defer_until),
+        start_date: iso(task.start_date),
+        start_has_time: !!task.start_has_time,
         completed_at: iso(task.completed_at),
         project_uid: await uidOf(Project, task.project_id),
         parent_task_uid: await uidOf(Task, task.parent_task_id),
@@ -84,9 +88,12 @@ async function afterCommit(options, fn) {
     await fn();
 }
 
-function skip(task) {
-    // Habits are tasks underneath; their check-ins are not task changes.
+function skip(task, options) {
+    // Habits are tasks underneath; their check-ins are not task changes. A
+    // spreadsheet import writes rows in bulk and passes skipWebhooks, so a
+    // receiver is not flooded with one event per row.
     return (
+        options?.skipWebhooks ||
         !task?.user_id ||
         task.habit_mode ||
         dispatcher.knownToHaveNone(task.user_id)
@@ -94,12 +101,12 @@ function skip(task) {
 }
 
 function onCreate(task, options) {
-    if (skip(task)) return undefined;
+    if (skip(task, options)) return undefined;
     return afterCommit(options, () => send('task.created', task));
 }
 
 function onUpdate(task, options) {
-    if (skip(task)) return undefined;
+    if (skip(task, options)) return undefined;
     const changed = (task.changed() || []).filter((field) =>
         WATCHED_FIELDS.includes(field)
     );
@@ -122,7 +129,7 @@ function onUpdate(task, options) {
 }
 
 function onDestroy(task, options) {
-    if (skip(task)) return undefined;
+    if (skip(task, options)) return undefined;
     const snapshot = Task.build(task.get({ plain: true }), {
         isNewRecord: false,
     });

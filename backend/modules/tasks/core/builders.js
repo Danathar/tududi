@@ -12,6 +12,7 @@ const {
     processDeferUntilForStorage,
     dueDateTimeToUTC,
     utcToUserDateString,
+    startDateTimeToUTC,
 } = require('../../../utils/timezone-utils');
 const { ValidationError } = require('../../../shared/errors');
 
@@ -67,6 +68,31 @@ function applyDueTime(attrs, body, timezone, storedDueDate = null) {
 
     attrs.due_date = dueDateTimeToUTC(dateString, timeString, timezone);
     attrs.due_has_time = true;
+}
+
+// Applies start_date (YYYY-MM-DD) and an optional start_time (HH:mm) in the
+// user's timezone. Like the due date, changing start_date alone drops the
+// time; sending start_time alone keeps the stored day.
+function applyStart(attrs, body, timezone, storedStart = null) {
+    if (body.start_date === undefined && body.start_time === undefined) return;
+
+    const dateString =
+        body.start_date !== undefined
+            ? body.start_date || null
+            : storedStart && utcToUserDateString(storedStart, timezone);
+    // startDateTimeToUTC throws a plain Error; the task routes answer only
+    // AppErrors with their status, so convert it to keep a 400.
+    try {
+        const { value, hasTime } = startDateTimeToUTC(
+            dateString,
+            body.start_time,
+            timezone
+        );
+        attrs.start_date = value;
+        attrs.start_has_time = hasTime;
+    } catch (error) {
+        throw new ValidationError(error.message);
+    }
 }
 
 function resolveNote(body) {
@@ -241,6 +267,7 @@ function buildTaskAttributes(body, userId, timezone, isUpdate = false) {
     };
 
     applyDueTime(attrs, body, timezone);
+    applyStart(attrs, body, timezone);
     applyReminderAt(attrs, body);
 
     if (!isUpdate) {
@@ -372,6 +399,7 @@ function buildUpdateAttributes(body, task, timezone) {
     }
 
     applyDueTime(attrs, body, timezone, task.due_date);
+    applyStart(attrs, body, timezone, task.start_date);
     applyReminderAt(attrs, body);
 
     return attrs;
@@ -382,5 +410,6 @@ module.exports = {
     buildUpdateAttributes,
     calculateInitialDueDate,
     applyDueTime,
+    applyStart,
     applyReminderAt,
 };

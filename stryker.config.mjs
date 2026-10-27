@@ -1,15 +1,19 @@
 // StrykerJS configuration for the mutation check on changed lines.
 // scripts/mutation-check.mjs runs it once per Jest suite, setting
-// MUTATION_PROJECT to `backend` or `frontend` and passing the changed line
-// ranges with `--mutate`; the `mutate` list below is only a fallback for a
-// hand run (`npx stryker run`), which mutates every source file of the suite
-// and takes hours. See docs/quality.md.
+// MUTATION_PROJECT to `backend`, `backend-unit` or `frontend` and passing the
+// changed line ranges with `--mutate`; the `mutate` list below is only a
+// fallback for a hand run (`npx stryker run`), which mutates every source
+// file of the suite and takes hours. See docs/quality.md.
 const project = process.env.MUTATION_PROJECT === 'frontend' ? 'frontend' : 'backend';
 // The fork's tooling (scripts/ and the Bash guard hook) is tested with plain
 // `node --test` files, not Jest. For those suites mutation-check.mjs passes
 // the test files to run in MUTATION_TEST_COMMAND, and Stryker's built-in
 // `command` runner runs that command once per mutant.
 const testCommand = process.env.MUTATION_TEST_COMMAND;
+// For the `backend-unit` suite mutation-check.mjs lists the unit tests of the
+// mutated files in MUTATION_JEST_TESTS (JSON, repository-relative). Jest then
+// runs those files only, instead of every test related to the mutated files.
+const jestTests = process.env.MUTATION_JEST_TESTS ? JSON.parse(process.env.MUTATION_JEST_TESTS) : null;
 
 const suites = {
     backend: {
@@ -52,8 +56,13 @@ export default {
               jest: {
                   projectType: 'custom',
                   configFile: suites[project].configFile,
-                  // Run only the tests related to the mutated files.
-                  enableFindRelatedTests: true,
+                  // Run only the tests related to the mutated files, or
+                  // only the listed ones. The backend config's rootDir is
+                  // backend/.
+                  enableFindRelatedTests: !jestTests,
+                  ...(jestTests
+                      ? { config: { testMatch: jestTests.map((t) => t.replace(/^backend\//, '<rootDir>/')) } }
+                      : {}),
               },
               coverageAnalysis: 'perTest',
               mutate: suites[project].mutate,
