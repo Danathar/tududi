@@ -98,3 +98,4 @@ out.
 | [#396](https://github.com/Danathar/tududi/pull/396) | `.github/workflows/ci.yml`, `.gitignore`, `package-lock.json`, `package.json` | ci: report changed lines whose tests would not notice them breaking (advisory mutation job) | fork only |
 | [#420](https://github.com/Danathar/tududi/pull/420) | `babel.config.js` | test(mutation): give the Babel 7 presets only to Babel 7, so StrykerJS (Babel 8) can parse backend files for the mutation job | fork only |
 | [#436](https://github.com/Danathar/tududi/pull/436) | `.github/workflows/ci.yml` | ci(mutation): longer mutation job timeout and a time budget, so a long backend run ends "incomplete" instead of red | fork only |
+| [#434](https://github.com/Danathar/tududi/pull/434) | `backend/services/emailDomainService.js`, `backend/tests/unit/services/emailDomainService.test.js` | fix(auth): fold an address to the mailbox it is delivered to before the trial check | fork only |
