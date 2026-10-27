@@ -341,6 +341,38 @@ describe('Billing with Paddle', () => {
         ).toBeNull();
     });
 
+    it("syncs a transaction billed to the account's own Paddle customer", async () => {
+        await subscribed();
+        paddle.transactions.txn_7 = {
+            id: 'txn_7',
+            customer_id: 'ctm_1',
+            subscription_id: 'sub_1',
+        };
+        paddle.subscriptions.sub_1 = subscription('sub_1', user);
+        const res = await agent
+            .post('/api/billing/sync')
+            .send({ session_id: 'txn_7' });
+        expect(res.status).toBe(200);
+        expect((await account(user)).provider_subscription_id).toBe('sub_1');
+    });
+
+    it('refuses a transaction billed to another Paddle customer', async () => {
+        await subscribed();
+        paddle.transactions.txn_6 = {
+            id: 'txn_6',
+            customer_id: 'ctm_other',
+            subscription_id: 'sub_6',
+        };
+        paddle.subscriptions.sub_6 = subscription('sub_6', user, {
+            customer_id: 'ctm_other',
+        });
+        const res = await agent
+            .post('/api/billing/sync')
+            .send({ session_id: 'txn_6' });
+        expect(res.status).toBe(403);
+        expect((await account(user)).provider_subscription_id).toBe('sub_1');
+    });
+
     it('opens the customer portal for the subscription', async () => {
         await subscribed();
         const res = await agent.post('/api/billing/portal');

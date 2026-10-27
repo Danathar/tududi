@@ -221,15 +221,27 @@ async function createPortal({ account }) {
 // After checkout the redirect carries the transaction id, whose
 // subscription is read; otherwise the stored subscription, or the newest
 // one of the customer. The transaction id comes from the browser, so only
-// a transaction this user's checkout opened is read: anyone else's would
-// hand this account their subscription and Paddle customer.
+// a transaction this user's checkout opened, or one billed to this
+// account's own Paddle customer (a renewal or card update paid from an
+// email link), is read: anyone else's would hand this account their
+// subscription and Paddle customer.
+function ownsTransaction(transaction, user, account) {
+    if (transaction.custom_data?.user_uid) {
+        return transaction.custom_data.user_uid === user.uid;
+    }
+    return (
+        !!account.provider_customer_id &&
+        String(transaction.customer_id) === account.provider_customer_id
+    );
+}
+
 async function sync({ user, account, checkoutRef }) {
     if (checkoutRef) {
         const transaction = await api(
             'GET',
             `/transactions/${encodeURIComponent(checkoutRef)}`
         );
-        if (transaction.custom_data?.user_uid !== user.uid) {
+        if (!ownsTransaction(transaction, user, account)) {
             throw new ForbiddenError('That checkout belongs to someone else');
         }
         if (transaction.subscription_id) {
