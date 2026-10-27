@@ -80,13 +80,19 @@ function applyStart(attrs, body, timezone, storedStart = null) {
         body.start_date !== undefined
             ? body.start_date || null
             : storedStart && utcToUserDateString(storedStart, timezone);
-    const { value, hasTime } = startDateTimeToUTC(
-        dateString,
-        body.start_time,
-        timezone
-    );
-    attrs.start_date = value;
-    attrs.start_has_time = hasTime;
+    // startDateTimeToUTC throws a plain Error; the task routes answer only
+    // AppErrors with their status, so convert it to keep a 400.
+    try {
+        const { value, hasTime } = startDateTimeToUTC(
+            dateString,
+            body.start_time,
+            timezone
+        );
+        attrs.start_date = value;
+        attrs.start_has_time = hasTime;
+    } catch (error) {
+        throw new ValidationError(error.message);
+    }
 }
 
 function resolveNote(body) {
