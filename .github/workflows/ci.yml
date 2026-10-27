@@ -101,7 +101,10 @@ jobs:
     name: Mutation check on changed lines (advisory)
     if: "github.event_name == 'pull_request' && !startsWith(github.event.pull_request.title, 'chore: sync upstream')"
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The budget below ends the run on its own before this timeout, which stays
+    # as a backstop: a job cut off by its timeout fails the check even with
+    # continue-on-error, and that blocks the merge (#435).
+    timeout-minutes: 60
     continue-on-error: true
 
     steps:
@@ -122,4 +125,7 @@ jobs:
     - name: Mutate the lines this PR changes
       env:
         BASE_REF: ${{ github.base_ref }}
-      run: node scripts/mutation-check.mjs --base "origin/$BASE_REF"
+      # 50 of the job's 60 minutes, leaving the rest for checkout, npm install
+      # and stopping Stryker. At the budget the check exits 0 with an
+      # "incomplete" warning instead of running into the job timeout.
+      run: node scripts/mutation-check.mjs --base "origin/$BASE_REF" --budget-minutes 50

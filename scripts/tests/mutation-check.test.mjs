@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    budgetNotice,
     evaluate,
     formatSurvivor,
     isAccepted,
@@ -9,6 +10,7 @@ import {
     originalText,
     parseDiff,
     projectFor,
+    summarize,
     survivors,
     validateLedger,
 } from '../mutation-check.mjs';
@@ -316,4 +318,55 @@ test('formatSurvivor names the place, mutator, status and both texts on one line
         formatSurvivor({ ...SURVIVOR, original: 'a\n  b' }),
         'backend/services/a.js:2:12 EqualityOperator (Survived): `a b` -> `x >= 0`'
     );
+});
+
+test('budgetNotice names the budget, the suite stopped part way and the suites never started', () => {
+    assert.equal(
+        budgetNotice({ minutes: 50, cut: null, skipped: [] }),
+        'mutation check incomplete — time budget (50 min) reached, no result'
+    );
+    assert.equal(
+        budgetNotice({ minutes: 50, cut: 'backend', skipped: ['frontend'] }),
+        'mutation check incomplete — time budget (50 min) reached, no result: ' +
+            'backend was stopped part way and none of its mutants are counted; frontend not run'
+    );
+    assert.equal(
+        budgetNotice({ minutes: 0.5, cut: null, skipped: ['backend', 'frontend'] }),
+        'mutation check incomplete — time budget (0.5 min) reached, no result: backend, frontend not run'
+    );
+    assert.equal(
+        budgetNotice({ minutes: 50, cut: 'frontend', skipped: [] }),
+        'mutation check incomplete — time budget (50 min) reached, no result: ' +
+            'frontend was stopped part way and none of its mutants are counted'
+    );
+});
+
+test('summarize reports no new survivors, or lists them with what to do', () => {
+    assert.equal(
+        summarize([], [SURVIVOR]),
+        ['## Mutation check on changed lines', '', 'No new surviving mutants (1 accepted in the ledger).'].join('\n')
+    );
+    const some = summarize([SURVIVOR], []);
+    assert.match(some, /^## Mutation check on changed lines\n\n1 changed line\(s\) can be broken without any test failing:\n\n- backend\/services\/a\.js:2:12 /);
+    assert.match(some, /add it to `\.mutation-survivors\.json` with a reason\.$/);
+    assert.doesNotMatch(some, /incomplete/);
+    assert.equal(summarize([SURVIVOR], [], null), some);
+});
+
+test('summarize puts the budget notice first when the budget stopped the run', () => {
+    const stopped = { minutes: 50, cut: 'backend', skipped: ['frontend'] };
+    assert.equal(
+        summarize([], [], stopped),
+        [
+            '## Mutation check on changed lines',
+            '',
+            '**mutation check incomplete — time budget (50 min) reached, no result: ' +
+                'backend was stopped part way and none of its mutants are counted; frontend not run**',
+            '',
+            'No new surviving mutants in the runs that finished (0 accepted in the ledger).',
+        ].join('\n')
+    );
+    const some = summarize([SURVIVOR], [], { minutes: 50, cut: 'frontend', skipped: [] });
+    assert.match(some, /^## Mutation check on changed lines\n\n\*\*mutation check incomplete/);
+    assert.match(some, /1 changed line\(s\) can be broken without any test failing/);
 });

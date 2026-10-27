@@ -6,13 +6,25 @@
 // or NoCoverage) that is not an accepted survivor in .mutation-survivors.json.
 // Exits 0 when there is nothing new, 1 on a new survivor, 2 when the check
 // could not run (bad arguments, git or Stryker failure, unreadable ledger).
+// A run stopped by --budget-minutes exits 0 unless a run that finished
+// before it found a new survivor.
 // Usage: node scripts/mutation-check.mjs [--base <ref>] [--ledger <file>]
-//        [--root <dir>] [--dry-run] [--report <stryker json report>]...
+//        [--root <dir>] [--budget-minutes <n>] [--dry-run]
+//        [--report <stryker json report>]...
 // --dry-run prints the ranges and stops. --report skips git and Stryker and
 // checks existing Stryker JSON reports against the ledger.
+// --budget-minutes is a wall-clock limit for the Stryker runs together
+// (#435). A change to a file most of the backend loads can keep Stryker busy
+// past the CI job's timeout, and a job cut off by its timeout fails the check
+// even though the job is advisory. At the budget the Stryker run in progress
+// is stopped with its whole process group (SIGTERM, then SIGKILL after a
+// grace period), the other suite is not started, and a notice says the
+// result is incomplete. Without the option there is no limit.
 import { appendFileSync, existsSync, readFileSync, rmSync } from 'node:fs';
+import { constants } from 'node:os';
 import { isAbsolute, relative, resolve } from 'node:path';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { pathToFileURL } from 'node:url';
 
 export const LEDGER = '.mutation-survivors.json';
@@ -234,13 +246,35 @@ export function ledgerEntry(s) {
     };
 }
 
+/**
+ * The one-line notice for a run that hit its time budget.
+ * @param {{minutes: number, cut: string|null, skipped: string[]}} stopped the
+ *   budget, the suite stopped part way (if any) and the suites never started
+ */
+export function budgetNotice(stopped) {
+    const left = [];
+    if (stopped.cut) left.push(`${stopped.cut} was stopped part way and none of its mutants are counted`);
+    if (stopped.skipped.length) left.push(`${stopped.skipped.join(', ')} not run`);
+    return (
+        `mutation check incomplete — time budget (${stopped.minutes} min) reached, no result` +
+        (left.length ? `: ${left.join('; ')}` : '')
+    );
+}
+
 function fail(message) {
     console.error(`mutation-check: ${message}`);
     process.exit(2);
 }
 
 function parseArgs(argv) {
-    const opts = { base: 'origin/main', ledger: LEDGER, root: process.cwd(), dryRun: false, reports: [] };
+    const opts = {
+        base: 'origin/main',
+        ledger: LEDGER,
+        root: process.cwd(),
+        budgetMinutes: null,
+        dryRun: false,
+        reports: [],
+    };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         const value = () => {
@@ -251,7 +285,13 @@ function parseArgs(argv) {
         if (a === '--base') opts.base = value();
         else if (a === '--ledger') opts.ledger = value();
         else if (a === '--root') opts.root = value();
-        else if (a === '--report') opts.reports.push(value());
+        else if (a === '--budget-minutes') {
+            const v = value();
+            opts.budgetMinutes = Number(v);
+            if (!/^\d+(\.\d+)?$/.test(v) || !(opts.budgetMinutes > 0)) {
+                fail(`--budget-minutes needs a positive number of minutes, got ${v}`);
+            }
+        } else if (a === '--report') opts.reports.push(value());
         else if (a === '--dry-run') opts.dryRun = true;
         else fail(`unknown argument ${a}`);
     }
@@ -280,7 +320,17 @@ function changedRanges(root, base) {
     }
 }
 
-function runStryker(root, project, mutate) {
+// How long Stryker gets to stop by itself after SIGTERM before SIGKILL.
+const KILL_GRACE_MS = 5000;
+
+/**
+ * Stryker for one suite. With a limit (milliseconds) it runs in a process
+ * group of its own and is stopped with that group, the Jest workers it starts
+ * included, if it is still running when the limit is up.
+ * @returns {Promise<{report: object, cut: boolean}>} `cut` when the limit
+ *   stopped it; none of its mutants are counted then
+ */
+async function runStryker(root, project, mutate, limitMs = null) {
     const bin = resolve(root, 'node_modules/@stryker-mutator/core/bin/stryker.js');
     if (!existsSync(bin)) fail(`StrykerJS is not installed (${bin}); run npm install`);
     const report = resolve(root, `reports/mutation/${project}.json`);
@@ -289,20 +339,84 @@ function runStryker(root, project, mutate) {
     for (const m of mutate) console.log(`   ${m}`);
     const env = { ...process.env, MUTATION_PROJECT: project };
     if (project === 'backend') env.NODE_ENV = 'test';
-    const r = spawnSync(process.execPath, [bin, 'run', CONFIG, '--mutate', mutate.join(',')], {
-        cwd: root,
-        env,
-        stdio: 'inherit',
-    });
-    if (r.status !== 0) fail(`Stryker (${project}) exited with ${r.status ?? r.signal}`);
+    // Without a limit Stryker stays in our process group, so Ctrl-C in a
+    // terminal reaches it as usual.
+    const detached = limitMs !== null;
+    let child;
+    let timer = null;
+    let cut = false;
+    let interrupted = null;
+    const killGroup = (signal) => {
+        try {
+            process.kill(-child.pid, signal);
+        } catch {
+            // The group is already gone.
+        }
+    };
+    const stop = (signal) => {
+        killGroup(signal);
+        clearTimeout(timer);
+        timer = setTimeout(() => killGroup('SIGKILL'), KILL_GRACE_MS);
+    };
+    // A group of its own no longer gets the terminal's Ctrl-C or the
+    // runner's cancel, so pass those on.
+    const onSignal = (signal) => {
+        interrupted = signal;
+        stop(signal);
+    };
+    let status;
+    let signal;
+    try {
+        child = spawn(process.execPath, [bin, 'run', CONFIG, '--mutate', mutate.join(',')], {
+            cwd: root,
+            env,
+            stdio: 'inherit',
+            detached,
+        });
+        if (detached) {
+            timer = setTimeout(() => {
+                cut = true;
+                stop('SIGTERM');
+            }, limitMs);
+            process.on('SIGINT', onSignal);
+            process.on('SIGTERM', onSignal);
+        }
+        [status, signal] = await once(child, 'close');
+    } catch (e) {
+        // spawn throws for some failures (E2BIG: the ranges do not fit in one
+        // argument), and `once` rejects on the 'error' event of the others.
+        fail(`cannot start Stryker (${project}): ${e.message}`);
+    } finally {
+        clearTimeout(timer);
+        process.off('SIGINT', onSignal);
+        process.off('SIGTERM', onSignal);
+    }
+    // Processes Stryker started can outlive it; end what is left of the group.
+    if (detached) killGroup('SIGKILL');
+    if (interrupted) {
+        console.error(`mutation-check: stopped by ${interrupted}`);
+        process.exit(128 + constants.signals[interrupted]);
+    }
+    // Stryker writes its report at the end, so a run that was cut off has none.
+    if (cut) return { report: { files: {} }, cut };
+    if (status !== 0) fail(`Stryker (${project}) exited with ${status ?? signal}`);
     // Stryker writes no report when the ranges hold no mutable code.
-    return existsSync(report) ? readJson(report, 'Stryker report') : { files: {} };
+    return { report: existsSync(report) ? readJson(report, 'Stryker report') : { files: {} }, cut };
 }
 
-function summarize(fresh, accepted) {
+/**
+ * The step-summary text: the new survivors and how to resolve them, and the
+ * budget notice when the time budget stopped the run.
+ */
+export function summarize(fresh, accepted, stopped = null) {
     const lines = ['## Mutation check on changed lines', ''];
+    if (stopped) lines.push(`**${budgetNotice(stopped)}**`, '');
     if (!fresh.length) {
-        lines.push(`No new surviving mutants (${accepted.length} accepted in the ledger).`);
+        lines.push(
+            stopped
+                ? `No new surviving mutants in the runs that finished (${accepted.length} accepted in the ledger).`
+                : `No new surviving mutants (${accepted.length} accepted in the ledger).`
+        );
     } else {
         lines.push(
             `${fresh.length} changed line(s) can be broken without any test failing:`,
@@ -315,7 +429,8 @@ function summarize(fresh, accepted) {
     return lines.join('\n');
 }
 
-function main(argv) {
+async function main(argv) {
+    const started = Date.now();
     const opts = parseArgs(argv);
     const ledgerPath = resolve(opts.root, opts.ledger);
     const ledger = existsSync(ledgerPath) ? readJson(ledgerPath, 'ledger') : { survivors: [] };
@@ -323,6 +438,7 @@ function main(argv) {
     if (problems.length) fail(`${opts.ledger} is malformed:\n  ${problems.join('\n  ')}`);
 
     const reports = [];
+    let stopped = null;
     if (opts.reports.length) {
         for (const p of opts.reports) reports.push(readJson(resolve(opts.root, p), 'Stryker report'));
     } else {
@@ -336,8 +452,21 @@ function main(argv) {
             console.log(`No backend or frontend source lines changed against ${opts.base}; nothing to mutate.`);
             return;
         }
-        for (const project of ['backend', 'frontend']) {
-            if (ranges[project].length) reports.push(runStryker(opts.root, project, ranges[project]));
+        const budgetMs = opts.budgetMinutes === null ? null : opts.budgetMinutes * 60_000;
+        const queue = ['backend', 'frontend'].filter((p) => ranges[p].length);
+        while (queue.length) {
+            const project = queue.shift();
+            const left = budgetMs === null ? null : started + budgetMs - Date.now();
+            if (left !== null && left <= 0) {
+                stopped = { minutes: opts.budgetMinutes, cut: null, skipped: [project, ...queue] };
+                break;
+            }
+            const result = await runStryker(opts.root, project, ranges[project], left);
+            reports.push(result.report);
+            if (result.cut) {
+                stopped = { minutes: opts.budgetMinutes, cut: project, skipped: [...queue] };
+                break;
+            }
         }
     }
 
@@ -345,8 +474,12 @@ function main(argv) {
         reports.flatMap((r) => survivors(r, opts.root)),
         ledger
     );
-    const text = summarize(fresh, accepted);
+    const text = summarize(fresh, accepted, stopped);
     console.log(`\n${text}`);
+    if (stopped) {
+        console.log(`\n${budgetNotice(stopped)}`);
+        if (process.env.GITHUB_ACTIONS === 'true') console.log(`::warning::${budgetNotice(stopped)}`);
+    }
     if (process.env.GITHUB_STEP_SUMMARY) {
         try {
             appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${text}\n`);
@@ -362,5 +495,5 @@ function main(argv) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-    main(process.argv.slice(2));
+    await main(process.argv.slice(2));
 }
