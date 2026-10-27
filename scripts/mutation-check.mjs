@@ -381,10 +381,11 @@ async function runStryker(root, project, mutate, limitMs = null) {
     const scriptTests = existsSync(resolve(root, 'scripts/tests'))
         ? readdirSync(resolve(root, 'scripts/tests'))
               .filter((f) => f.endsWith('.test.mjs'))
-              .sort()
               .map((f) => `scripts/tests/${f}`)
         : [];
     const tests = testsFor(project, scriptTests);
+    // A bare `node --test` would run every test file it finds instead.
+    if (tests && !tests.length) fail(`no node --test files to run for ${project}`);
     // Set for a tooling suite only; a Jest suite never inherits one.
     if (tests) env.MUTATION_TEST_COMMAND = `node --test ${tests.join(' ')}`;
     else delete env.MUTATION_TEST_COMMAND;
@@ -492,17 +493,16 @@ async function main(argv) {
         for (const p of opts.reports) reports.push(readJson(resolve(opts.root, p), 'Stryker report'));
     } else {
         const ranges = changedRanges(opts.root, opts.base);
-        const total = Object.values(ranges).reduce((n, r) => n + r.length, 0);
+        const queue = Object.keys(ranges).filter((p) => ranges[p].length);
         if (opts.dryRun) {
             console.log(JSON.stringify(ranges, null, 2));
             return;
         }
-        if (!total) {
+        if (!queue.length) {
             console.log(`No source lines changed against ${opts.base}; nothing to mutate.`);
             return;
         }
         const budgetMs = opts.budgetMinutes === null ? null : opts.budgetMinutes * 60_000;
-        const queue = Object.keys(ranges).filter((p) => ranges[p].length);
         while (queue.length) {
             const project = queue.shift();
             const left = budgetMs === null ? null : started + budgetMs - Date.now();

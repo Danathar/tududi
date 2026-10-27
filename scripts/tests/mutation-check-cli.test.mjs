@@ -267,6 +267,7 @@ const FILES = {
     frontend: 'frontend/components/X.tsx',
     hooks: '.claude/hooks/guard.mjs',
     'scripts-tool': 'scripts/tool.mjs',
+    'scripts-lonely': 'scripts/lonely.mjs',
 };
 function writeReport() {
     mkdirSync('reports/mutation', { recursive: true });
@@ -415,8 +416,10 @@ test('runs a changed script and the guard hook against their own node --test fil
         const files = {
             'backend/services/a.js': 'const a = 1;\nconst b = 3;\n',
             'scripts/tool.mjs': 'export const a = 1;\n',
+            'scripts/lonely.mjs': 'export const c = 1;\n',
             'scripts/tests/tool.test.mjs': '',
             'scripts/tests/other.test.mjs': '',
+            'scripts/tests/helpers.mjs': '',
             '.claude/hooks/guard.mjs': 'export const b = 1;\n',
             '.claude/hooks/tests/shell-reader.test.mjs': '',
         };
@@ -431,18 +434,42 @@ test('runs a changed script and the guard hook against their own node --test fil
         // a command-runner suite.
         const r = strykerRun(dir, null, { MUTATION_TEST_COMMAND: 'node --test leaked.test.mjs' });
         assert.equal(r.status, 1, r.stdout + r.stderr);
-        assert.deepEqual(starts(dir), ['backend', 'hooks', 'scripts-tool']);
-        assert.equal(
-            readFileSync(path.join(dir, 'stryker-commands.log'), 'utf8'),
-            'backend: -\n' +
-                'hooks: node --test .claude/hooks/tests/guard-bash.test.mjs .claude/hooks/tests/gate-refusal-corpus.test.mjs\n' +
-                'scripts-tool: node --test scripts/tests/tool.test.mjs\n'
-        );
+        assert.deepEqual(starts(dir), ['backend', 'hooks', 'scripts-lonely', 'scripts-tool']);
+        const commands = readFileSync(path.join(dir, 'stryker-commands.log'), 'utf8').trim().split('\n');
+        assert.deepEqual(commands.filter((c) => !c.startsWith('scripts-lonely:')), [
+            'backend: -',
+            'hooks: node --test .claude/hooks/tests/guard-bash.test.mjs .claude/hooks/tests/gate-refusal-corpus.test.mjs',
+            'scripts-tool: node --test scripts/tests/tool.test.mjs',
+        ]);
+        // A script with no test file of its own runs every scripts/tests
+        // file, in whatever order the directory lists them.
+        const lonely = commands.find((c) => c.startsWith('scripts-lonely: node --test '));
+        assert.deepEqual(lonely.split(' ').slice(3).sort(), [
+            'scripts/tests/other.test.mjs',
+            'scripts/tests/tool.test.mjs',
+        ]);
         assert.match(r.stdout, /== hooks: mutating 1 range\(s\)\n {3}\.claude\/hooks\/guard\.mjs:1-1\n/);
         assert.match(r.stdout, /== scripts-tool: mutating 1 range\(s\)\n {3}scripts\/tool\.mjs:1-1\n/);
-        for (const file of ['backend/services/a.js', '.claude/hooks/guard.mjs', 'scripts/tool.mjs']) {
+        for (const file of ['backend/services/a.js', '.claude/hooks/guard.mjs', 'scripts/lonely.mjs', 'scripts/tool.mjs']) {
             assert.ok(r.stdout.includes(`${file}:2:12 EqualityOperator (Survived)`), file);
         }
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('exits 2 instead of running a bare node --test when a changed script has no tests at all', () => {
+    const dir = repo();
+    try {
+        mkdirSync(path.join(dir, 'scripts'), { recursive: true });
+        writeFileSync(path.join(dir, 'scripts/lonely.mjs'), 'export const c = 1;\n');
+        git(dir, 'add', '.');
+        git(dir, 'commit', '-q', '-m', 'change');
+        installFakeStryker(dir);
+        const r = strykerRun(dir, null);
+        assert.equal(r.status, 2, r.stdout + r.stderr);
+        assert.match(r.stderr, /^mutation-check: no node --test files to run for scripts-lonely$/m);
+        assert.equal(existsSync(path.join(dir, 'stryker-starts.log')), false);
     } finally {
         cleanup(dir);
     }
