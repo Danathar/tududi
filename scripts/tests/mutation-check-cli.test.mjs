@@ -251,7 +251,10 @@ test('exits 2 when the base ref does not exist', () => {
 // when that is set, and otherwise writes a report (one survivor, or with
 // FAKE_CLEAN one killed mutant) after FAKE_DELAY_MS, if set, and exits 0. It
 // logs the test command a tooling suite gets; with FAKE_ORPHAN it first starts
-// a child that ignores SIGTERM and outlives it. Nothing it starts lives longer
+// a child that ignores SIGTERM and outlives it. For the suite named in
+// FAKE_OOM it prints Stryker's out-of-memory warning in two pieces and exits
+// 1, or with FAKE_OOM_RECOVERS writes its report and exits 0 as a Stryker run
+// whose restarted test runner finished would. Nothing it starts lives longer
 // than 30 s, so a broken kill cannot leave processes behind for long.
 const FAKE_STRYKER = `
 const { appendFileSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
@@ -261,9 +264,11 @@ const stat = readFileSync('/proc/self/stat', 'utf8');
 const group = stat.slice(stat.lastIndexOf(')') + 2).split(' ')[2];
 appendFileSync('stryker-starts.log', project + ' ' + group + ' ' + process.env.NODE_ENV + '\\n');
 appendFileSync('stryker-commands.log', project + ': ' + (process.env.MUTATION_TEST_COMMAND ?? '-') + '\\n');
+appendFileSync('stryker-jest-tests.log', project + ': ' + (process.env.MUTATION_JEST_TESTS ?? '-') + '\\n');
 const SOURCE = ${JSON.stringify(SOURCE)};
 const FILES = {
     backend: 'backend/services/a.js',
+    'backend-unit': 'backend/services/a.js',
     frontend: 'frontend/components/X.tsx',
     hooks: '.claude/hooks/guard.mjs',
     'scripts-tool': 'scripts/tool.mjs',
@@ -294,6 +299,13 @@ if (project === process.env.FAKE_HANG) {
         appendFileSync('signals.log', 'gave up\\n');
         process.exit(0);
     }, 30000);
+} else if (project === process.env.FAKE_OOM) {
+    process.stdout.write('WARN ChildProcessProxy Child process [pid 1] ran out ');
+    setTimeout(() => {
+        process.stdout.write('of memory.\\n');
+        if (process.env.FAKE_OOM_RECOVERS) writeReport();
+        else process.exitCode = 1;
+    }, 200);
 } else if (process.env.FAKE_EXIT) {
     process.exit(Number(process.env.FAKE_EXIT));
 } else if (process.env.FAKE_ORPHAN) {
@@ -453,6 +465,39 @@ test('runs a changed script and the guard hook against their own node --test fil
         for (const file of ['backend/services/a.js', '.claude/hooks/guard.mjs', 'scripts/lonely.mjs', 'scripts/tool.mjs']) {
             assert.ok(r.stdout.includes(`${file}:2:12 EqualityOperator (Survived)`), file);
         }
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('runs a backend file with its own unit test against that test alone', linuxOnly, () => {
+    const dir = repo();
+    try {
+        const files = {
+            'backend/services/a.js': 'const a = 1;\nconst b = 3;\n',
+            'backend/tests/unit/services/a.test.js': '',
+            'backend/services/b.js': 'const c = 1;\n',
+            'backend/tests/unit/services/c.test.js': '',
+        };
+        for (const [rel, body] of Object.entries(files)) {
+            mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+            writeFileSync(path.join(dir, rel), body);
+        }
+        git(dir, 'add', '.');
+        git(dir, 'commit', '-q', '-m', 'change');
+        installFakeStryker(dir);
+        // A list left in the environment must not narrow the backend suite.
+        const r = strykerRun(dir, null, { MUTATION_JEST_TESTS: '["backend/tests/leaked.test.js"]' });
+        assert.equal(r.status, 1, r.stdout + r.stderr);
+        assert.deepEqual(startLog(dir), [
+            ['backend', ownGroup(), 'test'],
+            ['backend-unit', ownGroup(), 'test'],
+        ]);
+        const lists = readFileSync(path.join(dir, 'stryker-jest-tests.log'), 'utf8').trim().split('\n');
+        assert.deepEqual(lists, ['backend: -', 'backend-unit: ["backend/tests/unit/services/a.test.js"]']);
+        assert.match(r.stdout, /== backend: mutating 1 range\(s\)\n {3}backend\/services\/b\.js:1-1\n/);
+        assert.match(r.stdout, /== backend-unit: mutating 1 range\(s\)\n {3}backend\/services\/a\.js:2-2\n/);
+        assert.ok(r.stdout.includes('backend/services/a.js:2:12 EqualityOperator (Survived)'));
     } finally {
         cleanup(dir);
     }
@@ -665,6 +710,53 @@ test('exits 2 when Stryker fails, with or without a budget', linuxOnly, () => {
             assert.match(r.stderr, /^mutation-check: Stryker \(backend\) exited with 3$/m);
         }
         assert.deepEqual(starts(dir), ['backend', 'backend']);
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('a suite that runs out of memory is reported incomplete, and the other suites still count', linuxOnly, () => {
+    const dir = strykerRepo();
+    const summary = path.join(dir, 'summary.md');
+    const notice =
+        'mutation check incomplete — backend ran out of memory, no result; none of its mutants are counted';
+    try {
+        for (const budget of [null, '10']) {
+            const r = strykerRun(dir, budget, {
+                FAKE_OOM: 'backend',
+                GITHUB_ACTIONS: 'true',
+                GITHUB_STEP_SUMMARY: summary,
+            });
+            // The frontend survivor is a normal finding, so the usual exit status 1.
+            assert.equal(r.status, 1, r.stdout + r.stderr);
+            // Stryker's own output still reaches the log, split message included.
+            assert.ok(r.stdout.includes('Child process [pid 1] ran out of memory.'), r.stdout);
+            assert.ok(r.stdout.includes(`\n${notice}\n`), r.stdout);
+            assert.ok(r.stdout.includes(`\n::warning::${notice}\n`), r.stdout);
+            assert.match(r.stdout, /frontend\/components\/X\.tsx:2:12 EqualityOperator \(Survived\)/);
+            assert.doesNotMatch(r.stdout, /backend\/services\/a\.js:2:12/);
+            assert.doesNotMatch(r.stdout, /time budget/);
+            assert.ok(readFileSync(summary, 'utf8').includes(`**${notice}**`));
+        }
+        assert.deepEqual(starts(dir), ['backend', 'frontend', 'backend', 'frontend']);
+        // With nothing new elsewhere the incomplete run exits 0.
+        const clean = strykerRun(dir, null, { FAKE_OOM: 'backend', FAKE_CLEAN: '1' });
+        assert.equal(clean.status, 0, clean.stdout + clean.stderr);
+        assert.ok(clean.stdout.includes(`\n${notice}\n`), clean.stdout);
+        assert.match(clean.stdout, /No new surviving mutants in the runs that finished \(0 accepted in the ledger\)\./);
+        assert.doesNotMatch(clean.stdout, /::warning::/);
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('a Stryker run that recovers from running out of memory counts as usual', linuxOnly, () => {
+    const dir = strykerRepo();
+    try {
+        const r = strykerRun(dir, null, { FAKE_OOM: 'backend', FAKE_OOM_RECOVERS: '1' });
+        assert.equal(r.status, 1, r.stdout + r.stderr);
+        assert.match(r.stdout, /backend\/services\/a\.js:2:12 EqualityOperator \(Survived\)/);
+        assert.doesNotMatch(r.stdout, /incomplete/);
     } finally {
         cleanup(dir);
     }

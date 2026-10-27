@@ -52,7 +52,16 @@ the lines each pull request adds or changes:
    deletes have nothing to mutate.
 2. Stryker runs once per suite ([stryker.config.mjs](../stryker.config.mjs),
    `MUTATION_PROJECT` names the suite). The backend and frontend suites run
-   only the Jest tests related to the mutated files. The tooling suites use
+   only the Jest tests related to the mutated files. A backend file with a
+   unit test of its own at the mirrored path
+   (`backend/services/x.js` → `backend/tests/unit/services/x.test.js`) goes
+   to a `backend-unit` suite instead, which runs only those unit tests
+   (listed in `MUTATION_JEST_TESTS`). A file most of the backend loads has
+   nearly every backend test related to it, and Stryker runs them in one
+   Jest process; for such a file the first run ran out of memory before any
+   mutant was tried. A mutant only the integration tests notice shows up as
+   a survivor of `backend-unit`: add a unit case for it, or accept it in the
+   ledger. The tooling suites use
    Stryker's built-in `command` runner, which runs one `node --test` command
    per mutant (passed in `MUTATION_TEST_COMMAND`): a script's own
    `scripts/tests/<name>.test.mjs` and `<name>-cli.test.mjs` (every
@@ -91,6 +100,14 @@ run cover most of the backend integration suite, about 10 minutes on CI.
   "no result", not "no survivors".
 - Without `--budget-minutes` there is no limit, which is how a local run works
   unless you pass it.
+- Stryker runs all of a suite's tests in one Jest process, and that process
+  grows with every backend test file it runs, so a run over most of the
+  backend suite runs out of memory (#444). A file with its own
+  unit test avoids that through the `backend-unit` suite above. When a
+  Stryker run still fails after its test runner ran out of memory, that suite
+  is reported the same way as a run the budget stopped: an "incomplete" notice
+  in the log, a `::warning::` annotation and the step summary, none of its
+  mutants counted, and the other suites still run.
 
 For each new survivor, add a test that fails on it. Only when the mutant is
 equivalent (the code behaves the same) or harmless, copy the ledger entry the
