@@ -17,6 +17,11 @@ const { projectIdsInArea } = require('../../../services/scopeService');
 const {
     applyViewerAreasToProjects,
 } = require('../../../services/projectAreaOverrides');
+const {
+    startDateTimeToUTC,
+    utcToUserDateString,
+    getSafeTimezone,
+} = require('../../../utils/timezone-utils');
 
 const colorInputProperty = {
     type: 'string',
@@ -41,6 +46,36 @@ function parseProjectDueDate(value) {
         throw new Error('due_date_at must be a valid ISO 8601 date');
     }
     return value;
+}
+
+const startInputProperties = {
+    start_date: {
+        type: ['string', 'null'],
+        description:
+            "Start date (YYYY-MM-DD) in the user's timezone: when the project begins. Pass null to clear it.",
+    },
+    start_time: {
+        type: ['string', 'null'],
+        description:
+            "Optional start time (HH:mm, 24-hour) in the user's timezone. Omit or null for a whole-day start.",
+    },
+};
+
+// Changing start_date alone drops the time, as in the web UI.
+function startAttrs(params, timezone, storedStart = null) {
+    if (params.start_date === undefined && params.start_time === undefined)
+        return {};
+    const tz = getSafeTimezone(timezone);
+    const dateString =
+        params.start_date !== undefined
+            ? params.start_date || null
+            : storedStart && utcToUserDateString(storedStart, tz);
+    const { value, hasTime } = startDateTimeToUTC(
+        dateString,
+        params.start_time,
+        tz
+    );
+    return { start_date_at: value, start_has_time: hasTime };
 }
 
 const goalInputProperties = {
@@ -180,6 +215,8 @@ function registerProjectTools(server, context, tools) {
                     is_maintenance: !!proj.is_maintenance,
                     tags: proj.Tags ? proj.Tags.map((t) => t.name) : [],
                     due_date_at: proj.due_date_at,
+                    start_date_at: proj.start_date_at,
+                    start_has_time: !!proj.start_has_time,
                     completed_at: proj.completed_at,
                     pin_to_sidebar: proj.pin_to_sidebar,
                     created_at: proj.created_at,
@@ -310,6 +347,7 @@ function registerProjectTools(server, context, tools) {
                     description: 'Due date (ISO 8601)',
                 },
                 color: colorInputProperty,
+                ...startInputProperties,
                 tags: {
                     type: 'array',
                     items: { type: 'string' },
@@ -351,6 +389,7 @@ function registerProjectTools(server, context, tools) {
                 image_url: params.image_url || null,
                 goal_id: goalId || null,
                 is_maintenance: params.is_maintenance === true,
+                ...startAttrs(params, context.user?.timezone),
             };
 
             await rolesService.assertCan(context.userId, 'create_projects');
@@ -395,6 +434,8 @@ function registerProjectTools(server, context, tools) {
                     : [],
                 due_date_at: reloadedProject.due_date_at,
                 color: reloadedProject.color,
+                start_date_at: reloadedProject.start_date_at,
+                start_has_time: !!reloadedProject.start_has_time,
                 completed_at: reloadedProject.completed_at,
                 created_at: reloadedProject.created_at,
             };
@@ -468,6 +509,7 @@ function registerProjectTools(server, context, tools) {
                     type: 'boolean',
                     description: 'Pin to sidebar',
                 },
+                ...startInputProperties,
                 image_url: {
                     type: 'string',
                     description:
@@ -499,7 +541,13 @@ function registerProjectTools(server, context, tools) {
                 throw new Error(`Project not found: ${params.uid}`);
             }
 
-            const updates = {};
+            const updates = {
+                ...startAttrs(
+                    params,
+                    context.user?.timezone,
+                    project.start_date_at
+                ),
+            };
             if (params.name !== undefined)
                 updates.name = validateName(params.name);
             if (params.description !== undefined)
@@ -622,6 +670,8 @@ function registerProjectTools(server, context, tools) {
                     : [],
                 due_date_at: reloadedProject.due_date_at,
                 color: reloadedProject.color,
+                start_date_at: reloadedProject.start_date_at,
+                start_has_time: !!reloadedProject.start_has_time,
                 completed_at: reloadedProject.completed_at,
                 pin_to_sidebar: reloadedProject.pin_to_sidebar,
                 updated_at: reloadedProject.updated_at,
