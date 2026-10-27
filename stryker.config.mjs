@@ -5,6 +5,11 @@
 // hand run (`npx stryker run`), which mutates every source file of the suite
 // and takes hours. See docs/quality.md.
 const project = process.env.MUTATION_PROJECT === 'frontend' ? 'frontend' : 'backend';
+// The fork's tooling (scripts/ and the Bash guard hook) is tested with plain
+// `node --test` files, not Jest. For those suites mutation-check.mjs passes
+// the test files to run in MUTATION_TEST_COMMAND, and Stryker's built-in
+// `command` runner runs that command once per mutant.
+const testCommand = process.env.MUTATION_TEST_COMMAND;
 
 const suites = {
     backend: {
@@ -33,18 +38,30 @@ const suites = {
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 export default {
     packageManager: 'npm',
-    testRunner: 'jest',
-    plugins: ['@stryker-mutator/jest-runner'],
-    jest: {
-        projectType: 'custom',
-        configFile: suites[project].configFile,
-        // Run only the tests related to the mutated files.
-        enableFindRelatedTests: true,
-    },
-    coverageAnalysis: 'perTest',
-    mutate: suites[project].mutate,
+    ...(testCommand
+        ? {
+              testRunner: 'command',
+              commandRunner: { command: testCommand },
+              // The command runner cannot tell which test covers which mutant.
+              coverageAnalysis: 'off',
+              mutate: ['scripts/*.{js,mjs}', '.claude/hooks/*.mjs'],
+          }
+        : {
+              testRunner: 'jest',
+              plugins: ['@stryker-mutator/jest-runner'],
+              jest: {
+                  projectType: 'custom',
+                  configFile: suites[project].configFile,
+                  // Run only the tests related to the mutated files.
+                  enableFindRelatedTests: true,
+              },
+              coverageAnalysis: 'perTest',
+              mutate: suites[project].mutate,
+          }),
     // Top-level paths the sandbox copy does not need (anchored, so
-    // backend/docs, which the API docs load, is still copied).
+    // backend/docs, which the API docs load, is still copied). The tooling
+    // tests read docs/ (the policy and fork-delta checks), so it stays for
+    // them.
     ignorePatterns: [
         '/dist',
         '/coverage',
@@ -52,11 +69,12 @@ export default {
         '/backend/coverage',
         '/screenshots',
         '/e2e',
-        '/docs',
+        ...(testCommand ? [] : ['/docs']),
         '/reports',
     ],
     reporters: ['clear-text', 'progress', 'json'],
-    jsonReporter: { fileName: `reports/mutation/${project}.json` },
+    // One report per suite; mutation-check.mjs reads it by the suite's name.
+    jsonReporter: { fileName: `reports/mutation/${process.env.MUTATION_PROJECT ?? project}.json` },
     // mutation-check.mjs decides the result from the report and the survivors
     // ledger, so Stryker's own score threshold never fails the run.
     thresholds: { high: 80, low: 60, break: null },

@@ -249,7 +249,8 @@ test('exits 2 when the base ref does not exist', () => {
 // and does not finish: SIGTERM or SIGINT is logged and ends it, or with
 // FAKE_IGNORE_TERM is only logged. Every other suite exits with FAKE_EXIT
 // when that is set, and otherwise writes a report (one survivor, or with
-// FAKE_CLEAN one killed mutant) and exits 0; with FAKE_ORPHAN it first starts
+// FAKE_CLEAN one killed mutant) after FAKE_DELAY_MS, if set, and exits 0. It
+// logs the test command a tooling suite gets; with FAKE_ORPHAN it first starts
 // a child that ignores SIGTERM and outlives it. Nothing it starts lives longer
 // than 30 s, so a broken kill cannot leave processes behind for long.
 const FAKE_STRYKER = `
@@ -259,8 +260,15 @@ const project = process.env.MUTATION_PROJECT;
 const stat = readFileSync('/proc/self/stat', 'utf8');
 const group = stat.slice(stat.lastIndexOf(')') + 2).split(' ')[2];
 appendFileSync('stryker-starts.log', project + ' ' + group + ' ' + process.env.NODE_ENV + '\\n');
+appendFileSync('stryker-commands.log', project + ': ' + (process.env.MUTATION_TEST_COMMAND ?? '-') + '\\n');
 const SOURCE = ${JSON.stringify(SOURCE)};
-const FILES = { backend: 'backend/services/a.js', frontend: 'frontend/components/X.tsx' };
+const FILES = {
+    backend: 'backend/services/a.js',
+    frontend: 'frontend/components/X.tsx',
+    hooks: '.claude/hooks/guard.mjs',
+    'scripts-tool': 'scripts/tool.mjs',
+    'scripts-lonely': 'scripts/lonely.mjs',
+};
 function writeReport() {
     mkdirSync('reports/mutation', { recursive: true });
     const m = {
@@ -303,11 +311,16 @@ if (project === process.env.FAKE_HANG) {
         writeReport();
     });
 } else {
-    writeReport();
+    setTimeout(writeReport, Number(process.env.FAKE_DELAY_MS ?? 0));
 }
 `;
 
 const STRYKER_BIN = 'node_modules/@stryker-mutator/core/bin/stryker.js';
+
+const installFakeStryker = (dir) => {
+    mkdirSync(path.join(dir, path.dirname(STRYKER_BIN)), { recursive: true });
+    writeFileSync(path.join(dir, STRYKER_BIN), FAKE_STRYKER);
+};
 
 // A branch that changes one backend and one frontend line, with the fake
 // Stryker installed (untracked, as node_modules is).
@@ -318,8 +331,7 @@ function strykerRepo() {
     writeFileSync(path.join(dir, 'frontend/components/X.tsx'), 'export const x = 1;\n');
     git(dir, 'add', '.');
     git(dir, 'commit', '-q', '-m', 'change');
-    mkdirSync(path.join(dir, path.dirname(STRYKER_BIN)), { recursive: true });
-    writeFileSync(path.join(dir, STRYKER_BIN), FAKE_STRYKER);
+    installFakeStryker(dir);
     return dir;
 }
 
@@ -393,6 +405,71 @@ test('runs Stryker for the backend, then the frontend, and reports the survivors
         assert.match(r.stdout, /backend\/services\/a\.js:2:12 EqualityOperator \(Survived\)/);
         assert.match(r.stdout, /frontend\/components\/X\.tsx:2:12 EqualityOperator \(Survived\)/);
         assert.doesNotMatch(r.stdout, /time budget|incomplete/);
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('runs a changed script and the guard hook against their own node --test files', linuxOnly, () => {
+    const dir = repo();
+    try {
+        const files = {
+            'backend/services/a.js': 'const a = 1;\nconst b = 3;\n',
+            'scripts/tool.mjs': 'export const a = 1;\n',
+            'scripts/lonely.mjs': 'export const c = 1;\n',
+            'scripts/tests/tool.test.mjs': '',
+            'scripts/tests/other.test.mjs': '',
+            'scripts/tests/helpers.mjs': '',
+            '.claude/hooks/guard.mjs': 'export const b = 1;\n',
+            '.claude/hooks/tests/shell-reader.test.mjs': '',
+        };
+        for (const [rel, body] of Object.entries(files)) {
+            mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+            writeFileSync(path.join(dir, rel), body);
+        }
+        git(dir, 'add', '.');
+        git(dir, 'commit', '-q', '-m', 'change');
+        installFakeStryker(dir);
+        // A command left in the environment must not turn the Jest suite into
+        // a command-runner suite.
+        const r = strykerRun(dir, null, { MUTATION_TEST_COMMAND: 'node --test leaked.test.mjs' });
+        assert.equal(r.status, 1, r.stdout + r.stderr);
+        assert.deepEqual(starts(dir), ['backend', 'hooks', 'scripts-lonely', 'scripts-tool']);
+        const commands = readFileSync(path.join(dir, 'stryker-commands.log'), 'utf8').trim().split('\n');
+        assert.deepEqual(commands.filter((c) => !c.startsWith('scripts-lonely:')), [
+            'backend: -',
+            'hooks: node --test .claude/hooks/tests/guard-bash.test.mjs .claude/hooks/tests/gate-refusal-corpus.test.mjs',
+            'scripts-tool: node --test scripts/tests/tool.test.mjs',
+        ]);
+        // A script with no test file of its own runs every scripts/tests
+        // file, in whatever order the directory lists them.
+        const lonely = commands.find((c) => c.startsWith('scripts-lonely: node --test '));
+        assert.deepEqual(lonely.split(' ').slice(3).sort(), [
+            'scripts/tests/other.test.mjs',
+            'scripts/tests/tool.test.mjs',
+        ]);
+        assert.match(r.stdout, /== hooks: mutating 1 range\(s\)\n {3}\.claude\/hooks\/guard\.mjs:1-1\n/);
+        assert.match(r.stdout, /== scripts-tool: mutating 1 range\(s\)\n {3}scripts\/tool\.mjs:1-1\n/);
+        for (const file of ['backend/services/a.js', '.claude/hooks/guard.mjs', 'scripts/lonely.mjs', 'scripts/tool.mjs']) {
+            assert.ok(r.stdout.includes(`${file}:2:12 EqualityOperator (Survived)`), file);
+        }
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('exits 2 instead of running a bare node --test when a changed script has no tests at all', () => {
+    const dir = repo();
+    try {
+        mkdirSync(path.join(dir, 'scripts'), { recursive: true });
+        writeFileSync(path.join(dir, 'scripts/lonely.mjs'), 'export const c = 1;\n');
+        git(dir, 'add', '.');
+        git(dir, 'commit', '-q', '-m', 'change');
+        installFakeStryker(dir);
+        const r = strykerRun(dir, null);
+        assert.equal(r.status, 2, r.stdout + r.stderr);
+        assert.match(r.stderr, /^mutation-check: no node --test files to run for scripts-lonely$/m);
+        assert.equal(existsSync(path.join(dir, 'stryker-starts.log')), false);
     } finally {
         cleanup(dir);
     }
@@ -476,6 +553,25 @@ test('at the budget the running suite gets SIGTERM with its child processes, and
         assert.match(r.stdout, /backend\/services\/a\.js:2:12 EqualityOperator \(Survived\)/);
         assert.doesNotMatch(r.stdout, /frontend\/components\/X\.tsx:2:12/);
         assert.ok(readFileSync(summary, 'utf8').includes(`**${notice}**`));
+        await assertGone(pidIn(dir, 'child.pid'), 'the child process of the stopped Stryker run');
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('the suite after the first one gets only what is left of the budget', linuxOnly, async () => {
+    const dir = strykerRepo();
+    try {
+        // The backend takes 4 s of the 6 s budget, so the frontend is stopped
+        // about 2 s after it starts, not after another 6 s.
+        const began = Date.now();
+        const r = strykerRun(dir, '0.1', { FAKE_HANG: 'frontend', FAKE_DELAY_MS: '4000' });
+        const took = Date.now() - began;
+        assert.equal(r.status, 1, r.stdout + r.stderr);
+        assert.deepEqual(starts(dir), ['backend', 'frontend']);
+        assert.equal(signals(dir), 'SIGTERM\n');
+        assert.ok(took >= 6_000, `${took} ms`);
+        assert.ok(took < 8_500, `${took} ms: the frontend run was given the whole budget again`);
         await assertGone(pidIn(dir, 'child.pid'), 'the child process of the stopped Stryker run');
     } finally {
         cleanup(dir);
