@@ -75,8 +75,9 @@ async function deleteFromCaldavRemotes(task) {
 
 // Dependent rows are removed in dependency order, which is what PostgreSQL
 // relies on; older SQLite databases additionally get constraint checks
-// switched off by the caller.
-async function destroyTaskRows(task) {
+// switched off by the caller. `skipWebhooks` keeps a bulk caller (undoing an
+// import) from sending one task.deleted per row.
+async function removeTaskRows(task, { skipWebhooks = false } = {}) {
     const taskId = task.id;
 
     await TaskEvent.destroy({ where: { task_id: taskId }, force: true });
@@ -99,13 +100,13 @@ async function destroyTaskRows(task) {
     // Unlink attachment files from disk before destroying rows, so a
     // dangling file never outlives the record that gated its access
     // (GHSA-43p8-ch4p-gqg4).
-    const attachments = await TaskAttachment.findAll({
-        where: { task_id: taskId },
-    });
+    const attachments =
+        task.Attachments ||
+        (await TaskAttachment.findAll({ where: { task_id: taskId } }));
     await deleteAttachmentFiles(attachments);
     await TaskAttachment.destroy({ where: { task_id: taskId }, force: true });
 
-    await task.destroy({ force: true });
+    await task.destroy({ force: true, skipWebhooks });
 }
 
 // Deletes the task and its subtasks (docs/00-tasks-behavior.md: "Deleting the
@@ -125,11 +126,23 @@ async function deleteTask(task) {
 
     await withForeignKeyChecksDisabled(sequelize, async () => {
         for (const each of tasks) {
-            await destroyTaskRows(each);
+            await removeTaskRows(each);
         }
+    });
+}
+
+// Removes one task row and everything that hangs off it, including its
+// remote CalDAV copies. Subtasks and recurring instances are the caller's
+// business: the spreadsheet import undo uses this to drop exactly the rows it
+// created.
+async function destroyTaskRows(task, { skipWebhooks = false } = {}) {
+    await deleteFromCaldavRemotes(task);
+    await withForeignKeyChecksDisabled(sequelize, async () => {
+        await removeTaskRows(task, { skipWebhooks });
     });
 }
 
 module.exports = {
     deleteTask,
+    destroyTaskRows,
 };
