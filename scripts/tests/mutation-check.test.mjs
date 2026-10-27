@@ -1,11 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
     budgetNotice,
     evaluate,
     formatSurvivor,
     isAccepted,
+    jestTestsFor,
     ledgerEntry,
+    memoryNotice,
     mutateRanges,
     originalText,
     parseDiff,
@@ -13,6 +18,7 @@ import {
     summarize,
     survivors,
     testsFor,
+    unitTestFor,
     validateLedger,
 } from '../mutation-check.mjs';
 
@@ -233,6 +239,119 @@ test('mutateRanges adds a tooling suite only for the scripts and hooks that chan
     });
 });
 
+test('unitTestFor mirrors a backend source file under backend/tests/unit', () => {
+    assert.equal(
+        unitTestFor('backend/services/emailDomainService.js'),
+        'backend/tests/unit/services/emailDomainService.test.js'
+    );
+    assert.equal(unitTestFor('backend/modules/auth/js.js'), 'backend/tests/unit/modules/auth/js.test.js');
+    assert.equal(unitTestFor('backend/utils/x.js'), 'backend/tests/unit/utils/x.test.js');
+    for (const f of [
+        'frontend/utils/date.ts',
+        'backend/tests/unit/services/x.test.js',
+        'backend/models/index.js',
+        'scripts/mutation-check.mjs',
+    ]) {
+        assert.equal(unitTestFor(f), null, f);
+    }
+});
+
+test('mutateRanges sends a backend file with its own unit test to backend-unit', () => {
+    const changed = new Map([
+        ['backend/services/a.js', [{ start: 1, end: 3 }, { start: 9, end: 9 }]],
+        ['backend/services/b.js', [{ start: 2, end: 2 }]],
+        ['backend/models/user.js', [{ start: 5, end: 5 }]],
+        ['frontend/b.tsx', [{ start: 2, end: 4 }]],
+    ]);
+    const asked = [];
+    const hasTest = (t) => {
+        asked.push(t);
+        return ['backend/tests/unit/services/a.test.js', 'backend/tests/unit/models/user.test.js'].includes(t);
+    };
+    assert.deepEqual(mutateRanges(changed, hasTest), {
+        backend: ['backend/services/b.js:2-2'],
+        frontend: ['frontend/b.tsx:2-4'],
+        'backend-unit': [
+            'backend/models/user.js:5-5',
+            'backend/services/a.js:1-3',
+            'backend/services/a.js:9-9',
+        ],
+    });
+    // Only backend files are looked up, each once.
+    assert.deepEqual(asked.sort(), [
+        'backend/tests/unit/models/user.test.js',
+        'backend/tests/unit/services/a.test.js',
+        'backend/tests/unit/services/b.test.js',
+    ]);
+    // Without the lookup every backend file stays in the backend suite.
+    assert.deepEqual(Object.keys(mutateRanges(changed)), ['backend', 'frontend']);
+});
+
+test('jestTestsFor lists the own unit test of each backend-unit file once, null elsewhere', () => {
+    assert.deepEqual(
+        jestTestsFor('backend-unit', [
+            'backend/models/user.js:5-5',
+            'backend/services/a.js:1-3',
+            'backend/services/a.js:9-9',
+        ]),
+        ['backend/tests/unit/models/user.test.js', 'backend/tests/unit/services/a.test.js']
+    );
+    for (const project of ['backend', 'frontend', 'hooks', 'scripts-tool']) {
+        assert.equal(jestTestsFor(project, ['backend/services/a.js:1-3']), null, project);
+    }
+    assert.equal(testsFor('backend-unit', ['scripts/tests/x.test.mjs']), null);
+});
+
+// stryker.config.mjs reads its environment when it is loaded, so each case
+// loads it in a child process of its own.
+const CONFIG_URL = pathToFileURL(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'stryker.config.mjs')
+).href;
+function strykerConfig(env) {
+    const out = execFileSync(
+        process.execPath,
+        [
+            '--input-type=module',
+            '-e',
+            `const c = (await import(${JSON.stringify(CONFIG_URL)})).default; console.log(JSON.stringify(c));`,
+        ],
+        { encoding: 'utf8', env: { PATH: process.env.PATH, ...env } }
+    );
+    return JSON.parse(out);
+}
+
+test('stryker.config.mjs runs only the listed backend unit tests for backend-unit', () => {
+    const c = strykerConfig({
+        MUTATION_PROJECT: 'backend-unit',
+        MUTATION_JEST_TESTS: JSON.stringify([
+            'backend/tests/unit/services/a.test.js',
+            'backend/tests/unit/models/user.test.js',
+        ]),
+    });
+    assert.equal(c.testRunner, 'jest');
+    assert.equal(c.coverageAnalysis, 'perTest');
+    assert.deepEqual(c.jest, {
+        projectType: 'custom',
+        configFile: 'backend/jest.config.js',
+        enableFindRelatedTests: false,
+        config: {
+            testMatch: ['<rootDir>/tests/unit/services/a.test.js', '<rootDir>/tests/unit/models/user.test.js'],
+        },
+    });
+    assert.equal(c.jsonReporter.fileName, 'reports/mutation/backend-unit.json');
+});
+
+test('stryker.config.mjs keeps related-test selection for the backend and frontend suites', () => {
+    for (const [project, configFile] of [
+        ['backend', 'backend/jest.config.js'],
+        ['frontend', 'jest.config.js'],
+    ]) {
+        const c = strykerConfig({ MUTATION_PROJECT: project });
+        assert.deepEqual(c.jest, { projectType: 'custom', configFile, enableFindRelatedTests: true }, project);
+        assert.equal(c.jsonReporter.fileName, `reports/mutation/${project}.json`);
+    }
+});
+
 test('mutateRanges is empty when only tests and docs change', () => {
     assert.deepEqual(mutateRanges(parseDiff('+++ b/backend/tests/x.test.js\n@@ -1 +1 @@\n')), {
         backend: [],
@@ -424,4 +543,36 @@ test('summarize puts the budget notice first when the budget stopped the run', (
     const some = summarize([SURVIVOR], [], { minutes: 50, cut: 'frontend', skipped: [] });
     assert.match(some, /^## Mutation check on changed lines\n\n\*\*mutation check incomplete/);
     assert.match(some, /1 changed line\(s\) can be broken without any test failing/);
+});
+
+test('memoryNotice names the suites that ran out of memory', () => {
+    assert.equal(
+        memoryNotice(['backend', 'backend-unit']),
+        'mutation check incomplete — backend, backend-unit ran out of memory, no result; ' +
+            'none of its mutants are counted'
+    );
+});
+
+test('summarize puts the memory notice after the budget notice and says only finished runs count', () => {
+    const stopped = { minutes: 50, cut: 'frontend', skipped: [] };
+    assert.equal(
+        summarize([], [], null, ['backend']),
+        [
+            '## Mutation check on changed lines',
+            '',
+            `**${memoryNotice(['backend'])}**`,
+            '',
+            'No new surviving mutants in the runs that finished (0 accepted in the ledger).',
+        ].join('\n')
+    );
+    const both = summarize([SURVIVOR], [], stopped, ['backend']).split('\n');
+    assert.deepEqual(both.slice(0, 6), [
+        '## Mutation check on changed lines',
+        '',
+        `**${budgetNotice(stopped)}**`,
+        '',
+        `**${memoryNotice(['backend'])}**`,
+        '',
+    ]);
+    assert.equal(summarize([], [], null, []), summarize([], [], null));
 });
