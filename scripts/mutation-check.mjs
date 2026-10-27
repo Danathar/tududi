@@ -92,7 +92,7 @@ export function projectFor(file) {
  */
 export function unitTestFor(file) {
     if (projectFor(file) !== 'backend') return null;
-    return `backend/tests/unit/${file.slice('backend/'.length).replace(/\.js$/, '.test.js')}`;
+    return `backend/tests/unit/${file.slice('backend/'.length, -'.js'.length)}.test.js`;
 }
 
 /**
@@ -197,7 +197,7 @@ export function parseDiff(diff) {
  *   `backend-unit`
  * @returns {{backend: string[], frontend: string[], [suite: string]: string[]}}
  */
-export function mutateRanges(changed, hasTest = () => false) {
+export function mutateRanges(changed, hasTest) {
     const out = { backend: [], frontend: [] };
     for (const [file, ranges] of [...changed].sort(([a], [b]) =>
         a < b ? -1 : a > b ? 1 : 0
@@ -208,7 +208,7 @@ export function mutateRanges(changed, hasTest = () => false) {
         // related to it. Run as one in-band Jest process, those ran out of
         // memory before any mutant ran, so a file with its own unit test is
         // checked against that test alone.
-        if (project === 'backend' && hasTest(unitTestFor(file))) project = 'backend-unit';
+        if (project === 'backend' && hasTest?.(unitTestFor(file))) project = 'backend-unit';
         out[project] ??= [];
         for (const r of ranges) out[project].push(`${file}:${r.start}-${r.end}`);
     }
@@ -416,7 +416,7 @@ const KILL_GRACE_MS = 5000;
  * Stryker for one suite. With a limit (milliseconds) it runs in a process
  * group of its own and is stopped with that group, the Jest workers it starts
  * included, if it is still running when the limit is up.
- * @returns {Promise<{report: object, cut: boolean, outOfMemory: boolean}>}
+ * @returns {Promise<{report: object, cut: boolean, outOfMemory?: boolean}>}
  *   `cut` when the limit stopped it, `outOfMemory` when it failed after its
  *   test runner ran out of memory; none of its mutants are counted then
  */
@@ -516,17 +516,13 @@ async function runStryker(root, project, mutate, limitMs = null) {
         process.exit(128 + constants.signals[interrupted]);
     }
     // Stryker writes its report at the end, so a run that was cut off has none.
-    if (cut) return { report: { files: {} }, cut, outOfMemory: false };
+    if (cut) return { report: { files: {} }, cut };
     // A suite too big for one test runner process says nothing about the
     // change; report it as incomplete, like a run the budget stopped.
     if (status !== 0 && outOfMemory) return { report: { files: {} }, cut, outOfMemory };
     if (status !== 0) fail(`Stryker (${project}) exited with ${status ?? signal}`);
     // Stryker writes no report when the ranges hold no mutable code.
-    return {
-        report: existsSync(report) ? readJson(report, 'Stryker report') : { files: {} },
-        cut,
-        outOfMemory: false,
-    };
+    return { report: existsSync(report) ? readJson(report, 'Stryker report') : { files: {} }, cut };
 }
 
 /**

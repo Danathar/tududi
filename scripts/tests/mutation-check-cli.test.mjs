@@ -247,9 +247,10 @@ test('exits 2 when the base ref does not exist', () => {
 // FAKE_HANG it starts a child process of its own (as Stryker starts Jest
 // workers), records that child's pid once its signal handlers are in place,
 // and does not finish: SIGTERM or SIGINT is logged and ends it, or with
-// FAKE_IGNORE_TERM is only logged. Every other suite exits with FAKE_EXIT
-// when that is set, and otherwise writes a report (one survivor, or with
-// FAKE_CLEAN one killed mutant) after FAKE_DELAY_MS, if set, and exits 0. It
+// FAKE_IGNORE_TERM is only logged. Every other suite prints an error line to
+// stdout and one to stderr and exits with FAKE_EXIT when that is set, and
+// otherwise writes a report (one survivor, or with FAKE_CLEAN one killed
+// mutant) after FAKE_DELAY_MS, if set, and exits 0. It
 // logs the test command a tooling suite gets; with FAKE_ORPHAN it first starts
 // a child that ignores SIGTERM and outlives it. For the suite named in
 // FAKE_OOM it prints Stryker's out-of-memory warning in two pieces and exits
@@ -307,7 +308,9 @@ if (project === process.env.FAKE_HANG) {
         else process.exitCode = 1;
     }, 200);
 } else if (process.env.FAKE_EXIT) {
-    process.exit(Number(process.env.FAKE_EXIT));
+    process.stdout.write('ERROR Stryker Unexpected error occurred while running Stryker\\n');
+    process.stderr.write('Error: Something went wrong in the initial test run\\n');
+    process.exitCode = Number(process.env.FAKE_EXIT);
 } else if (process.env.FAKE_ORPHAN) {
     // It ignores SIGTERM, so only a SIGKILL to the group ends it; wait until
     // its handler is in place.
@@ -417,6 +420,14 @@ test('runs Stryker for the backend, then the frontend, and reports the survivors
         assert.match(r.stdout, /backend\/services\/a\.js:2:12 EqualityOperator \(Survived\)/);
         assert.match(r.stdout, /frontend\/components\/X\.tsx:2:12 EqualityOperator \(Survived\)/);
         assert.doesNotMatch(r.stdout, /time budget|incomplete/);
+        // A run with nothing incomplete prints no notice or annotation at all.
+        const ci = strykerRun(dir, null, { GITHUB_ACTIONS: 'true' });
+        assert.equal(ci.status, 1, ci.stdout + ci.stderr);
+        assert.doesNotMatch(ci.stdout, /::warning::/);
+        assert.ok(
+            ci.stdout.trimEnd().endsWith(']'),
+            'the ledger entries end the output, with no notice after them'
+        );
     } finally {
         cleanup(dir);
     }
@@ -598,6 +609,7 @@ test('at the budget the running suite gets SIGTERM with its child processes, and
         assert.match(r.stdout, /backend\/services\/a\.js:2:12 EqualityOperator \(Survived\)/);
         assert.doesNotMatch(r.stdout, /frontend\/components\/X\.tsx:2:12/);
         assert.ok(readFileSync(summary, 'utf8').includes(`**${notice}**`));
+        assert.doesNotMatch(r.stdout, /ran out of memory/);
         await assertGone(pidIn(dir, 'child.pid'), 'the child process of the stopped Stryker run');
     } finally {
         cleanup(dir);
@@ -708,6 +720,10 @@ test('exits 2 when Stryker fails, with or without a budget', linuxOnly, () => {
             const r = strykerRun(dir, budget, { FAKE_EXIT: '3' });
             assert.equal(r.status, 2, r.stdout + r.stderr);
             assert.match(r.stderr, /^mutation-check: Stryker \(backend\) exited with 3$/m);
+            // Stryker's own output is passed through, each stream to its own.
+            assert.match(r.stdout, /^ERROR Stryker Unexpected error occurred while running Stryker$/m);
+            assert.match(r.stderr, /^Error: Something went wrong in the initial test run$/m);
+            assert.doesNotMatch(r.stdout, /incomplete/);
         }
         assert.deepEqual(starts(dir), ['backend', 'backend']);
     } finally {
