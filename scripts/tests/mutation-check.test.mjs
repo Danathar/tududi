@@ -12,6 +12,7 @@ import {
     projectFor,
     summarize,
     survivors,
+    testsFor,
     validateLedger,
 } from '../mutation-check.mjs';
 
@@ -115,7 +116,38 @@ test('projectFor picks the Jest suite for source files', () => {
     assert.equal(projectFor('frontend/a.jsx'), 'frontend');
 });
 
-test('projectFor leaves out tests, configs, migrations, scripts and locales', () => {
+test('projectFor picks a tooling suite for the scripts and the guard hook', () => {
+    assert.equal(projectFor('scripts/mutation-check.mjs'), 'scripts-mutation-check');
+    assert.equal(projectFor('scripts/version-plan.js'), 'scripts-version-plan');
+    assert.equal(projectFor('.claude/hooks/guard-bash.mjs'), 'hooks');
+    assert.equal(projectFor('.claude/hooks/shell-reader.mjs'), 'hooks');
+});
+
+test('testsFor runs a script against its own tests, the hook against the guard tests', () => {
+    const scriptTests = [
+        'scripts/tests/coverage-gate-cli.test.mjs',
+        'scripts/tests/coverage-gate.test.mjs',
+        'scripts/tests/pr-metrics.test.mjs',
+        'scripts/tests/version-plan.test.mjs',
+    ];
+    assert.equal(testsFor('backend', scriptTests), null);
+    assert.equal(testsFor('frontend', scriptTests), null);
+    assert.deepEqual(testsFor('scripts-coverage-gate', scriptTests), [
+        'scripts/tests/coverage-gate.test.mjs',
+        'scripts/tests/coverage-gate-cli.test.mjs',
+    ]);
+    assert.deepEqual(testsFor('scripts-version-plan', scriptTests), ['scripts/tests/version-plan.test.mjs']);
+    // A test named after a longer script name is not this script's own.
+    assert.deepEqual(testsFor('scripts-coverage', scriptTests), scriptTests);
+    // The reader's hash pin fails for every mutant, so it is never run.
+    assert.deepEqual(testsFor('hooks', scriptTests), [
+        '.claude/hooks/tests/guard-bash.test.mjs',
+        '.claude/hooks/tests/gate-refusal-corpus.test.mjs',
+    ]);
+    assert.ok(!testsFor('hooks', scriptTests).some((f) => f.includes('shell-reader')));
+});
+
+test('projectFor leaves out tests, configs, migrations, shell scripts and locales', () => {
     for (const f of [
         'backend/tests/integration/mcp/mcp-shared-project-area.test.js',
         'backend/modules/tasks/__tests__/x.js',
@@ -138,8 +170,12 @@ test('projectFor leaves out tests, configs, migrations, scripts and locales', ()
         'frontend/index.tsx',
         'frontend/styles.css',
         'public/locales/en/translation.json',
-        'scripts/mutation-check.mjs',
-        '.claude/hooks/guard-bash.mjs',
+        'scripts/tests/mutation-check.test.mjs',
+        'scripts/create-version.sh',
+        'scripts/lib/x.mjs',
+        '.claude/hooks/tests/guard-bash.test.mjs',
+        '.claude/hooks/lib/x.mjs',
+        '.claude/settings.json',
         'jest.config.js',
         'stryker.config.mjs',
         'package.json',
@@ -175,6 +211,21 @@ test('mutateRanges builds Stryker file:start-end entries per suite, sorted by fi
     assert.deepEqual(mutateRanges(changed), {
         backend: ['backend/services/a.js:1-3', 'backend/services/a.js:9-9', 'backend/services/z.js:7-7'],
         frontend: ['frontend/b.tsx:2-4'],
+    });
+});
+
+test('mutateRanges adds a tooling suite only for the scripts and hooks that changed', () => {
+    const changed = new Map([
+        ['scripts/pr-metrics.mjs', [{ start: 5, end: 6 }]],
+        ['.claude/hooks/shell-reader.mjs', [{ start: 9, end: 9 }]],
+        ['.claude/hooks/guard-bash.mjs', [{ start: 1, end: 2 }]],
+        ['scripts/tests/pr-metrics.test.mjs', [{ start: 1, end: 1 }]],
+    ]);
+    assert.deepEqual(mutateRanges(changed), {
+        backend: [],
+        frontend: [],
+        hooks: ['.claude/hooks/guard-bash.mjs:1-2', '.claude/hooks/shell-reader.mjs:9-9'],
+        'scripts-pr-metrics': ['scripts/pr-metrics.mjs:5-6'],
     });
 });
 

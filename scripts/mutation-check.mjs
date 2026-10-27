@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Mutation check on the lines a pull request changes. Turns
 // `git diff -U0 <base>...HEAD` into StrykerJS `--mutate file:start-end`
-// ranges for the backend and frontend Jest suites, runs Stryker once per
-// suite, and reports every mutant the tests did not notice (status Survived
-// or NoCoverage) that is not an accepted survivor in .mutation-survivors.json.
+// ranges for the backend and frontend Jest suites and for the fork's own
+// tooling (scripts/ and the Bash guard hook, tested with `node --test`), runs
+// Stryker once per suite, and reports every mutant the tests did not notice
+// (status Survived or NoCoverage) that is not an accepted survivor in
+// .mutation-survivors.json.
 // Exits 0 when there is nothing new, 1 on a new survivor, 2 when the check
 // could not run (bad arguments, git or Stryker failure, unreadable ledger).
 // A run stopped by --budget-minutes exits 0 unless a run that finished
@@ -18,9 +20,9 @@
 // past the CI job's timeout, and a job cut off by its timeout fails the check
 // even though the job is advisory. At the budget the Stryker run in progress
 // is stopped with its whole process group (SIGTERM, then SIGKILL after a
-// grace period), the other suite is not started, and a notice says the
+// grace period), the suites after it are not started, and a notice says the
 // result is incomplete. Without the option there is no limit.
-import { appendFileSync, existsSync, readFileSync, rmSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { constants } from 'node:os';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
@@ -36,6 +38,19 @@ export const SURVIVING = new Set(['Survived', 'NoCoverage']);
 const BACKEND_SOURCE = /^backend\/(?:modules|services|middleware|models|utils|shared)\/.+\.js$/;
 // Source the frontend Jest suite (root jest.config.js) tests.
 const FRONTEND_SOURCE = /^frontend\/.+\.(?:js|jsx|ts|tsx)$/;
+// The fork's tooling. Stryker runs these with its built-in `command` test
+// runner: a script against its own scripts/tests/<name>.test.mjs and
+// <name>-cli.test.mjs, the guard hook against HOOK_TESTS (#NNN).
+const SCRIPT_SOURCE = /^scripts\/([^/]+)\.m?js$/;
+const HOOK_SOURCE = /^\.claude\/hooks\/[^/]+\.mjs$/;
+// The tests that exercise the guard hook and its shared shell reader.
+// .claude/hooks/tests/shell-reader.test.mjs is left out: it pins the
+// reader's sha256, so it fails for every mutant and would count each one as
+// killed.
+export const HOOK_TESTS = [
+    '.claude/hooks/tests/guard-bash.test.mjs',
+    '.claude/hooks/tests/gate-refusal-corpus.test.mjs',
+];
 const NOT_SOURCE = [
     /(?:^|\/)__tests__\//,
     /(?:^|\/)__mocks__\//,
@@ -50,16 +65,38 @@ const NOT_SOURCE = [
 ];
 
 /**
- * Which Jest suite mutates this file, or null when it is not source Stryker
+ * Which suite mutates this file, or null when it is not source Stryker
  * should touch.
  * @param {string} file repository-relative path
- * @returns {'backend'|'frontend'|null}
+ * @returns {string|null} `backend` or `frontend` (Jest), `hooks`, or
+ *   `scripts-<name>` for scripts/<name>.mjs
  */
 export function projectFor(file) {
     if (NOT_SOURCE.some((re) => re.test(file))) return null;
     if (BACKEND_SOURCE.test(file)) return 'backend';
     if (FRONTEND_SOURCE.test(file)) return 'frontend';
+    if (HOOK_SOURCE.test(file)) return 'hooks';
+    const script = file.match(SCRIPT_SOURCE);
+    if (script) return `scripts-${script[1]}`;
     return null;
+}
+
+/**
+ * The test files a tooling suite runs, or null for a Jest suite. A script
+ * with no test file of its own runs every scripts/tests file, since another
+ * script's tests may still load it.
+ * @param {string} project from projectFor
+ * @param {string[]} scriptTests the scripts/tests/*.test.mjs files that exist
+ * @returns {string[]|null}
+ */
+export function testsFor(project, scriptTests) {
+    if (project === 'backend' || project === 'frontend') return null;
+    if (project === 'hooks') return [...HOOK_TESTS];
+    const name = project.slice('scripts-'.length);
+    const own = [`scripts/tests/${name}.test.mjs`, `scripts/tests/${name}-cli.test.mjs`].filter((f) =>
+        scriptTests.includes(f)
+    );
+    return own.length ? own : [...scriptTests];
 }
 
 function unquote(path) {
@@ -125,9 +162,10 @@ export function parseDiff(diff) {
 }
 
 /**
- * Stryker `--mutate` entries per Jest suite, for the files that suite tests.
+ * Stryker `--mutate` entries per suite, for the files that suite tests. The
+ * Jest suites are always present; a tooling suite only when it has entries.
  * @param {Map<string, {start: number, end: number}[]>} changed from parseDiff
- * @returns {{backend: string[], frontend: string[]}}
+ * @returns {{backend: string[], frontend: string[], [tooling: string]: string[]}}
  */
 export function mutateRanges(changed) {
     const out = { backend: [], frontend: [] };
@@ -136,6 +174,7 @@ export function mutateRanges(changed) {
     )) {
         const project = projectFor(file);
         if (!project) continue;
+        out[project] ??= [];
         for (const r of ranges) out[project].push(`${file}:${r.start}-${r.end}`);
     }
     return out;
@@ -339,6 +378,16 @@ async function runStryker(root, project, mutate, limitMs = null) {
     for (const m of mutate) console.log(`   ${m}`);
     const env = { ...process.env, MUTATION_PROJECT: project };
     if (project === 'backend') env.NODE_ENV = 'test';
+    const scriptTests = existsSync(resolve(root, 'scripts/tests'))
+        ? readdirSync(resolve(root, 'scripts/tests'))
+              .filter((f) => f.endsWith('.test.mjs'))
+              .sort()
+              .map((f) => `scripts/tests/${f}`)
+        : [];
+    const tests = testsFor(project, scriptTests);
+    // Set for a tooling suite only; a Jest suite never inherits one.
+    if (tests) env.MUTATION_TEST_COMMAND = `node --test ${tests.join(' ')}`;
+    else delete env.MUTATION_TEST_COMMAND;
     // Without a limit Stryker stays in our process group, so Ctrl-C in a
     // terminal reaches it as usual.
     const detached = limitMs !== null;
@@ -443,17 +492,17 @@ async function main(argv) {
         for (const p of opts.reports) reports.push(readJson(resolve(opts.root, p), 'Stryker report'));
     } else {
         const ranges = changedRanges(opts.root, opts.base);
-        const total = ranges.backend.length + ranges.frontend.length;
+        const total = Object.values(ranges).reduce((n, r) => n + r.length, 0);
         if (opts.dryRun) {
             console.log(JSON.stringify(ranges, null, 2));
             return;
         }
         if (!total) {
-            console.log(`No backend or frontend source lines changed against ${opts.base}; nothing to mutate.`);
+            console.log(`No source lines changed against ${opts.base}; nothing to mutate.`);
             return;
         }
         const budgetMs = opts.budgetMinutes === null ? null : opts.budgetMinutes * 60_000;
-        const queue = ['backend', 'frontend'].filter((p) => ranges[p].length);
+        const queue = Object.keys(ranges).filter((p) => ranges[p].length);
         while (queue.length) {
             const project = queue.shift();
             const left = budgetMs === null ? null : started + budgetMs - Date.now();
