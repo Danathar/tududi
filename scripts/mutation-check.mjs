@@ -40,7 +40,7 @@ const BACKEND_SOURCE = /^backend\/(?:modules|services|middleware|models|utils|sh
 const FRONTEND_SOURCE = /^frontend\/.+\.(?:js|jsx|ts|tsx)$/;
 // The fork's tooling. Stryker runs these with its built-in `command` test
 // runner: a script against its own scripts/tests/<name>.test.mjs and
-// <name>-cli.test.mjs, the guard hook against HOOK_TESTS (#NNN).
+// <name>-cli.test.mjs, the guard hook against HOOK_TESTS (#437).
 const SCRIPT_SOURCE = /^scripts\/([^/]+)\.m?js$/;
 const HOOK_SOURCE = /^\.claude\/hooks\/[^/]+\.mjs$/;
 // The tests that exercise the guard hook and its shared shell reader.
