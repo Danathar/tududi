@@ -1,9 +1,10 @@
 // StrykerJS configuration for the mutation check on changed lines.
 // scripts/mutation-check.mjs runs it once per Jest suite, setting
-// MUTATION_PROJECT to `backend`, `backend-unit` or `frontend` and passing the
-// changed line ranges with `--mutate`; the `mutate` list below is only a
-// fallback for a hand run (`npx stryker run`), which mutates every source
-// file of the suite and takes hours. See docs/quality.md.
+// MUTATION_PROJECT to `backend`, `backend-unit`, `backend-changed` or
+// `frontend` and passing the changed line ranges with `--mutate`; the
+// `mutate` list below is only a fallback for a hand run (`npx stryker run`),
+// which mutates every source file of the suite and takes hours. See
+// docs/quality.md.
 const project = process.env.MUTATION_PROJECT === 'frontend' ? 'frontend' : 'backend';
 // The fork's tooling (scripts/ and the Bash guard hook) is tested with plain
 // `node --test` files, not Jest. For those suites mutation-check.mjs passes
@@ -11,7 +12,8 @@ const project = process.env.MUTATION_PROJECT === 'frontend' ? 'frontend' : 'back
 // `command` runner runs that command once per mutant.
 const testCommand = process.env.MUTATION_TEST_COMMAND;
 // For the `backend-unit` suite mutation-check.mjs lists the unit tests of the
-// mutated files in MUTATION_JEST_TESTS (JSON, repository-relative). Jest then
+// mutated files in MUTATION_JEST_TESTS (JSON, repository-relative), and for
+// `backend-changed` the backend test files the branch changes. Jest then
 // runs those files only, instead of every test related to the mutated files.
 const jestTests = process.env.MUTATION_JEST_TESTS ? JSON.parse(process.env.MUTATION_JEST_TESTS) : null;
 
