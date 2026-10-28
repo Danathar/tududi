@@ -8,7 +8,10 @@
 // .mutation-survivors.json. A backend file with a unit test of its own at the
 // mirrored path (backend/services/x.js -> backend/tests/unit/services/x.test.js)
 // goes to a `backend-unit` suite that runs only those unit tests; the rest
-// of the backend runs every Jest test related to the file.
+// of the backend runs every Jest test related to the file. When that run
+// runs out of memory and the branch changes backend test files, the same
+// lines are checked again in a `backend-changed` suite that runs only those
+// test files.
 // Exits 0 when there is nothing new, 1 on a new survivor, 2 when the check
 // could not run (bad arguments, git or Stryker failure, unreadable ledger).
 // A run stopped by --budget-minutes, or a suite whose Stryker run ran out of
@@ -55,6 +58,8 @@ export const HOOK_TESTS = [
     '.claude/hooks/tests/guard-bash.test.mjs',
     '.claude/hooks/tests/gate-refusal-corpus.test.mjs',
 ];
+// The suites Stryker runs with Jest. The backend ones run with NODE_ENV=test.
+const JEST_SUITES = new Set(['backend', 'backend-unit', 'backend-changed', 'frontend']);
 const NOT_SOURCE = [
     /(?:^|\/)__tests__\//,
     /(?:^|\/)__mocks__\//,
@@ -108,6 +113,20 @@ export function jestTestsFor(project, mutate) {
     return [...new Set(mutate.map((m) => unitTestFor(m.slice(0, m.lastIndexOf(':')))))];
 }
 
+// The backend Jest test files (backend/jest.config.js testMatch).
+const BACKEND_TEST = /^backend\/tests\/.+\.test\.js$/;
+
+/**
+ * The backend Jest test files a branch changes, sorted: what the
+ * `backend-changed` suite runs when the `backend` suite runs out of memory.
+ * @param {Iterable<string>} files repository-relative paths, such as the
+ *   keys of parseDiff
+ * @returns {string[]}
+ */
+export function changedBackendTests(files) {
+    return [...files].filter((f) => BACKEND_TEST.test(f)).sort();
+}
+
 /**
  * The test files a tooling suite runs, or null for a Jest suite. A script
  * with no test file of its own runs every scripts/tests file, since another
@@ -117,7 +136,7 @@ export function jestTestsFor(project, mutate) {
  * @returns {string[]|null}
  */
 export function testsFor(project, scriptTests) {
-    if (project === 'backend' || project === 'backend-unit' || project === 'frontend') return null;
+    if (JEST_SUITES.has(project)) return null;
     if (project === 'hooks') return [...HOOK_TESTS];
     const name = project.slice('scripts-'.length);
     const own = [`scripts/tests/${name}.test.mjs`, `scripts/tests/${name}-cli.test.mjs`].filter((f) =>
@@ -337,6 +356,18 @@ export function memoryNotice(suites) {
 }
 
 /**
+ * The one-line notice for a `backend` run that ran out of memory and was
+ * checked again against the backend test files the branch changes.
+ * @param {string[]} tests what the `backend-changed` suite runs
+ */
+export function changedTestsNotice(tests) {
+    return (
+        'backend ran out of memory running every related test; its lines were checked ' +
+        `against the ${tests.length} backend test file(s) this change edits instead (backend-changed)`
+    );
+}
+
+/**
  * The one-line notice for a run that hit its time budget.
  * @param {{minutes: number, cut: string|null, skipped: string[]}} stopped the
  *   budget, the suite stopped part way (if any) and the suites never started
@@ -404,7 +435,11 @@ function changedRanges(root, base) {
             ['diff', '-U0', '--no-color', '--no-ext-diff', '--no-renames', '--diff-filter=AM', `${base}...HEAD`],
             { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }
         );
-        return mutateRanges(parseDiff(diff), (t) => existsSync(resolve(root, t)));
+        const changed = parseDiff(diff);
+        return {
+            ranges: mutateRanges(changed, (t) => existsSync(resolve(root, t))),
+            backendTests: changedBackendTests(changed.keys()),
+        };
     } catch (e) {
         fail(`git diff against ${base} failed: ${e.message}`);
     }
@@ -417,11 +452,13 @@ const KILL_GRACE_MS = 5000;
  * Stryker for one suite. With a limit (milliseconds) it runs in a process
  * group of its own and is stopped with that group, the Jest workers it starts
  * included, if it is still running when the limit is up.
+ * @param {string[]|null} [jestTests] the Jest test files to run, by default
+ *   jestTestsFor; null runs the tests related to the mutated files
  * @returns {Promise<{report: object, cut: boolean, outOfMemory?: boolean}>}
  *   `cut` when the limit stopped it, `outOfMemory` when it failed after its
  *   test runner ran out of memory; none of its mutants are counted then
  */
-async function runStryker(root, project, mutate, limitMs = null) {
+async function runStryker(root, project, mutate, limitMs = null, jestTests = jestTestsFor(project, mutate)) {
     const bin = resolve(root, 'node_modules/@stryker-mutator/core/bin/stryker.js');
     if (!existsSync(bin)) fail(`StrykerJS is not installed (${bin}); run npm install`);
     const report = resolve(root, `reports/mutation/${project}.json`);
@@ -429,7 +466,7 @@ async function runStryker(root, project, mutate, limitMs = null) {
     console.log(`\n== ${project}: mutating ${mutate.length} range(s)`);
     for (const m of mutate) console.log(`   ${m}`);
     const env = { ...process.env, MUTATION_PROJECT: project };
-    if (project === 'backend' || project === 'backend-unit') env.NODE_ENV = 'test';
+    if (JEST_SUITES.has(project) && project !== 'frontend') env.NODE_ENV = 'test';
     const scriptTests = existsSync(resolve(root, 'scripts/tests'))
         ? readdirSync(resolve(root, 'scripts/tests'))
               .filter((f) => f.endsWith('.test.mjs'))
@@ -441,9 +478,9 @@ async function runStryker(root, project, mutate, limitMs = null) {
     // Set for a tooling suite only; a Jest suite never inherits one.
     if (tests) env.MUTATION_TEST_COMMAND = `node --test ${tests.join(' ')}`;
     else delete env.MUTATION_TEST_COMMAND;
-    // Set for the backend-unit suite only, as a JSON list of repository-
-    // relative paths that stryker.config.mjs turns into Jest's testMatch.
-    const jestTests = jestTestsFor(project, mutate);
+    // Set for the backend-unit and backend-changed suites only, as a JSON list
+    // of repository-relative paths that stryker.config.mjs turns into Jest's
+    // testMatch.
     if (jestTests) env.MUTATION_JEST_TESTS = JSON.stringify(jestTests);
     else delete env.MUTATION_JEST_TESTS;
     // Without a limit Stryker stays in our process group, so Ctrl-C in a
@@ -529,13 +566,15 @@ async function runStryker(root, project, mutate, limitMs = null) {
 
 /**
  * The step-summary text: the new survivors and how to resolve them, the
- * budget notice when the time budget stopped the run, and the memory notice
- * for suites that ran out of memory.
+ * budget notice when the time budget stopped the run, the memory notice
+ * for suites that ran out of memory, and the notice for a backend run
+ * checked again against the backend test files the branch changes.
  */
-export function summarize(fresh, accepted, stopped = null, outOfMemory = []) {
+export function summarize(fresh, accepted, stopped = null, outOfMemory = [], changedTests = null) {
     const lines = ['## Mutation check on changed lines', ''];
     if (stopped) lines.push(`**${budgetNotice(stopped)}**`, '');
     if (outOfMemory.length) lines.push(`**${memoryNotice(outOfMemory)}**`, '');
+    if (changedTests) lines.push(`**${changedTestsNotice(changedTests)}**`, '');
     if (!fresh.length) {
         lines.push(
             stopped || outOfMemory.length
@@ -565,10 +604,14 @@ async function main(argv) {
     const reports = [];
     let stopped = null;
     const outOfMemory = [];
+    // Whether backend-changed was queued, and the backend test files it ran
+    // once that run gave a result.
+    let checkingChanged = false;
+    let changedTests = null;
     if (opts.reports.length) {
         for (const p of opts.reports) reports.push(readJson(resolve(opts.root, p), 'Stryker report'));
     } else {
-        const ranges = changedRanges(opts.root, opts.base);
+        const { ranges, backendTests } = changedRanges(opts.root, opts.base);
         const queue = Object.keys(ranges).filter((p) => ranges[p].length);
         if (opts.dryRun) {
             console.log(JSON.stringify(ranges, null, 2));
@@ -586,25 +629,39 @@ async function main(argv) {
                 stopped = { minutes: opts.budgetMinutes, cut: null, skipped: [project, ...queue] };
                 break;
             }
-            const result = await runStryker(opts.root, project, ranges[project], left);
+            const jestTests = project === 'backend-changed' ? backendTests : undefined;
+            const result = await runStryker(opts.root, project, ranges[project], left, jestTests);
             reports.push(result.report);
-            if (result.outOfMemory) outOfMemory.push(project);
+            // Every backend test related to a file most of the backend loads
+            // is too much for one Jest process (#444). The test files the
+            // branch changes are the ones it says cover the change, so check
+            // the same lines against those before giving up on them.
+            if (result.outOfMemory && project === 'backend' && backendTests.length) {
+                ranges['backend-changed'] = ranges.backend;
+                queue.unshift('backend-changed');
+                checkingChanged = true;
+            } else if (result.outOfMemory) outOfMemory.push(project);
+            if (project === 'backend-changed' && !result.outOfMemory && !result.cut) changedTests = backendTests;
             if (result.cut) {
                 stopped = { minutes: opts.budgetMinutes, cut: project, skipped: [...queue] };
                 break;
             }
         }
+        // The backend stays out of memory unless backend-changed gave a
+        // result in its place.
+        if (checkingChanged && !changedTests) outOfMemory.unshift('backend');
     }
 
     const { fresh, accepted } = evaluate(
         reports.flatMap((r) => survivors(r, opts.root)),
         ledger
     );
-    const text = summarize(fresh, accepted, stopped, outOfMemory);
+    const text = summarize(fresh, accepted, stopped, outOfMemory, changedTests);
     console.log(`\n${text}`);
     const notices = [
         ...(stopped ? [budgetNotice(stopped)] : []),
         ...(outOfMemory.length ? [memoryNotice(outOfMemory)] : []),
+        ...(changedTests ? [changedTestsNotice(changedTests)] : []),
     ];
     for (const notice of notices) {
         console.log(`\n${notice}`);

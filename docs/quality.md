@@ -108,6 +108,17 @@ run cover most of the backend integration suite, about 10 minutes on CI.
   is reported the same way as a run the budget stopped: an "incomplete" notice
   in the log, a `::warning::` annotation and the step summary, none of its
   mutants counted, and the other suites still run.
+- A backend file with no unit test of its own, such as a module only the
+  integration tests reach, stays in the `backend` suite. When that suite runs
+  out of memory and the branch changes backend test files
+  (`backend/tests/**/*.test.js`), the same lines are checked again in a
+  `backend-changed` suite that runs only those test files, with what is left
+  of the budget. Its survivors count as usual, and the log, a `::warning::`
+  annotation and the step summary say which suite ran instead. A mutant only
+  some other backend test notices shows up as a survivor there: add a case to
+  a test the change edits, or accept it in the ledger. Without changed backend
+  test files, or when `backend-changed` does not finish either, the backend is
+  reported out of memory as above.
 
 For each new survivor, add a test that fails on it. Only when the mutant is
 equivalent (the code behaves the same) or harmless, copy the ledger entry the

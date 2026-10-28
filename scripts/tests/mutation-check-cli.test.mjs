@@ -255,7 +255,8 @@ test('exits 2 when the base ref does not exist', () => {
 // a child that ignores SIGTERM and outlives it. For the suite named in
 // FAKE_OOM it prints Stryker's out-of-memory warning in two pieces and exits
 // 1, or with FAKE_OOM_RECOVERS writes its report and exits 0 as a Stryker run
-// whose restarted test runner finished would. Nothing it starts lives longer
+// whose restarted test runner finished would; FAKE_OOM may name several
+// suites, comma-separated. Nothing it starts lives longer
 // than 30 s, so a broken kill cannot leave processes behind for long.
 const FAKE_STRYKER = `
 const { appendFileSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
@@ -270,6 +271,7 @@ const SOURCE = ${JSON.stringify(SOURCE)};
 const FILES = {
     backend: 'backend/services/a.js',
     'backend-unit': 'backend/services/a.js',
+    'backend-changed': 'backend/services/a.js',
     frontend: 'frontend/components/X.tsx',
     hooks: '.claude/hooks/guard.mjs',
     'scripts-tool': 'scripts/tool.mjs',
@@ -300,7 +302,7 @@ if (project === process.env.FAKE_HANG) {
         appendFileSync('signals.log', 'gave up\\n');
         process.exit(0);
     }, 30000);
-} else if (project === process.env.FAKE_OOM) {
+} else if ((process.env.FAKE_OOM ?? '').split(',').includes(project)) {
     process.stdout.write('WARN ChildProcessProxy Child process [pid 1] ran out ');
     setTimeout(() => {
         process.stdout.write('of memory.\\n');
@@ -773,6 +775,128 @@ test('a Stryker run that recovers from running out of memory counts as usual', l
         assert.equal(r.status, 1, r.stdout + r.stderr);
         assert.match(r.stdout, /backend\/services\/a\.js:2:12 EqualityOperator \(Survived\)/);
         assert.doesNotMatch(r.stdout, /incomplete/);
+    } finally {
+        cleanup(dir);
+    }
+});
+
+// The strykerRepo branch, also changing two backend test files and a test
+// helper.
+function strykerRepoWithTests() {
+    const dir = strykerRepo();
+    const files = {
+        'backend/tests/integration/a.test.js': "test('a', () => {});\n",
+        'backend/tests/unit/services/z.test.js': "test('z', () => {});\n",
+        'backend/tests/helpers/h.js': 'module.exports = {};\n',
+    };
+    for (const [rel, body] of Object.entries(files)) {
+        mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+        writeFileSync(path.join(dir, rel), body);
+    }
+    git(dir, 'add', 'backend');
+    git(dir, 'commit', '-q', '-m', 'tests');
+    return dir;
+}
+
+const memoryNotice = (suites) =>
+    `mutation check incomplete — ${suites} ran out of memory, no result; none of its mutants are counted`;
+
+const jestTestLog = (dir) => readFileSync(path.join(dir, 'stryker-jest-tests.log'), 'utf8').trim().split('\n');
+
+test('a backend run out of memory is checked again against the backend test files the branch changes', linuxOnly, () => {
+    const dir = strykerRepoWithTests();
+    const summary = path.join(dir, 'summary.md');
+    const notice =
+        'backend ran out of memory running every related test; its lines were checked against ' +
+        'the 2 backend test file(s) this change edits instead (backend-changed)';
+    try {
+        const r = strykerRun(dir, '10', {
+            FAKE_OOM: 'backend',
+            GITHUB_ACTIONS: 'true',
+            GITHUB_STEP_SUMMARY: summary,
+        });
+        assert.equal(r.status, 1, r.stdout + r.stderr);
+        assert.deepEqual(
+            startLog(dir).map(([project, , env]) => [project, env]),
+            [
+                ['backend', 'test'],
+                ['backend-changed', 'test'],
+                ['frontend', process.env.NODE_ENV ?? 'undefined'],
+            ]
+        );
+        assert.deepEqual(jestTestLog(dir), [
+            'backend: -',
+            'backend-changed: ["backend/tests/integration/a.test.js","backend/tests/unit/services/z.test.js"]',
+            'frontend: -',
+        ]);
+        assert.match(r.stdout, /== backend-changed: mutating 1 range\(s\)\n {3}backend\/services\/a\.js:2-2\n/);
+        // Its survivor counts like any other.
+        assert.match(r.stdout, /backend\/services\/a\.js:2:12 EqualityOperator \(Survived\)/);
+        assert.match(r.stdout, /frontend\/components\/X\.tsx:2:12 EqualityOperator \(Survived\)/);
+        assert.ok(r.stdout.includes(`\n${notice}\n`), r.stdout);
+        assert.ok(r.stdout.includes(`\n::warning::${notice}\n`), r.stdout);
+        assert.ok(readFileSync(summary, 'utf8').includes(`**${notice}**`));
+        assert.doesNotMatch(r.stdout, /incomplete/);
+        // Nothing new anywhere: exit 0, and the run counts as complete.
+        const clean = strykerRun(dir, null, { FAKE_OOM: 'backend', FAKE_CLEAN: '1' });
+        assert.equal(clean.status, 0, clean.stdout + clean.stderr);
+        assert.ok(clean.stdout.includes(`\n${notice}\n`), clean.stdout);
+        assert.match(clean.stdout, /No new surviving mutants \(0 accepted in the ledger\)\./);
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('a backend run that finishes, or a backend-unit run out of memory, is not checked again', linuxOnly, () => {
+    const dir = strykerRepoWithTests();
+    try {
+        const r = strykerRun(dir, null);
+        assert.equal(r.status, 1, r.stdout + r.stderr);
+        assert.deepEqual(starts(dir), ['backend', 'frontend']);
+        assert.doesNotMatch(r.stdout, /backend-changed/);
+        // A backend file with its own unit test runs as backend-unit.
+        mkdirSync(path.join(dir, 'backend/tests/unit/services'), { recursive: true });
+        writeFileSync(path.join(dir, 'backend/tests/unit/services/a.test.js'), '');
+        git(dir, 'add', 'backend');
+        git(dir, 'commit', '-q', '-m', 'unit test');
+        rmSync(path.join(dir, 'stryker-starts.log'));
+        const unit = strykerRun(dir, null, { FAKE_OOM: 'backend-unit', FAKE_CLEAN: '1' });
+        assert.equal(unit.status, 0, unit.stdout + unit.stderr);
+        assert.deepEqual(starts(dir), ['frontend', 'backend-unit']);
+        assert.ok(unit.stdout.includes(`\n${memoryNotice('backend-unit')}\n`), unit.stdout);
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('when backend-changed runs out of memory too, both are reported incomplete', linuxOnly, () => {
+    const dir = strykerRepoWithTests();
+    try {
+        const r = strykerRun(dir, null, { FAKE_OOM: 'backend,backend-changed', FAKE_CLEAN: '1' });
+        assert.equal(r.status, 0, r.stdout + r.stderr);
+        assert.deepEqual(starts(dir), ['backend', 'backend-changed', 'frontend']);
+        assert.ok(r.stdout.includes(`\n${memoryNotice('backend, backend-changed')}\n`), r.stdout);
+        assert.doesNotMatch(r.stdout, /were checked against/);
+        assert.match(r.stdout, /No new surviving mutants in the runs that finished/);
+    } finally {
+        cleanup(dir);
+    }
+});
+
+test('backend-changed gets what is left of the budget, and a stop there leaves the backend out of memory', linuxOnly, async () => {
+    const dir = strykerRepoWithTests();
+    try {
+        const r = strykerRun(dir, '0.03', { FAKE_OOM: 'backend', FAKE_HANG: 'backend-changed' });
+        assert.equal(r.status, 0, r.stdout + r.stderr);
+        assert.deepEqual(starts(dir), ['backend', 'backend-changed']);
+        assert.equal(signals(dir), 'SIGTERM\n');
+        assert.match(
+            r.stdout,
+            /no result: backend-changed was stopped part way and none of its mutants are counted; frontend not run\n/
+        );
+        assert.ok(r.stdout.includes(`\n${memoryNotice('backend')}\n`), r.stdout);
+        assert.doesNotMatch(r.stdout, /were checked against/);
+        await assertGone(pidIn(dir, 'child.pid'), 'the child process of the stopped Stryker run');
     } finally {
         cleanup(dir);
     }

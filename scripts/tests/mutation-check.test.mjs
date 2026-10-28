@@ -5,6 +5,8 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
     budgetNotice,
+    changedBackendTests,
+    changedTestsNotice,
     evaluate,
     formatSurvivor,
     isAccepted,
@@ -296,10 +298,34 @@ test('jestTestsFor lists the own unit test of each backend-unit file once, null 
         ]),
         ['backend/tests/unit/models/user.test.js', 'backend/tests/unit/services/a.test.js']
     );
-    for (const project of ['backend', 'frontend', 'hooks', 'scripts-tool']) {
+    for (const project of ['backend', 'backend-changed', 'frontend', 'hooks', 'scripts-tool']) {
         assert.equal(jestTestsFor(project, ['backend/services/a.js:1-3']), null, project);
     }
     assert.equal(testsFor('backend-unit', ['scripts/tests/x.test.mjs']), null);
+    assert.equal(testsFor('backend-changed', ['scripts/tests/x.test.mjs']), null);
+});
+
+test('changedBackendTests keeps the backend Jest test files a branch changes, sorted', () => {
+    const changed = parseDiff(
+        [
+            'backend/tests/unit/services/a.test.js',
+            'backend/modules/billing/providers/paddle.js',
+            'backend/tests/integration/billing-paddle.test.js',
+            'backend/tests/helpers/fixtures.js',
+            'backend/tests/integration/billing-paddle.test.js.snap',
+            'frontend/components/__tests__/X.test.tsx',
+            'scripts/tests/tool.test.mjs',
+            'e2e/tests/login.test.js',
+            'e2e/backend/tests/login.test.js',
+        ]
+            .map((f) => `+++ b/${f}\n@@ -0,0 +1 @@\n+x`)
+            .join('\n')
+    );
+    assert.deepEqual(changedBackendTests(changed.keys()), [
+        'backend/tests/integration/billing-paddle.test.js',
+        'backend/tests/unit/services/a.test.js',
+    ]);
+    assert.deepEqual(changedBackendTests([]), []);
 });
 
 // stryker.config.mjs reads its environment when it is loaded, so each case
@@ -339,6 +365,20 @@ test('stryker.config.mjs runs only the listed backend unit tests for backend-uni
         },
     });
     assert.equal(c.jsonReporter.fileName, 'reports/mutation/backend-unit.json');
+});
+
+test('stryker.config.mjs runs only the listed backend test files for backend-changed', () => {
+    const c = strykerConfig({
+        MUTATION_PROJECT: 'backend-changed',
+        MUTATION_JEST_TESTS: JSON.stringify(['backend/tests/integration/billing-paddle.test.js']),
+    });
+    assert.deepEqual(c.jest, {
+        projectType: 'custom',
+        configFile: 'backend/jest.config.js',
+        enableFindRelatedTests: false,
+        config: { testMatch: ['<rootDir>/tests/integration/billing-paddle.test.js'] },
+    });
+    assert.equal(c.jsonReporter.fileName, 'reports/mutation/backend-changed.json');
 });
 
 test('stryker.config.mjs keeps related-test selection for the backend and frontend suites', () => {
@@ -575,4 +615,29 @@ test('summarize puts the memory notice after the budget notice and says only fin
         '',
     ]);
     assert.equal(summarize([], [], null, []), summarize([], [], null));
+});
+
+test('changedTestsNotice says the backend lines were checked against the changed test files', () => {
+    assert.equal(
+        changedTestsNotice(['backend/tests/integration/a.test.js', 'backend/tests/unit/b.test.js']),
+        'backend ran out of memory running every related test; its lines were checked against ' +
+            'the 2 backend test file(s) this change edits instead (backend-changed)'
+    );
+});
+
+test('summarize puts the changed-tests notice last and counts the run as finished', () => {
+    const tests = ['backend/tests/integration/a.test.js'];
+    assert.equal(
+        summarize([], [], null, [], tests),
+        [
+            '## Mutation check on changed lines',
+            '',
+            `**${changedTestsNotice(tests)}**`,
+            '',
+            'No new surviving mutants (0 accepted in the ledger).',
+        ].join('\n')
+    );
+    const all = summarize([SURVIVOR], [], { minutes: 50, cut: 'frontend', skipped: [] }, ['hooks'], tests);
+    assert.deepEqual(all.split('\n').slice(6, 8), [`**${changedTestsNotice(tests)}**`, '']);
+    assert.equal(summarize([], [], null, [], null), summarize([], [], null, []));
 });
