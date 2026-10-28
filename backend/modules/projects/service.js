@@ -45,6 +45,20 @@ const {
 } = require('../tasks/utils/validation');
 const { Project, Area } = require('../../models');
 
+const PRIORITY_VALUES = { low: 0, medium: 1, high: 2 };
+
+// The UI sends priority names while the column is an integer; Postgres
+// rejects the names outright, so map them before saving.
+function toPriorityValue(priority) {
+    if (priority === '' || priority === null || priority === undefined) {
+        return null;
+    }
+    if (typeof priority === 'string' && priority in PRIORITY_VALUES) {
+        return PRIORITY_VALUES[priority];
+    }
+    return priority;
+}
+
 const PROJECT_STATUSES = Project.rawAttributes.status.values;
 
 // A project can only be filed under an area or goal the caller owns or can
@@ -572,7 +586,7 @@ class ProjectsService {
             goal_id: resolvedGoalId || null,
             is_maintenance: is_maintenance || false,
             pin_to_sidebar: false,
-            priority: priority || null,
+            priority: toPriorityValue(priority),
             due_date_at: due_date_at || null,
             image_url: image_url || null,
             color: color || null,
@@ -683,7 +697,7 @@ class ProjectsService {
         if (pin_to_sidebar !== undefined)
             updateData.pin_to_sidebar = pin_to_sidebar;
         if (priority !== undefined)
-            updateData.priority = validatePriority(priority);
+            updateData.priority = toPriorityValue(validatePriority(priority));
         if (due_date_at !== undefined)
             updateData.due_date_at = due_date_at === '' ? null : due_date_at;
         applyStart(updateData, data, userTimezone, project.start_date_at);
