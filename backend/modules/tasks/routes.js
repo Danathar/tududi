@@ -92,6 +92,7 @@ const {
 
 const { getTaskMetrics } = require('./queries/metrics-computation');
 const scopeService = require('../../services/scopeService');
+const dailyPlanService = require('../daily-plan/service');
 
 const { getSubtasks } = require('./operations/subtasks');
 
@@ -584,6 +585,13 @@ router.post(
             const task = await taskRepository.create(taskAttributes);
             await updateTaskTags(task, tagsData, req.currentUser.id);
             await createSubtasks(task.id, subtasks, req.currentUser.id);
+            if (req.body.today === true) {
+                await dailyPlanService.setTaskOnToday(
+                    req.currentUser,
+                    task.uid,
+                    true
+                );
+            }
 
             const taskWithAssociations = await taskRepository.findById(
                 task.id,
@@ -984,6 +992,13 @@ router.patch('/task/:uid', requireTaskWriteAccess, async (req, res, next) => {
             await revokeProjectSharesForItem('task', task.id, oldProjectId);
         }
 
+        if (typeof req.body.today === 'boolean') {
+            await dailyPlanService.setTaskOnToday(
+                req.currentUser,
+                task.uid,
+                req.body.today
+            );
+        }
         await logTaskChanges(
             task,
             oldValues,
