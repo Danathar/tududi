@@ -2,9 +2,10 @@
 
 // MCP's update_task and complete_task re-implement, by hand, what
 // PATCH /api/task/:uid does after it saves a task: completed_at, recurring
-// advance, subtask cascade, task history, clearing the example mark, due time
-// and reminders. Each piece was copied over separately (#163, #165, #179), and
-// every upstream sync can add one more step to PATCH that MCP never learns.
+// advance, subtask cascade, task history, clearing the example mark, due time,
+// reminders and the today flag (today's plan). Each piece was copied over
+// separately (#163, #165, #179), and every upstream sync can add one more step
+// to PATCH that MCP never learns.
 //
 // This suite makes the same edit to two identical tasks, one through PATCH and
 // one through MCP, and requires the stored results to match. A step added to
@@ -13,20 +14,26 @@
 
 const request = require('supertest');
 const app = require('../../../app');
-const { Task, TaskEvent, RecurringCompletion } = require('../../../models');
+const {
+    Task,
+    TaskEvent,
+    RecurringCompletion,
+    DailyPlanItem,
+} = require('../../../models');
 const { createTestUser } = require('../../helpers/testUtils');
 const { createApiToken } = require('../../../modules/users/apiTokenService');
+const dailyPlanService = require('../../../modules/daily-plan/service');
 
 // Columns PATCH and MCP can both change. Two dates match when they are less
 // than a minute apart (or both empty), so the two requests running a few
 // milliseconds apart do not count as a difference in completed_at, even when
-// they fall either side of a minute boundary.
+// they fall either side of a minute boundary. The today flag has no column:
+// it puts the task on today's plan, compared as plan_items below.
 const COMPARED_COLUMNS = [
     'name',
     'note',
     'status',
     'priority',
-    'today',
     'due_date',
     'due_has_time',
     'reminder_at',
@@ -89,13 +96,18 @@ describe('MCP task edits match PATCH /api/task/:uid', () => {
         }));
     });
 
+    // A seed's onToday puts the new task on today's plan.
     async function createTask(seed, { withSubtask }) {
+        const { onToday, ...attributes } = seed;
         const task = await Task.create({
             user_id: user.id,
             name: 'Task',
             status: Task.STATUS.NOT_STARTED,
-            ...seed,
+            ...attributes,
         });
+        if (onToday) {
+            await dailyPlanService.setTaskOnToday(user, task.uid, true);
+        }
         if (withSubtask) {
             await Task.create({
                 user_id: user.id,
@@ -108,8 +120,8 @@ describe('MCP task edits match PATCH /api/task/:uid', () => {
     }
 
     // Everything an edit can leave behind: the row, its subtasks' statuses,
-    // its history (without the web/mcp source, which is meant to differ) and
-    // its recorded recurring completions.
+    // its history (without the web/mcp source, which is meant to differ), its
+    // recorded recurring completions and its daily plan entries.
     async function storedState(task) {
         const row = await Task.findByPk(task.id);
         const state = {};
@@ -129,6 +141,9 @@ describe('MCP task edits match PATCH /api/task/:uid', () => {
             (event) => `${event.event_type}:${event.field_name}`
         );
         state.recurring_completions = await RecurringCompletion.count({
+            where: { task_id: task.id },
+        });
+        state.plan_items = await DailyPlanItem.count({
             where: { task_id: task.id },
         });
         return state;
@@ -253,6 +268,7 @@ describe('MCP task edits match PATCH /api/task/:uid', () => {
             ['renaming', {}, false, { name: 'Renamed' }],
             ['editing the note', {}, false, { note: 'Updated note' }],
             ['adding to Today', {}, false, { today: true }],
+            ['taking off Today', { onToday: true }, false, { today: false }],
         ];
 
         it.each(cases)('%s', async (_label, seed, withSubtask, edit) => {
