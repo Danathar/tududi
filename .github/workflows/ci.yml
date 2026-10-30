@@ -99,7 +99,7 @@ jobs:
   # not this fork's to test. See docs/quality.md.
   mutation:
     name: Mutation check on changed lines (advisory)
-    if: "github.event_name == 'pull_request' && !startsWith(github.event.pull_request.title, 'chore: sync upstream')"
+    if: "github.event_name == 'pull_request' && !contains(github.event.pull_request.title, 'chore: sync upstream')"
     runs-on: ubuntu-latest
     # The budget below ends the run on its own before this timeout, which stays
     # as a backstop: a job cut off by its timeout fails the check even with

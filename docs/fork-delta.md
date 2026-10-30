@@ -100,3 +100,4 @@ out.
 | [#436](https://github.com/Danathar/tududi/pull/436) | `.github/workflows/ci.yml` | ci(mutation): longer mutation job timeout and a time budget, so a long backend run ends "incomplete" instead of red | fork only |
 | [#434](https://github.com/Danathar/tududi/pull/434) | `backend/services/emailDomainService.js`, `backend/tests/unit/services/emailDomainService.test.js` | fix(auth): fold an address to the mailbox it is delivered to before the trial check | fork only |
 | [#453](https://github.com/Danathar/tududi/pull/453) | `backend/modules/billing/providers/paddle.js`, `backend/tests/integration/billing-paddle.test.js` | fix(billing): refuse to sync a Paddle transaction another user opened | fork only |
+| [#480](https://github.com/Danathar/tududi/pull/480) | `.github/workflows/ci.yml` | ci(mutation): skip the mutation check on sync PRs whose title has a prefix, such as hive's emoji | fork only |
