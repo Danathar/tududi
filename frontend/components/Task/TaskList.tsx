@@ -27,6 +27,7 @@ interface TaskListProps {
     onTaskDelete: (taskUid: string) => void;
     projects: Project[];
     hideProjectName?: boolean;
+    hideAreaName?: boolean;
     onToggleToday?: (taskId: number, task?: Task) => Promise<void>;
     showCompletedTasks?: boolean;
     isInCompletedSection?: boolean;
@@ -47,6 +48,7 @@ const TaskList: React.FC<TaskListProps> = ({
     onTaskDelete,
     projects,
     hideProjectName = false,
+    hideAreaName = false,
     onToggleToday,
     showCompletedTasks = false,
     isInCompletedSection = false,
@@ -72,6 +74,7 @@ const TaskList: React.FC<TaskListProps> = ({
             onTaskDelete={onTaskDelete}
             projects={projects}
             hideProjectName={hideProjectName}
+            hideAreaName={hideAreaName}
             onToggleToday={onToggleToday}
             isInCompletedSection={isInCompletedSection}
             isUpcomingView={isUpcomingView}

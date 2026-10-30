@@ -234,7 +234,8 @@
     "habit": "Vana",
     "assignedTo": "Tilldelat till",
     "subtasks": "Deluppgifter",
-    "openFullPage": "Öppna fullständig vy"
+    "openFullPage": "Öppna fullständig vy",
+    "openPanel": "Öppna i sidopanelen"
   },
   "timeline": {
     "activityTimeline": "Aktivitetslinje",
@@ -1317,6 +1318,8 @@
     "recurringSetup": "Återkommande inställning",
     "notRecurring": "Denna uppgift är inte återkommande ännu.",
     "clickToEditTitle": "Klicka för att redigera titel",
+    "copyLink": "Kopiera länk till uppgiften",
+    "linkCopied": "Länk kopierad",
     "clickToEditContent": "Klicka för att redigera innehåll",
     "clickToAddContent": "Klicka för att lägga till innehåll",
     "clickToEditSubtasks": "Klicka för att redigera deluppgifter",
@@ -2711,7 +2714,9 @@
     "upcoming": "Denna vecka",
     "noDate": "Inget datum",
     "nothing": "Ingenting just nu",
-    "empty": "Ingenting delat är på just nu. Dela ett område, projekt eller mål, eller tilldela någon en uppgift, för att se det här."
+    "empty": "Ingenting delat är på just nu. Dela ett område, projekt eller mål, eller tilldela någon en uppgift, för att se det här.",
+    "sortableColumn": "sorterbar kolumn",
+    "reorderFailed": "Det gick inte att spara kolumnordningen."
   },
   "people": {
     "addMember": "Lägg till medlem",

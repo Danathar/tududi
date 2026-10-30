@@ -234,7 +234,8 @@
     "habit": "Hábito",
     "assignedTo": "Atribuído a",
     "subtasks": "Subtarefas",
-    "openFullPage": "Abrir visualização completa"
+    "openFullPage": "Abrir visualização completa",
+    "openPanel": "Abrir no painel lateral"
   },
   "timeline": {
     "activityTimeline": "Linha do Tempo de Atividades",
@@ -1317,6 +1318,8 @@
     "recurringSetup": "Configuração Recorrente",
     "notRecurring": "Esta tarefa ainda não é recorrente.",
     "clickToEditTitle": "Clique para editar o título",
+    "copyLink": "Copiar link da tarefa",
+    "linkCopied": "Link copiado",
     "clickToEditContent": "Clique para editar o conteúdo",
     "clickToAddContent": "Clique para adicionar conteúdo",
     "clickToEditSubtasks": "Clique para editar subtarefas",
@@ -2714,7 +2717,9 @@
     "upcoming": "Esta semana",
     "noDate": "Sem data",
     "nothing": "Nada no momento",
-    "empty": "Nada compartilhado está ativo no momento. Compartilhe uma área, projeto ou meta, ou atribua uma tarefa a alguém, para vê-lo aqui."
+    "empty": "Nada compartilhado está ativo no momento. Compartilhe uma área, projeto ou meta, ou atribua uma tarefa a alguém, para vê-lo aqui.",
+    "sortableColumn": "coluna ordenável",
+    "reorderFailed": "Não foi possível guardar a ordem das colunas."
   },
   "people": {
     "addMember": "Adicionar membro",

@@ -234,7 +234,8 @@
     "habit": "Vane",
     "assignedTo": "Tildelt til",
     "subtasks": "Underopgaver",
-    "openFullPage": "Åbn fuld visning"
+    "openFullPage": "Åbn fuld visning",
+    "openPanel": "Åbn i sidepanelet"
   },
   "timeline": {
     "activityTimeline": "Aktivitets Tidslinje",
@@ -1356,6 +1357,8 @@
     "recurringSetup": "Gentagen opsætning",
     "notRecurring": "Denne opgave er ikke gentagende endnu.",
     "clickToEditTitle": "Klik for at redigere titel",
+    "copyLink": "Kopiér link til opgaven",
+    "linkCopied": "Link kopieret",
     "clickToEditContent": "Klik for at redigere indhold",
     "clickToAddContent": "Klik for at tilføje indhold",
     "clickToEditSubtasks": "Klik for at redigere underopgaver",
@@ -2711,7 +2714,9 @@
     "upcoming": "Denne uge",
     "noDate": "Ingen dato",
     "nothing": "Intet lige nu",
-    "empty": "Intet delt er på lige nu. Del et område, projekt eller mål, eller tildel nogen en opgave for at se det her."
+    "empty": "Intet delt er på lige nu. Del et område, projekt eller mål, eller tildel nogen en opgave for at se det her.",
+    "sortableColumn": "sorterbar kolonne",
+    "reorderFailed": "Kunne ikke gemme kolonnernes rækkefølge."
   },
   "people": {
     "addMember": "Tilføj medlem",

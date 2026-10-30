@@ -233,7 +233,8 @@
         "habit": "Návyk",
         "assignedTo": "Priradené",
         "subtasks": "Podúlohy",
-        "openFullPage": "Otvoriť celé zobrazenie"
+        "openFullPage": "Otvoriť celé zobrazenie",
+        "openPanel": "Otvoriť v bočnom paneli"
     },
     "comments": {
         "count": "Komentáre: {{count}}",
@@ -1348,6 +1349,8 @@
         "instanceOf": "Toto je výskyt opakujúcej sa úlohy",
         "parentTask": "Nadradená úloha",
         "clickToEditTitle": "Kliknutím upravíte názov",
+        "copyLink": "Kopírovať odkaz na úlohu",
+        "linkCopied": "Odkaz skopírovaný",
         "clickToEditContent": "Kliknutím upravíte obsah",
         "clickToAddContent": "Kliknutím pridáte obsah",
         "clickToEditSubtasks": "Kliknutím upravíte podúlohy",
@@ -2717,7 +2720,9 @@
         "upcoming": "Tento týždeň",
         "noDate": "Bez dátumu",
         "nothing": "Momentálne nič",
-        "empty": "Momentálne nie je nič zdieľané. Zdieľajte oblasť, projekt alebo cieľ, prípadne niekomu priraďte úlohu, a uvidíte to tu."
+        "empty": "Momentálne nie je nič zdieľané. Zdieľajte oblasť, projekt alebo cieľ, prípadne niekomu priraďte úlohu, a uvidíte to tu.",
+        "sortableColumn": "zoraditeľný stĺpec",
+        "reorderFailed": "Poradie stĺpcov sa nepodarilo uložiť."
     },
     "people": {
         "addMember": "Pridať člena",
