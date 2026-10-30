@@ -234,7 +234,8 @@
     "habit": "Gewoonte",
     "assignedTo": "Toegewezen aan",
     "subtasks": "Subtaken",
-    "openFullPage": "Volledige weergave openen"
+    "openFullPage": "Volledige weergave openen",
+    "openPanel": "Openen in zijpaneel"
   },
   "timeline": {
     "activityTimeline": "Activiteit Tijdlijn",
@@ -1357,6 +1358,8 @@
     "recurringSetup": "Terugkerende instellingen",
     "notRecurring": "Deze taak is nog niet terugkerend.",
     "clickToEditTitle": "Klik om titel te bewerken",
+    "copyLink": "Link naar taak kopiëren",
+    "linkCopied": "Link gekopieerd",
     "clickToEditContent": "Klik om inhoud te bewerken",
     "clickToAddContent": "Klik om inhoud toe te voegen",
     "clickToEditSubtasks": "Klik om subtaken te bewerken",
@@ -2711,7 +2714,9 @@
     "upcoming": "Deze week",
     "noDate": "Geen datum",
     "nothing": "Niets op dit moment",
-    "empty": "Er is momenteel niets gedeeld. Deel een gebied, project of doel, of wijs iemand een taak toe, om het hier te zien."
+    "empty": "Er is momenteel niets gedeeld. Deel een gebied, project of doel, of wijs iemand een taak toe, om het hier te zien.",
+    "sortableColumn": "sorteerbare kolom",
+    "reorderFailed": "De kolomvolgorde kon niet worden opgeslagen."
   },
   "people": {
     "addMember": "Lid toevoegen",

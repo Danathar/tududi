@@ -234,7 +234,8 @@
     "habit": "습관",
     "assignedTo": "할당됨",
     "subtasks": "하위 작업",
-    "openFullPage": "전체 보기 열기"
+    "openFullPage": "전체 보기 열기",
+    "openPanel": "사이드 패널에서 열기"
   },
   "timeline": {
     "activityTimeline": "활동 타임라인",
@@ -1356,6 +1357,8 @@
     "recurringSetup": "반복 설정",
     "notRecurring": "이 작업은 아직 반복되지 않습니다.",
     "clickToEditTitle": "클릭하여 제목 편집",
+    "copyLink": "작업 링크 복사",
+    "linkCopied": "링크가 복사되었습니다",
     "clickToEditContent": "클릭하여 내용 편집",
     "clickToAddContent": "클릭하여 내용 추가",
     "clickToEditSubtasks": "클릭하여 하위 작업 편집",
@@ -2709,7 +2712,9 @@
     "upcoming": "이번 주",
     "noDate": "날짜 없음",
     "nothing": "현재 아무것도 없음",
-    "empty": "현재 공유된 내용이 없습니다. 영역, 프로젝트 또는 목표를 공유하거나 누군가에게 작업을 할당하여 여기에 표시하세요."
+    "empty": "현재 공유된 내용이 없습니다. 영역, 프로젝트 또는 목표를 공유하거나 누군가에게 작업을 할당하여 여기에 표시하세요.",
+    "sortableColumn": "정렬 가능한 열",
+    "reorderFailed": "열 순서를 저장할 수 없습니다."
   },
   "people": {
     "addMember": "멤버 추가",

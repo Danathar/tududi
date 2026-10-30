@@ -234,7 +234,8 @@
     "habit": "Navada",
     "assignedTo": "Dodeljeno",
     "subtasks": "Podnaloge",
-    "openFullPage": "Odpri celoten pogled"
+    "openFullPage": "Odpri celoten pogled",
+    "openPanel": "Odpri v stranski plošči"
   },
   "timeline": {
     "activityTimeline": "Časovnica aktivnosti",
@@ -1319,6 +1320,8 @@
     "recurringSetup": "Nastavitev ponavljanja",
     "notRecurring": "Ta naloga še ni ponavljajoča.",
     "clickToEditTitle": "Kliknite za urejanje naslova",
+    "copyLink": "Kopiraj povezavo do opravila",
+    "linkCopied": "Povezava kopirana",
     "clickToEditContent": "Kliknite za urejanje vsebine",
     "clickToAddContent": "Kliknite za dodajanje vsebine",
     "clickToEditSubtasks": "Kliknite za urejanje podnalog",
@@ -2719,7 +2722,9 @@
     "upcoming": "Ta teden",
     "noDate": "Brez datuma",
     "nothing": "Trenutno nič",
-    "empty": "Trenutno ni nič deljeno. Delite področje, projekt ali cilj, ali dodelite nalogo nekomu, da ga vidite tukaj."
+    "empty": "Trenutno ni nič deljeno. Delite področje, projekt ali cilj, ali dodelite nalogo nekomu, da ga vidite tukaj.",
+    "sortableColumn": "razvrstljiv stolpec",
+    "reorderFailed": "Vrstnega reda stolpcev ni bilo mogoče shraniti."
   },
   "people": {
     "addMember": "Dodaj člana",

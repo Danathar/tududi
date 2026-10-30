@@ -234,7 +234,8 @@
     "habit": "Tapa",
     "assignedTo": "Osoitettu",
     "subtasks": "Ala-tehtävät",
-    "openFullPage": "Avaa koko näkymä"
+    "openFullPage": "Avaa koko näkymä",
+    "openPanel": "Avaa sivupaneelissa"
   },
   "timeline": {
     "activityTimeline": "Toiminta-aikajana",
@@ -1356,6 +1357,8 @@
     "recurringSetup": "Toistuva asetukset",
     "notRecurring": "Tämä tehtävä ei ole vielä toistuva.",
     "clickToEditTitle": "Napsauta muokataksesi otsikkoa",
+    "copyLink": "Kopioi linkki tehtävään",
+    "linkCopied": "Linkki kopioitu",
     "clickToEditContent": "Napsauta muokataksesi sisältöä",
     "clickToAddContent": "Napsauta lisätäksesi sisältöä",
     "clickToEditSubtasks": "Napsauta muokataksesi alitehtäviä",
@@ -2711,7 +2714,9 @@
     "upcoming": "Tällä viikolla",
     "noDate": "Ei päivämäärää",
     "nothing": "Ei mitään juuri nyt",
-    "empty": "Ei mitään jaettua ole nyt päällä. Jaa alue, projekti tai tavoite, tai määritä joku tehtävään, jotta näet sen täällä."
+    "empty": "Ei mitään jaettua ole nyt päällä. Jaa alue, projekti tai tavoite, tai määritä joku tehtävään, jotta näet sen täällä.",
+    "sortableColumn": "järjestettävä sarake",
+    "reorderFailed": "Sarakkeiden järjestystä ei voitu tallentaa."
   },
   "people": {
     "addMember": "Lisää jäsen",
