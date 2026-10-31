@@ -1490,7 +1490,16 @@
     "historyDuration_other": "用时 {{count}} 天",
     "reopen": "重新打开",
     "reopened": "“{{name}}”已恢复为进行中",
-    "loadError": "加载项目失败"
+    "loadError": "加载项目失败",
+    "unavailable": {
+      "noAccessTitle": "你没有访问此项目的权限",
+      "noAccessHint": "请让项目所有者与你共享。",
+      "notFoundTitle": "此项目不存在或已被删除",
+      "notFoundHint": "请检查链接，或在列表中查找该项目。",
+      "failedTitle": "无法加载项目详情。",
+      "failedHint": "请检查网络连接并重新加载页面。",
+      "backToProjects": "返回项目"
+    }
   },
   "projectItem": {
     "edit": "编辑",
@@ -2653,6 +2662,10 @@
     "perSeatNote": "（{{seats}} 个席位，含你自己）",
     "membersNeedTeam": "Pro 仅供一人使用。团队套餐可让你添加成员，3 个席位起。",
     "seatsFull": "你套餐中的 {{seats}} 个席位已全部占用。换成更大的团队套餐即可添加更多人。",
+    "seatsFullTitle": "席位已全部占用",
+    "seatsFullContact": "你套餐中的 {{seats}} 个席位已全部占用。请联系我们添加更多人。",
+    "seatsContactHint": "发送邮件至 {{email}}，我们会为你的套餐添加席位。",
+    "contactUs": "联系我们",
     "changePlan": "更改方案",
     "planChanged": "你的方案已更改。"
   },
@@ -2723,6 +2736,8 @@
     "filterMembers": "成员",
     "filterContacts": "联系人",
     "member": "成员",
+    "owner": "所有者",
+    "admin": "管理员",
     "memberNoSignIn": "成员，暂时无法登录",
     "giveAccount": "授予账户",
     "memberAdded": "成员已添加",
@@ -2771,7 +2786,12 @@
     "removed": "成员已移除",
     "updated": "成员已更新",
     "invitationSent": "邀请已发送",
-    "failedToRemove": "移除成员失败"
+    "failedToRemove": "移除成员失败",
+    "openTasksCount": "分配给 {{name}} 的未完成任务：{{count}}",
+    "handTo": "将其任务交给",
+    "handToYou": "{{name}}（你）",
+    "leaveUnassigned": "无人，保持未分配",
+    "handToHint": "对方会收到一条包含任务数量的通知。已完成的任务保持不变。"
   },
   "signInLink": {
     "action": "登录链接",

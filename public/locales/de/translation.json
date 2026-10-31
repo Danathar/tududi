@@ -1639,7 +1639,16 @@
     "historyDuration_other": "dauerte {{count}} Tage",
     "reopen": "Wieder öffnen",
     "reopened": "„{{name}}“ ist wieder in Bearbeitung",
-    "loadError": "Projekte konnten nicht geladen werden"
+    "loadError": "Projekte konnten nicht geladen werden",
+    "unavailable": {
+      "noAccessTitle": "Du hast keinen Zugriff auf dieses Projekt",
+      "noAccessHint": "Bitte den Eigentümer des Projekts, es mit dir zu teilen.",
+      "notFoundTitle": "Dieses Projekt existiert nicht oder wurde gelöscht",
+      "notFoundHint": "Prüfe den Link oder suche das Projekt in deiner Liste.",
+      "failedTitle": "Projektdetails konnten nicht geladen werden.",
+      "failedHint": "Prüfe deine Verbindung und lade die Seite neu.",
+      "backToProjects": "Zurück zu den Projekten"
+    }
   },
   "projectItem": {
     "edit": "Bearbeiten",
@@ -2664,6 +2673,10 @@
     "perSeatNote": "({{seats}} Plätze, du eingeschlossen)",
     "membersNeedTeam": "Pro ist für eine Person. Mit einem Team-Tarif kannst du Mitglieder hinzufügen, ab 3 Plätzen.",
     "seatsFull": "Alle {{seats}} Plätze deines Tarifs sind belegt. Wechsle zu einem größeren Team-Tarif, um weitere Personen hinzuzufügen.",
+    "seatsFullTitle": "Alle Plätze sind belegt",
+    "seatsFullContact": "Alle {{seats}} Plätze deines Tarifs sind belegt. Kontaktiere uns, um weitere Personen hinzuzufügen.",
+    "seatsContactHint": "Schreib an {{email}}, dann fügen wir deinem Tarif Plätze hinzu.",
+    "contactUs": "Kontakt",
     "changePlan": "Plan ändern",
     "planChanged": "Dein Plan wurde geändert."
   },
@@ -2734,6 +2747,8 @@
     "filterMembers": "Mitglieder",
     "filterContacts": "Kontakte",
     "member": "Mitglied",
+    "owner": "Inhaber",
+    "admin": "Admin",
     "memberNoSignIn": "Mitglied, kann sich noch nicht anmelden",
     "giveAccount": "Konto geben",
     "memberAdded": "Mitglied hinzugefügt",
@@ -2782,7 +2797,12 @@
     "removed": "Mitglied entfernt",
     "updated": "Mitglied aktualisiert",
     "invitationSent": "Einladung gesendet",
-    "failedToRemove": "Mitglied konnte nicht entfernt werden"
+    "failedToRemove": "Mitglied konnte nicht entfernt werden",
+    "openTasksCount": "Offene Aufgaben von {{name}}: {{count}}",
+    "handTo": "Aufgaben übergeben an",
+    "handToYou": "{{name}} (Sie)",
+    "leaveUnassigned": "Niemand, nicht zuweisen",
+    "handToHint": "Die Person erhält eine Benachrichtigung mit der Anzahl der Aufgaben. Erledigte Aufgaben bleiben unverändert."
   },
   "signInLink": {
     "action": "Anmeldelink",

@@ -1494,7 +1494,16 @@
     "historyDuration_other": "durato {{count}} giorni",
     "reopen": "Riapri",
     "reopened": "\"{{name}}\" è di nuovo in corso",
-    "loadError": "Impossibile caricare i progetti"
+    "loadError": "Impossibile caricare i progetti",
+    "unavailable": {
+      "noAccessTitle": "Non hai accesso a questo progetto",
+      "noAccessHint": "Chiedi al proprietario del progetto di condividerlo con te.",
+      "notFoundTitle": "Questo progetto non esiste o è stato eliminato",
+      "notFoundHint": "Controlla il link oppure cerca il progetto nel tuo elenco.",
+      "failedTitle": "Impossibile caricare i dettagli del progetto.",
+      "failedHint": "Controlla la connessione e ricarica la pagina.",
+      "backToProjects": "Torna ai progetti"
+    }
   },
   "projectItem": {
     "edit": "Modifica",
@@ -2658,6 +2667,10 @@
     "perSeatNote": "({{seats}} posti, tu incluso)",
     "membersNeedTeam": "Pro è per una persona. Un piano Team ti permette di aggiungere membri, a partire da 3 posti.",
     "seatsFull": "Tutti i {{seats}} posti del tuo piano sono in uso. Passa a un piano Team più grande per aggiungere altre persone.",
+    "seatsFullTitle": "Tutti i posti sono occupati",
+    "seatsFullContact": "Tutti i {{seats}} posti del tuo piano sono in uso. Contattaci per aggiungere altre persone.",
+    "seatsContactHint": "Scrivi a {{email}} e aggiungeremo posti al tuo piano.",
+    "contactUs": "Contattaci",
     "changePlan": "Cambia piano",
     "planChanged": "Il tuo piano è stato cambiato."
   },
@@ -2728,6 +2741,8 @@
     "filterMembers": "Membri",
     "filterContacts": "Contatti",
     "member": "Membro",
+    "owner": "Proprietario",
+    "admin": "Amministratore",
     "memberNoSignIn": "Membro, non può ancora accedere",
     "giveAccount": "Dai un account",
     "memberAdded": "Membro aggiunto",
@@ -2776,7 +2791,12 @@
     "removed": "Membro rimosso",
     "updated": "Membro aggiornato",
     "invitationSent": "Invito inviato",
-    "failedToRemove": "Impossibile rimuovere il membro"
+    "failedToRemove": "Impossibile rimuovere il membro",
+    "openTasksCount": "Attività aperte assegnate a {{name}}: {{count}}",
+    "handTo": "Passa le sue attività a",
+    "handToYou": "{{name}} (tu)",
+    "leaveUnassigned": "Nessuno, lasciale non assegnate",
+    "handToHint": "Riceverà un solo avviso con il numero di attività. Le attività completate restano come sono."
   },
   "signInLink": {
     "action": "Link di accesso",

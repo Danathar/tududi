@@ -1500,7 +1500,16 @@
     "historyDuration_other": "استغرق {{count}} يوم",
     "reopen": "إعادة فتح",
     "reopened": "عاد \"{{name}}\" قيد التنفيذ",
-    "loadError": "فشل تحميل المشاريع"
+    "loadError": "فشل تحميل المشاريع",
+    "unavailable": {
+      "noAccessTitle": "ليس لديك صلاحية الوصول إلى هذا المشروع",
+      "noAccessHint": "اطلب من مالك المشروع مشاركته معك.",
+      "notFoundTitle": "هذا المشروع غير موجود أو تم حذفه",
+      "notFoundHint": "تحقق من الرابط، أو ابحث عن المشروع في قائمتك.",
+      "failedTitle": "تعذر تحميل تفاصيل المشروع.",
+      "failedHint": "تحقق من اتصالك وأعد تحميل الصفحة.",
+      "backToProjects": "العودة إلى المشاريع"
+    }
   },
   "projectItem": {
     "edit": "تعديل",
@@ -2671,6 +2680,10 @@
     "perSeatNote": "({{seats}} مقاعد، بما فيها مقعدك)",
     "membersNeedTeam": "خطة Pro لشخص واحد. خطة الفريق تتيح لك إضافة أعضاء، بدءًا من 3 مقاعد.",
     "seatsFull": "جميع مقاعد خطتك ({{seats}}) مستخدمة. انتقل إلى خطة فريق أكبر لإضافة المزيد من الأشخاص.",
+    "seatsFullTitle": "كل المقاعد مشغولة",
+    "seatsFullContact": "جميع مقاعد خطتك ({{seats}}) مستخدمة. تواصل معنا لإضافة المزيد من الأشخاص.",
+    "seatsContactHint": "راسلنا على {{email}} وسنضيف مقاعد إلى خطتك.",
+    "contactUs": "تواصل معنا",
     "changePlan": "تغيير الخطة",
     "planChanged": "تم تغيير خطتك."
   },
@@ -2741,6 +2754,8 @@
     "filterMembers": "الأعضاء",
     "filterContacts": "جهات الاتصال",
     "member": "عضو",
+    "owner": "المالك",
+    "admin": "مسؤول",
     "memberNoSignIn": "عضو، لا يستطيع تسجيل الدخول بعد",
     "giveAccount": "منح حساب",
     "memberAdded": "تمت إضافة العضو",
@@ -2789,7 +2804,12 @@
     "removed": "تمت إزالة العضو",
     "updated": "تم تحديث العضو",
     "invitationSent": "تم إرسال الدعوة",
-    "failedToRemove": "تعذّرت إزالة العضو"
+    "failedToRemove": "تعذّرت إزالة العضو",
+    "openTasksCount": "المهام المفتوحة المسندة إلى {{name}}: {{count}}",
+    "handTo": "تسليم مهامه إلى",
+    "handToYou": "{{name}} (أنت)",
+    "leaveUnassigned": "لا أحد، اتركها بلا تعيين",
+    "handToHint": "سيصله إشعار واحد بعدد المهام. المهام المنجزة تبقى كما هي."
   },
   "signInLink": {
     "action": "رابط تسجيل الدخول",

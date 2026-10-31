@@ -115,6 +115,7 @@ export const handleAuthResponse = async (
         }
         const error = new Error(errorMessage);
         (error as any).details = details;
+        (error as any).status = response.status;
         throw error;
     }
     return response;
