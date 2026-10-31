@@ -234,6 +234,52 @@ describe('Removing a member hands their open tasks over', () => {
                 (await selfPerson(lead.id)).uid
             );
         });
+
+        // The member's own tasks in someone else's project pass to that
+        // project's owner on removal; they are handed over only where the
+        // remover could reassign them, like the rest.
+        it("leaves out the member's own task in a project the remover cannot see", async () => {
+            const xena = await createTestUser({
+                email: `xena_${stamp}@example.com`,
+            });
+            await rolesService.setRole(xena.id, 'user');
+            const xenaAgent = await login(xena.email);
+            const project = (
+                await xenaAgent.post('/api/project').send({ name: 'Private' })
+            ).body;
+            await xenaAgent.post('/api/shares').send({
+                resource_type: 'project',
+                resource_uid: project.uid,
+                target_user_email: bea.email,
+                access_level: 'rw',
+            });
+            const beaAgent = await login(bea.email);
+            await acceptAllInvitations(beaAgent);
+            const created = await beaAgent.post('/api/task').send({
+                name: 'Bea task in Xena project',
+                project_id: project.id,
+                assigned_to: beaUid,
+            });
+            expect(created.status).toBe(201);
+
+            const res = await leadAgent
+                .delete(`/api/members/${bea.id}`)
+                .send({ reassign_to: lead.id });
+
+            expect(res.status).toBe(204);
+            const kept = await Task.findOne({
+                where: { uid: created.body.uid },
+            });
+            expect(kept).not.toBeNull();
+            expect(kept.user_id).toBe(xena.id);
+            expect(kept.assigned_to).not.toBe((await selfPerson(lead.id)).uid);
+            expect(
+                (await leadAgent.get(`/api/task/${created.body.uid}`)).status
+            ).not.toBe(200);
+            expect(await assigneeOf(open)).toBe(
+                (await selfPerson(lead.id)).uid
+            );
+        });
     });
 
     describe('without reassign_to', () => {

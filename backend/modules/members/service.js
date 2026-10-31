@@ -7,6 +7,7 @@ const {
     Person,
     Role,
     Task,
+    Project,
     Notification,
 } = require('../../models');
 const rolesService = require('../../services/rolesService');
@@ -134,6 +135,10 @@ function openAssignedTasksWhere(memberId, personUid) {
 // assignee access to a task, so a task the remover cannot write, such as one
 // a third person assigned to the member in a project the remover cannot see,
 // is left to be unassigned as without reassign_to.
+// The member's own open tasks in someone else's project are candidates too:
+// eraseUserAccount passes them to the project owner before beforeErase runs,
+// so they then match openAssignedTasksWhere and can be handed over, but only
+// past the same checks.
 async function handoffTaskIds(actorId, memberId, targetPersonUid) {
     const person = await findSelfPerson(memberId, { attributes: ['uid'] });
     if (!person) return [];
@@ -142,6 +147,30 @@ async function handoffTaskIds(actorId, memberId, targetPersonUid) {
         attributes: ['id', 'uid', 'project_id'],
         raw: true,
     });
+    const own = await Task.findAll({
+        where: {
+            ...openAssignedTasksWhere(memberId, person.uid),
+            user_id: memberId,
+            project_id: { [Op.ne]: null },
+        },
+        attributes: ['id', 'uid', 'project_id'],
+        raw: true,
+    });
+    if (own.length > 0) {
+        const othersProjects = new Set(
+            (
+                await Project.findAll({
+                    where: {
+                        id: [...new Set(own.map((t) => t.project_id))],
+                        user_id: { [Op.ne]: memberId },
+                    },
+                    attributes: ['id'],
+                    raw: true,
+                })
+            ).map((p) => p.id)
+        );
+        tasks.push(...own.filter((t) => othersProjects.has(t.project_id)));
+    }
     const ids = [];
     for (const task of tasks) {
         const access = await permissionsService.getAccess(
@@ -165,7 +194,34 @@ async function handoffTaskIds(actorId, memberId, targetPersonUid) {
 async function countOpenAssignedTasks(memberId) {
     const person = await findSelfPerson(memberId, { attributes: ['uid'] });
     if (!person) return 0;
-    return Task.count({ where: openAssignedTasksWhere(memberId, person.uid) });
+    const others = await Task.count({
+        where: openAssignedTasksWhere(memberId, person.uid),
+    });
+    // Their own open tasks in someone else's project pass to the project
+    // owner on removal, so they are handed over with the rest.
+    const own = await Task.findAll({
+        where: {
+            ...openAssignedTasksWhere(memberId, person.uid),
+            user_id: memberId,
+            project_id: { [Op.ne]: null },
+        },
+        attributes: ['project_id'],
+        raw: true,
+    });
+    if (own.length === 0) return others;
+    const othersProjects = new Set(
+        (
+            await Project.findAll({
+                where: {
+                    id: [...new Set(own.map((t) => t.project_id))],
+                    user_id: { [Op.ne]: memberId },
+                },
+                attributes: ['id'],
+                raw: true,
+            })
+        ).map((p) => p.id)
+    );
+    return others + own.filter((t) => othersProjects.has(t.project_id)).length;
 }
 
 // Who may take over a removed member's tasks: the remover, or someone the
