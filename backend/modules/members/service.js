@@ -24,6 +24,8 @@ const {
 } = require('../../utils/notificationPreferences');
 const { logError } = require('../../services/logService');
 const { getWorkspaceUserIds } = require('../../services/workspaceMembers');
+const permissionsService = require('../../services/permissionsService');
+const { validateAssignee } = require('../tasks/utils/validation');
 const {
     shouldSendInAppNotification,
     deliverySources,
@@ -125,6 +127,39 @@ function openAssignedTasksWhere(memberId, personUid) {
         user_id: { [Op.ne]: memberId },
         status: { [Op.notIn]: CLOSED_TASK_STATUSES },
     };
+}
+
+// The open assigned tasks the remover may hand to the target: ones the
+// remover could reassign to them by editing the task. Assignment gives the
+// assignee access to a task, so a task the remover cannot write, such as one
+// a third person assigned to the member in a project the remover cannot see,
+// is left to be unassigned as without reassign_to.
+async function handoffTaskIds(actorId, memberId, targetPersonUid) {
+    const person = await findSelfPerson(memberId, { attributes: ['uid'] });
+    if (!person) return [];
+    const tasks = await Task.findAll({
+        where: openAssignedTasksWhere(memberId, person.uid),
+        attributes: ['id', 'uid', 'project_id'],
+        raw: true,
+    });
+    const ids = [];
+    for (const task of tasks) {
+        const access = await permissionsService.getAccess(
+            actorId,
+            'task',
+            task.uid
+        );
+        if (access !== 'rw' && access !== 'admin') continue;
+        try {
+            await validateAssignee(targetPersonUid, actorId, {
+                projectId: task.project_id,
+            });
+        } catch {
+            continue;
+        }
+        ids.push(task.id);
+    }
+    return ids;
 }
 
 async function countOpenAssignedTasks(memberId) {
@@ -501,27 +536,35 @@ class MembersService {
                 ? null
                 : await resolveHandoffTarget(actorId, member.id, reassignTo);
 
+        const taskIds = handoff
+            ? await handoffTaskIds(actorId, member.id, handoff.person.uid)
+            : [];
+
         let handedOver = 0;
         await eraseUserAccount(member.id, {
-            beforeErase: handoff
-                ? async (transaction) => {
-                      const person = await findSelfPerson(member.id, {
-                          attributes: ['uid'],
-                          transaction,
-                      });
-                      if (!person) return;
-                      [handedOver] = await Task.update(
-                          { assigned_to: handoff.person.uid },
-                          {
-                              where: openAssignedTasksWhere(
-                                  member.id,
-                                  person.uid
-                              ),
+            beforeErase:
+                taskIds.length > 0
+                    ? async (transaction) => {
+                          const person = await findSelfPerson(member.id, {
+                              attributes: ['uid'],
                               transaction,
-                          }
-                      );
-                  }
-                : undefined,
+                          });
+                          if (!person) return;
+                          [handedOver] = await Task.update(
+                              { assigned_to: handoff.person.uid },
+                              {
+                                  where: {
+                                      ...openAssignedTasksWhere(
+                                          member.id,
+                                          person.uid
+                                      ),
+                                      id: { [Op.in]: taskIds },
+                                  },
+                                  transaction,
+                              }
+                          );
+                      }
+                    : undefined,
         });
 
         if (handoff) {
