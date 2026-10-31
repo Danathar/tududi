@@ -390,7 +390,7 @@ class ProjectsService {
                     user_uid: projectJson.User?.uid,
                     share_count: shareCount,
                     is_shared: sharedUids.has(project.uid),
-                    can_share: isOwner || viewerIsAdmin,
+                    can_share: project.user_id === userId || viewerIsAdmin,
                     is_stalled: isStalled,
                     sort_position: positions[project.id] ?? null,
                 };
