@@ -20,7 +20,10 @@ const {
 } = require('../../models');
 const entitlements = require('../../services/entitlementsService');
 const rolesService = require('../../services/rolesService');
-const { createTestUser } = require('../helpers/testUtils');
+const {
+    createTestUser,
+    acceptAllInvitations,
+} = require('../helpers/testUtils');
 
 // Removing a member used to leave their open tasks unassigned without telling
 // anyone (#2019). The remover can now pick who takes them over.
@@ -185,6 +188,51 @@ describe('Removing a member hands their open tasks over', () => {
             expect(
                 await Notification.count({ where: { user_id: lead.id } })
             ).toBe(0);
+        });
+
+        // Assignment gives the assignee access to a task, so the handover
+        // must not reach tasks the remover could not reassign themselves.
+        it('leaves out a task someone else assigned in a project the remover cannot see', async () => {
+            const xena = await createTestUser({
+                email: `xena_${stamp}@example.com`,
+            });
+            await rolesService.setRole(xena.id, 'user');
+            const xenaAgent = await login(xena.email);
+            const project = (
+                await xenaAgent.post('/api/project').send({ name: 'Private' })
+            ).body;
+            await xenaAgent.post('/api/shares').send({
+                resource_type: 'project',
+                resource_uid: project.uid,
+                target_user_email: bea.email,
+                access_level: 'rw',
+            });
+            await acceptAllInvitations(await login(bea.email));
+            const created = await xenaAgent.post('/api/task').send({
+                name: 'Xena task',
+                project_id: project.id,
+                assigned_to: beaUid,
+            });
+            expect(created.status).toBe(201);
+            expect(
+                (await leadAgent.get(`/api/task/${created.body.uid}`)).status
+            ).not.toBe(200);
+
+            const res = await leadAgent
+                .delete(`/api/members/${bea.id}`)
+                .send({ reassign_to: lead.id });
+
+            expect(res.status).toBe(204);
+            const xenaTask = await Task.findOne({
+                where: { uid: created.body.uid },
+            });
+            expect(xenaTask.assigned_to).toBeNull();
+            expect(
+                (await leadAgent.get(`/api/task/${created.body.uid}`)).status
+            ).not.toBe(200);
+            expect(await assigneeOf(open)).toBe(
+                (await selfPerson(lead.id)).uid
+            );
         });
     });
 
