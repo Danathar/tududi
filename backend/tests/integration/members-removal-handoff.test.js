@@ -403,6 +403,33 @@ describe('Removing a member hands their open tasks over', () => {
             );
         });
 
+        // The superadmin may remove any account's member and hand the tasks
+        // to that account, but a task of the superadmin's own goes only to
+        // someone the superadmin could assign it to, never into a customer's
+        // account.
+        it('keeps a task of the superadmin out of the member account', async () => {
+            const superadmin = await User.findOne({
+                where: { email: `admin_${stamp}@example.com` },
+            });
+            expect(await rolesService.isAdmin(superadmin.id)).toBe(true);
+            const superTask = await Task.create({
+                name: 'Superadmin task',
+                user_id: superadmin.id,
+                assigned_to: mia.person_uid,
+                status: Task.STATUS.NOT_STARTED,
+            });
+
+            const superAgent = await login(superadmin.email);
+
+            const res = await superAgent
+                .delete(`/api/members/${mia.id}`)
+                .send({ reassign_to: ned.person_uid });
+
+            expect(res.status).toBe(204);
+            expect(await User.findByPk(mia.id)).toBeNull();
+            expect((await Task.findByPk(superTask.id)).assigned_to).toBeNull();
+        });
+
         it('refuses a member of another account and removes nothing', async () => {
             const res = await ownerAgent
                 .delete(`/api/members/${mia.id}`)
