@@ -1496,7 +1496,16 @@
     "historyDuration_other": "trwał {{count}} dnia",
     "reopen": "Otwórz ponownie",
     "reopened": "„{{name}}” znów jest w toku",
-    "loadError": "Nie udało się wczytać projektów"
+    "loadError": "Nie udało się wczytać projektów",
+    "unavailable": {
+      "noAccessTitle": "Nie masz dostępu do tego projektu",
+      "noAccessHint": "Poproś właściciela projektu, aby go Tobie udostępnił.",
+      "notFoundTitle": "Ten projekt nie istnieje lub został usunięty",
+      "notFoundHint": "Sprawdź link albo znajdź projekt na swojej liście.",
+      "failedTitle": "Nie udało się wczytać szczegółów projektu.",
+      "failedHint": "Sprawdź połączenie i odśwież stronę.",
+      "backToProjects": "Wróć do projektów"
+    }
   },
   "projectItem": {
     "edit": "Edytuj",
@@ -2663,6 +2672,10 @@
     "perSeatNote": "(miejsca: {{seats}}, łącznie z Tobą)",
     "membersNeedTeam": "Pro jest dla jednej osoby. Plan Zespół pozwala dodawać członków, od 3 miejsc wzwyż.",
     "seatsFull": "Wszystkie miejsca w Twoim planie ({{seats}}) są zajęte. Przejdź na większy plan Zespół, aby dodać więcej osób.",
+    "seatsFullTitle": "Wszystkie miejsca są zajęte",
+    "seatsFullContact": "Wszystkie miejsca w Twoim planie ({{seats}}) są zajęte. Skontaktuj się z nami, aby dodać więcej osób.",
+    "seatsContactHint": "Napisz na {{email}}, a dodamy miejsca do Twojego planu.",
+    "contactUs": "Skontaktuj się z nami",
     "changePlan": "Zmień plan",
     "planChanged": "Twój plan został zmieniony."
   },
@@ -2733,6 +2746,8 @@
     "filterMembers": "Członkowie",
     "filterContacts": "Kontakty",
     "member": "Członek",
+    "owner": "Właściciel",
+    "admin": "Administrator",
     "memberNoSignIn": "Członek, nie może się jeszcze zalogować",
     "giveAccount": "Nadaj konto",
     "memberAdded": "Dodano członka",
@@ -2781,7 +2796,12 @@
     "removed": "Członek usunięty",
     "updated": "Członek zaktualizowany",
     "invitationSent": "Zaproszenie wysłane",
-    "failedToRemove": "Nie udało się usunąć członka"
+    "failedToRemove": "Nie udało się usunąć członka",
+    "openTasksCount": "Otwarte zadania przypisane do {{name}}: {{count}}",
+    "handTo": "Przekaż zadania osobie",
+    "handToYou": "{{name}} (ty)",
+    "leaveUnassigned": "Nikomu, zostaw bez przypisania",
+    "handToHint": "Ta osoba dostanie jedno powiadomienie z liczbą zadań. Ukończone zadania pozostają bez zmian."
   },
   "signInLink": {
     "action": "Link do logowania",

@@ -5,6 +5,7 @@ const moment = require('moment-timezone');
 const { Task, Tag, Project, sequelize } = require('../../models');
 const searchRepository = require('./repository');
 const scopeService = require('../../services/scopeService');
+const permissionsService = require('../../services/permissionsService');
 const {
     parseSearchParams,
     priorityToInt,
@@ -78,7 +79,7 @@ class SearchService {
      * Build task search conditions.
      */
     buildTaskConditions(
-        userId,
+        visibleWhere,
         params,
         dueDateCondition,
         deferDateCondition,
@@ -95,8 +96,10 @@ class SearchService {
             taskStatus,
         } = params;
 
-        const conditions = { user_id: userId };
-        const extraConditions = [];
+        const conditions = {};
+        // Everything the user can open: own tasks, tasks in shared projects
+        // and areas, and tasks assigned to them.
+        const extraConditions = [visibleWhere];
         if (scopeWhere) {
             extraConditions.push(scopeWhere);
         }
@@ -250,9 +253,7 @@ class SearchService {
             extraConditions.push({ project_id: null });
         }
 
-        if (extraConditions.length > 0) {
-            conditions[Op.and] = extraConditions;
-        }
+        conditions[Op.and] = extraConditions;
 
         return conditions;
     }
@@ -312,7 +313,7 @@ class SearchService {
         }
 
         const conditions = this.buildTaskConditions(
-            userId,
+            await permissionsService.ownershipOrPermissionWhere('task', userId),
             params,
             dueDateCondition,
             deferDateCondition,
@@ -376,13 +377,21 @@ class SearchService {
         }
 
         // Templates live in the projects table but are not real projects.
-        const conditions = { user_id: userId, is_template: false };
+        const conditions = {
+            is_template: false,
+            [Op.and]: [
+                await permissionsService.ownershipOrPermissionWhere(
+                    'project',
+                    userId
+                ),
+            ],
+        };
         if (matchingIds) {
             conditions.id = { [Op.in]: matchingIds };
         }
         const scopeWhere = await scopeService.projectScopeWhere(scope);
         if (scopeWhere) {
-            conditions[Op.and] = [scopeWhere];
+            conditions[Op.and].push(scopeWhere);
         }
 
         if (searchQuery) {
@@ -418,12 +427,7 @@ class SearchService {
         if (extras.has('no_due_date')) {
             projectExtraConditions.push({ due_date_at: null });
         }
-        if (projectExtraConditions.length > 0) {
-            conditions[Op.and] = [
-                ...(conditions[Op.and] || []),
-                ...projectExtraConditions,
-            ];
-        }
+        conditions[Op.and].push(...projectExtraConditions);
 
         const requireTags = tagIds.length > 0 || extras.has('has_tags');
         const include = [];
@@ -473,10 +477,17 @@ class SearchService {
     async searchAreas(userId, params, scope = null) {
         const { searchQuery, hasPagination, limit, offset } = params;
 
-        const conditions = { user_id: userId };
         if (scope && scope.matchesNothing) {
             return { count: 0, results: [] };
         }
+        const conditions = {
+            [Op.and]: [
+                await permissionsService.ownershipOrPermissionWhere(
+                    'area',
+                    userId
+                ),
+            ],
+        };
         if (scope && scope.areaId !== null) {
             conditions.id = scope.areaId;
         }
@@ -526,13 +537,20 @@ class SearchService {
             }
         }
 
-        const conditions = { user_id: userId };
+        const conditions = {
+            [Op.and]: [
+                await permissionsService.ownershipOrPermissionWhere(
+                    'note',
+                    userId
+                ),
+            ],
+        };
         if (matchingIds) {
             conditions.id = { [Op.in]: matchingIds };
         }
         const scopeWhere = await scopeService.noteScopeWhere(scope);
         if (scopeWhere) {
-            conditions[Op.and] = [scopeWhere];
+            conditions[Op.and].push(scopeWhere);
         }
 
         if (searchQuery) {

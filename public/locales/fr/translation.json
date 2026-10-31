@@ -1494,7 +1494,16 @@
     "historyDuration_other": "a duré {{count}} jours",
     "reopen": "Rouvrir",
     "reopened": "« {{name}} » est de nouveau en cours",
-    "loadError": "Échec du chargement des projets"
+    "loadError": "Échec du chargement des projets",
+    "unavailable": {
+      "noAccessTitle": "Vous n'avez pas accès à ce projet",
+      "noAccessHint": "Demandez au propriétaire du projet de le partager avec vous.",
+      "notFoundTitle": "Ce projet n'existe pas ou a été supprimé",
+      "notFoundHint": "Vérifiez le lien ou retrouvez le projet dans votre liste.",
+      "failedTitle": "Impossible de charger les détails du projet.",
+      "failedHint": "Vérifiez votre connexion et rechargez la page.",
+      "backToProjects": "Retour aux projets"
+    }
   },
   "projectItem": {
     "edit": "Modifier",
@@ -2658,6 +2667,10 @@
     "perSeatNote": "({{seats}} places, vous compris)",
     "membersNeedTeam": "Pro est pour une personne. Un forfait Équipe vous permet d'ajouter des membres, à partir de 3 places.",
     "seatsFull": "Les {{seats}} places de votre forfait sont utilisées. Passez à un forfait Équipe plus grand pour ajouter d'autres personnes.",
+    "seatsFullTitle": "Toutes les places sont prises",
+    "seatsFullContact": "Les {{seats}} places de votre forfait sont utilisées. Contactez-nous pour ajouter d'autres personnes.",
+    "seatsContactHint": "Écrivez à {{email}} et nous ajouterons des places à votre forfait.",
+    "contactUs": "Nous contacter",
     "changePlan": "Changer de formule",
     "planChanged": "Votre formule a été modifiée."
   },
@@ -2728,6 +2741,8 @@
     "filterMembers": "Membres",
     "filterContacts": "Contacts",
     "member": "Membre",
+    "owner": "Propriétaire",
+    "admin": "Administrateur",
     "memberNoSignIn": "Membre, ne peut pas encore se connecter",
     "giveAccount": "Donner un compte",
     "memberAdded": "Membre ajouté",
@@ -2776,7 +2791,12 @@
     "removed": "Membre retiré",
     "updated": "Membre modifié",
     "invitationSent": "Invitation envoyée",
-    "failedToRemove": "Impossible de retirer le membre"
+    "failedToRemove": "Impossible de retirer le membre",
+    "openTasksCount": "Tâches ouvertes assignées à {{name}} : {{count}}",
+    "handTo": "Confier ses tâches à",
+    "handToYou": "{{name}} (vous)",
+    "leaveUnassigned": "Personne, les laisser sans responsable",
+    "handToHint": "Cette personne reçoit un seul avis avec le nombre de tâches. Les tâches terminées restent telles quelles."
   },
   "signInLink": {
     "action": "Lien de connexion",
