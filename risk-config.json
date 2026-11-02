@@ -15,11 +15,14 @@
                 ".github/workflows/**",
                 ".github/CODEOWNERS",
                 "policies/**",
+                "scripts/check-policies.mjs",
                 "risk-config.json",
                 "LICENSE*",
                 "package.json",
                 "package-lock.json",
-                "AGENTS.md"
+                "AGENTS.md",
+                ".claude/settings.json",
+                ".claude/hooks/**"
             ],
             "required_commands": [
                 "npm run lint",

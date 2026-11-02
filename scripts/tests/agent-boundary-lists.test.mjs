@@ -6,12 +6,16 @@
 // `scripts/check-policies.mjs`, which .github/CODEOWNERS names for the
 // owner's review. These tests hold each copy to the full list and to the file
 // that decides it, so a file added to one has to be added to the others in
-// the same change.
+// the same change. The tier table itself had left out
+// `scripts/check-policies.mjs`, `.claude/settings.json` and `.claude/hooks/`,
+// so each classified as the default Tier 3 with CI review only, while
+// CODEOWNERS and these pages said the owner reads every change to them.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { classify } from '../check-policies.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');
@@ -95,4 +99,14 @@ test(`${SECURITY} section 5 names every file that bounds agents ${CODEOWNERS} na
         ).sort(),
         boundingFiles().filter((p) => owned.has(p))
     );
+});
+
+test(`every file that bounds agents ${CODEOWNERS} names for the owner needs the owner's review in risk-config.json`, () => {
+    const owned = new Set(namedForOwner());
+    // A directory stands for any file in it.
+    const ciReviewed = boundingFiles()
+        .filter((p) => owned.has(p))
+        .map((p) => (p.endsWith('/') ? `${p}x` : p))
+        .filter((p) => classify(config, p).review !== 'owner');
+    assert.deepEqual(ciReviewed, []);
 });
