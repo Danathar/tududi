@@ -129,7 +129,8 @@ Without the owner's explicit, in-conversation instruction, an agent never:
 
 - changes anything in Tier 1 of [docs/risk-tiers.md](../risk-tiers.md) while
   acting autonomously, or relaxes any file that bounds agents (`AGENTS.md`,
-  `policies/`, `risk-config.json`, `.github/CODEOWNERS`, `.claude/settings.json`,
+  `policies/`, `scripts/check-policies.mjs`, `risk-config.json`,
+  `.github/CODEOWNERS`, `.github/workflows/`, `.claude/settings.json`,
   `.claude/hooks/`); see [agent boundaries](../agent-boundaries.md);
 - bumps the version in `package.json` or touches licence files (AGENTS.md,
   "Licensing");
