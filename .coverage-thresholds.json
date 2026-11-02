@@ -8,8 +8,8 @@
         },
         "frontend": {
             "summary": "coverage-frontend/coverage-summary.json",
-            "measured": { "lines": 43.32, "statements": 43.03, "functions": 35.47, "branches": 32.87 },
-            "floor": { "lines": 39, "statements": 40, "functions": 31, "branches": 28 }
+            "measured": { "lines": 44.63, "statements": 44.28, "functions": 36.14, "branches": 34.54 },
+            "floor": { "lines": 41, "statements": 40, "functions": 33, "branches": 31 }
         }
     }
 }
