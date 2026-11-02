@@ -12,7 +12,7 @@ Agents open pull requests against `Danathar/tududi` only
 
 | Tier | Agent may | Agent may not |
 | ---- | --------- | ------------- |
-| 1 critical | Propose a change in a pull request when the owner asked for it, and run the required commands. | Merge it, change it as part of unrelated work, or edit files that bound agents (`AGENTS.md`, `policies/`, `risk-config.json`, `.github/CODEOWNERS`) at all unless the owner told it to. |
+| 1 critical | Propose a change in a pull request when the owner asked for it, and run the required commands. | Merge it, change it as part of unrelated work, or edit files that bound agents (`AGENTS.md`, `policies/`, `risk-config.json`, `.github/CODEOWNERS`, `.github/workflows/`) at all unless the owner told it to. |
 | 2 high | Open a pull request with the required commands run and reported. | Merge it. The owner reviews it. |
 | 3 medium | Open a pull request; CI (`test-sqlite`, `test-postgres`, `agent-tooling`) is the gate. | Skip or loosen a failing check. |
 | 4 low | Open a pull request; CI is the gate. | Use a docs-only label to hide code changes. |

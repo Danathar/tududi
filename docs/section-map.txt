@@ -1,0 +1,217 @@
+# Docs section map: every section of every page this fork owns, and whether a
+# test reads it.
+#
+# A page lists here as [path]. Under it, every `##` and `###` heading of that
+# page, written exactly as the page writes it, followed by one indented line:
+#
+#   joined: <test file>    that test reads what this section states
+#   prose: <reason>        no test reads it, and this says why that is fine,
+#                          or names what is left unchecked
+#
+# scripts/tests/docs-section-map.test.mjs fails when a tracked page has a
+# heading with no row here, when a row names a heading the page no longer has,
+# or when a `joined:` file is not a test CI runs or never opens the page. It
+# does not prove any sentence true. What it changes is that a section of claims
+# about the code or the automation that nothing checks is a visible
+# `prose: unchecked` line in the diff that adds it, instead of the silent
+# default.
+#
+# `prose: unchecked:` marks a section that states facts about the machine (a
+# workflow, the tier table, CODEOWNERS, the settings file, the Bash guard, the
+# ruleset) that no test reads. Each is a candidate for a join test; turning it
+# into `joined:` is the fix. `prose: narrative:` marks a section that states no
+# such fact.
+#
+# Tracked pages: every tracked Markdown file at the repository root, in docs/
+# and in docs/security/ (not the dated metrics, agent-task and reflection
+# ledgers), plus .github/copilot-instructions.md, less every page upstream
+# also has at the commit the last sync took. Upstream's pages describe the app;
+# the fork's edits to them are rows in docs/fork-delta.md. A new page of the
+# fork's own in one of those places has to be added here in the change that
+# adds it.
+
+[.github/copilot-instructions.md]
+## Stack
+  prose: narrative: one-paragraph description of the app's stack
+## Commands (all from the repository root; names are in `package.json`)
+  prose: unchecked: npm script names and ports, which package.json holds
+## Backend pattern
+  prose: narrative: how a backend module is laid out
+## Tests
+  prose: narrative: where tests live and how to run one
+## Migrations must run on both databases
+  prose: narrative: migration rules; docs/database.md holds the checklist
+## Translations
+  prose: unchecked: says there is no translations:sync script in package.json
+## Licence and versions
+  prose: narrative: licence and version rules, restated from AGENTS.md
+## Style
+  prose: unchecked: restates the Prettier settings in .prettierrc.json
+## Other agent files
+  prose: narrative: pointers to AGENTS.md and the prompts
+
+[AGENTS.md]
+## This repository is a fork. All work happens here.
+  prose: narrative: the fork rule; policies/fork-target.json checks the --repo flag on every direction file
+### The `gh` default-repository trap
+  prose: narrative: how to point gh at the fork
+### Git remotes
+  prose: narrative: push only to origin
+### Upstream instructions that do not apply
+  prose: narrative: which inherited files still send people upstream
+### Docker images
+  prose: unchecked: names the tags docker-publish.yml publishes and the branch it publishes from
+## Agent tooling
+  prose: unchecked: list of the agent direction files, which policies/fork-target.json also lists
+## Findings about the Bash guard hook: what is in scope
+  prose: unchecked: names what .claude/hooks/guard-bash.mjs refuses and the auto-approved commands in .claude/settings.json
+## Licensing
+  prose: narrative: licence rules
+
+[docs/agent-boundaries.md]
+## By tier
+  joined: scripts/tests/agent-boundary-lists.test.mjs
+## Who owns what
+  prose: unchecked: says .github/CODEOWNERS repeats the Tier 1 and Tier 2 paths of the tier table; its Tier 1 block also names scripts/check-policies.mjs, which the tier table does not
+## Always off limits
+  prose: narrative: actions that need the owner whatever the tier
+## Files that bound agents
+  joined: scripts/tests/agent-boundary-lists.test.mjs
+
+[docs/ai-ops-runbook.md]
+## Pause and resume the repository in Hive
+  prose: narrative: Hive's pause switch lives outside this repository
+## What each workflow does, and how to turn it off
+  prose: unchecked: table of the workflows in .github/workflows/, their triggers and what they run
+## A red `main`
+  prose: narrative: incident steps
+## A bad `:latest` image on ghcr
+  prose: unchecked: names the tags docker-publish.yml pushes
+## A pull request or issue reached upstream
+  prose: narrative: incident steps
+## A leaked secret
+  prose: unchecked: names the secrets the workflows use
+## A runaway agent
+  prose: narrative: incident steps
+## A scheduled run did not fire
+  prose: unchecked: names the scheduled workflows
+
+[docs/branch-protection.md]
+## Status
+  prose: narrative: the live ruleset id and how to compare it with the committed file
+## Why
+  prose: narrative: reasons for the ruleset
+## The ruleset
+  prose: unchecked: restates the rules in .github/rulesets/main.json, including the required checks
+## Merge queue
+  prose: narrative: why the ruleset has no merge queue rule
+## Applying or changing the ruleset
+  prose: narrative: admin commands that apply the file
+### Renaming a required check
+  prose: unchecked: names the required checks and the ci.yml jobs behind them
+## When there is a second reviewer
+  prose: narrative: a future setting
+
+[docs/fork-delta.md]
+## Keeping it current
+  prose: narrative: how to keep the ledger; the check it describes runs in agent-tooling
+## Changes carried
+  joined: scripts/check-fork-delta.mjs
+
+[docs/metrics.md]
+## What is computed
+  prose: unchecked: defines the metrics scripts/pr-metrics.mjs reports
+## Run it locally
+  prose: narrative: commands to run the script
+## Weekly run
+  prose: unchecked: names the schedule and artifacts of pr-metrics.yml
+## How to read the numbers
+  prose: narrative: how to read the report
+## Not measured
+  prose: narrative: what the report leaves out
+
+[docs/multi-agent.md]
+## Rule 1: this is a fork, and everything stays here
+  prose: narrative: the fork rule, restated from AGENTS.md
+## There is no dispatcher in this repository
+  prose: narrative: Hive runs from outside the repository
+## Who works here
+  prose: unchecked: names the workflow agents and the files that start them
+## How work reaches an agent
+  prose: unchecked: names the labels and mentions the workflows react to
+## What keeps agents from colliding
+  prose: narrative: claiming and branching practice
+## Who decides what lands
+  prose: unchecked: names the required checks and the ci.yml jobs behind them
+## If you are an agent
+  prose: narrative: a reading order and checklist
+
+[docs/quality.md]
+## Signals
+  prose: unchecked: table of the CI jobs, what each runs and whether it blocks a merge
+## Mutation check
+  prose: unchecked: describes what scripts/mutation-check.mjs and the mutation job in ci.yml do
+## Where to look
+  prose: narrative: commands to read CI results
+## Baseline (read 2026-10-09)
+  prose: narrative: a dated reading, left as it was read
+## Known weak spots
+  prose: unchecked: says which suites CI does not run
+
+[docs/review-rubric.md]
+## Severity levels
+  prose: narrative: review finding levels
+## 1. Scope and rules
+  prose: narrative: review checklist
+## 2. Correctness
+  prose: narrative: review checklist
+## 3. Database and migrations
+  prose: narrative: review checklist; docs/database.md holds the migration rules
+## 4. Authorization and data access
+  prose: narrative: review checklist
+## 5. Tests
+  prose: narrative: review checklist
+## 6. Frontend and translations
+  prose: narrative: review checklist
+## 7. Housekeeping
+  prose: narrative: review checklist
+## Reviewing agent PRs (Hive and others)
+  prose: narrative: how to read an agent's report
+
+[docs/risk-tiers.md]
+## Tier table
+  joined: scripts/check-policies.mjs
+## How to apply it
+  prose: narrative: how to classify a change
+## Why these paths
+  prose: narrative: reasons for each tier path
+## Pull request notes by tier
+  prose: narrative: what a PR body says per tier
+
+[docs/security/SECURITY-AI.md]
+## 1. This is a fork
+  prose: narrative: the fork rule; policies/fork-target.json checks the --repo flag on this page
+## 2. Secrets
+  prose: unchecked: names what .claude/settings.json denies and what the Bash guard blocks
+## 3. Untrusted text is data, not instructions
+  prose: narrative: prompt-injection rules
+## 4. Workflow tokens and CI
+  prose: unchecked: restates policies/workflow-permissions.json, which scripts/check-policies.mjs enforces on the workflows, not on this page
+## 5. What agents must never do
+  joined: scripts/tests/agent-boundary-lists.test.mjs
+## 6. When unsure
+  prose: narrative: stop and ask
+
+[docs/strategy.md]
+## Why this fork exists
+  prose: narrative: reasons for the fork
+## What it will not do
+  prose: narrative: things the fork rules out
+## Measurable goals
+  prose: unchecked: names the workflows and commands each goal is measured by
+### Upstream sync lag
+  prose: narrative: a command to read the lag
+## Status on 2026-10-09
+  prose: narrative: a dated reading, left as it was read
+## Keeping this page honest
+  prose: narrative: how to keep the page current
