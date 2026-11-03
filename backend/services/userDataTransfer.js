@@ -53,6 +53,8 @@ const {
 } = require('../models');
 const { getConfig } = require('../config/config');
 const secretCipher = require('../shared/crypto/secretCipher');
+const { MAX_WEBHOOKS } = require('../modules/webhooks/service');
+const { MAX_FEEDS_PER_USER } = require('../modules/calendar-feeds/service');
 const { isAdmin } = require('./rolesService');
 const { uid: generateUid } = require('../utils/uid');
 const packageJson = require('../../package.json');
@@ -1583,10 +1585,15 @@ const LINKED_STAT_KEYS = [
 ];
 
 // A stored secret only comes across when this instance's key can read it,
-// otherwise the restored feed or webhook could never be used.
+// otherwise the restored feed or webhook could never be used. decrypt() hands
+// back anything unencrypted as it is, and an export never holds plain text,
+// so that is refused here.
 const readableHere = (...values) => {
     try {
-        for (const value of values) secretCipher.decrypt(value);
+        for (const value of values) {
+            if (!secretCipher.isEncrypted(value)) return false;
+            secretCipher.decrypt(value);
+        }
         return true;
     } catch (_) {
         return false;
@@ -1799,9 +1806,18 @@ async function restoreLinkedRecords(entries, renames, personUids, stats) {
                 }
             }
 
+            // The same per-account limits as adding them by hand.
+            let feedCount = await CalendarFeed.count({
+                where: { user_id: userId },
+                transaction,
+            });
             for (const f of data.calendar_feeds || []) {
                 const claim = await claimUid(CalendarFeed, f.uid, userId);
-                if (claim.existing || !readableHere(f.url_encrypted)) {
+                if (
+                    claim.existing ||
+                    feedCount >= MAX_FEEDS_PER_USER ||
+                    !readableHere(f.url_encrypted)
+                ) {
                     count('calendar_feeds', false);
                     continue;
                 }
@@ -1817,12 +1833,21 @@ async function restoreLinkedRecords(entries, renames, personUids, stats) {
                     },
                     { transaction }
                 );
+                feedCount += 1;
                 count('calendar_feeds', true);
             }
 
+            let webhookCount = await Webhook.count({
+                where: { user_id: userId },
+                transaction,
+            });
             for (const w of data.webhooks || []) {
                 const claim = await claimUid(Webhook, w.uid, userId);
-                if (claim.existing || !readableHere(w.url, w.secret)) {
+                if (
+                    claim.existing ||
+                    webhookCount >= MAX_WEBHOOKS ||
+                    !readableHere(w.url, w.secret)
+                ) {
                     count('webhooks', false);
                     continue;
                 }
@@ -1839,6 +1864,7 @@ async function restoreLinkedRecords(entries, renames, personUids, stats) {
                     },
                     { transaction }
                 );
+                webhookCount += 1;
                 count('webhooks', true);
             }
 

@@ -401,6 +401,41 @@ describe('Backup of comments, plans, feeds, webhooks and orders', () => {
         expect(stats.comments.created).toBe(2);
     });
 
+    it('skips feeds and webhooks whose secrets are not encrypted', async () => {
+        const backup = await exportUserData(seeded.user.id);
+        backup.data.calendar_feeds[0].url_encrypted =
+            'https://cal.example.com/plain.ics';
+        backup.data.webhooks[0].url = 'https://hooks.example.com/plain';
+
+        const stats = await importUserData(target.id, backup);
+
+        expect(stats.calendar_feeds).toEqual({ created: 0, skipped: 1 });
+        expect(stats.webhooks).toEqual({ created: 0, skipped: 1 });
+        expect(await Webhook.count({ where: { user_id: target.id } })).toBe(0);
+    });
+
+    it('stops at the limits on feeds and webhooks per account', async () => {
+        const backup = await exportUserData(seeded.user.id);
+        const [feed] = backup.data.calendar_feeds;
+        const [webhook] = backup.data.webhooks;
+        const copies = (row, prefix, total) =>
+            Array.from({ length: total }, (_, i) => ({
+                ...row,
+                uid: `${prefix}${i}`,
+            }));
+        backup.data.calendar_feeds = copies(feed, 'feedcopy', 12);
+        backup.data.webhooks = copies(webhook, 'hookcopy', 12);
+
+        const stats = await importUserData(target.id, backup);
+
+        expect(stats.calendar_feeds).toEqual({ created: 10, skipped: 2 });
+        expect(stats.webhooks).toEqual({ created: 10, skipped: 2 });
+        expect(
+            await CalendarFeed.count({ where: { user_id: target.id } })
+        ).toBe(10);
+        expect(await Webhook.count({ where: { user_id: target.id } })).toBe(10);
+    });
+
     it('still imports a backup made before these records were exported', async () => {
         const backup = await exportUserData(seeded.user.id);
         for (const key of [

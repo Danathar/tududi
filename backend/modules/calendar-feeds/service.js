@@ -277,4 +277,5 @@ module.exports = {
     eventsForDay,
     eventsForRangeOfDays,
     clearCache,
+    MAX_FEEDS_PER_USER,
 };
