@@ -2,6 +2,7 @@ const request = require('supertest');
 const app = require('../../app');
 const { Role } = require('../../models');
 const { createTestUser } = require('../helpers/testUtils');
+const { getDialect } = require('../../config/db');
 
 const login = async (user) => {
     const agent = request.agent(app);
@@ -21,7 +22,8 @@ describe('GET /api/admin/database', () => {
         const res = await (await login(admin)).get('/api/admin/database');
 
         expect(res.status).toBe(200);
-        expect(res.body).toEqual({ dialect: 'sqlite' });
+        // CI runs this suite on SQLite and on PostgreSQL.
+        expect(res.body).toEqual({ dialect: getDialect() });
     });
 
     it('is refused to anyone who is not an admin', async () => {

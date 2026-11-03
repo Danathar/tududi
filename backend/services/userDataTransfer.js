@@ -1174,8 +1174,9 @@ async function importOwnData(
             }
             for (const attachment of task.attachments || []) {
                 // Images pasted into a comment are not listed with the task's
-                // files, and comments are not backed up, so nothing would
-                // point at them after a restore.
+                // files. Comments are restored, but their bodies still link
+                // the old stored files, so nothing would point at them after
+                // a restore.
                 if (attachment.inline) continue;
                 const file = await writeAttachmentFile(attachment);
                 if (!file) continue;
