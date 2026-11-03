@@ -134,36 +134,60 @@ describe('Push notifications', () => {
             expect(await PushSubscription.count()).toBe(0);
         });
 
-        it('rejects endpoints on internal addresses (SSRF)', async () => {
+        it('rejects endpoints outside the browser push services', async () => {
             for (const endpoint of [
-                'https://127.0.0.1/push',
-                'https://169.254.169.254:8443/latest/meta-data',
-                'https://10.0.0.5/push',
-                'https://[::1]/push',
+                'https://10.0.0.5:8443/internal/api/action',
+                'https://127.0.0.1/x',
+                'https://[::1]/x',
+                'https://localhost/x',
+                'https://push.example.com/abc',
+                'https://fcm.googleapis.com.evil.example/x',
+                'https://evilfcm.googleapis.com.example/x',
+                'https://fcm.googleapis.com:8443/x',
+                'https://user@fcm.googleapis.com/x',
+                'https://169.254.169.254/latest/meta-data',
             ]) {
                 const res = await agent
                     .post('/api/push/subscriptions')
                     .send(subscriptionBody({ endpoint }));
                 expect(res.status).toBe(400);
             }
+            expect(await PushSubscription.count()).toBe(0);
+        });
 
-            // A hostname that resolves to a private address is refused too.
+        it('rejects a push-service host that resolves to an internal address (SSRF)', async () => {
+            // The allow-list checks the name only; the address it resolves
+            // to must still be public.
             dns.promises.lookup.mockResolvedValueOnce([
                 { address: '192.168.1.10', family: 4 },
             ]);
             const res = await agent.post('/api/push/subscriptions').send(
                 subscriptionBody({
-                    endpoint: 'https://internal.example.com/push',
+                    endpoint: 'https://fcm.googleapis.com/fcm/send/rebind',
                 })
             );
             expect(res.status).toBe(400);
             expect(await PushSubscription.count()).toBe(0);
         });
 
+        it('accepts the endpoints browsers hand out', async () => {
+            for (const endpoint of [
+                'https://fcm.googleapis.com/fcm/send/abc',
+                'https://updates.push.services.mozilla.com/wpush/v2/abc',
+                'https://web.push.apple.com/abc',
+                'https://wns2-par02p.notify.windows.com/w/?token=abc',
+            ]) {
+                const res = await agent
+                    .post('/api/push/subscriptions')
+                    .send(subscriptionBody({ endpoint }));
+                expect(res.status).toBe(201);
+            }
+        });
+
         it('rejects a subscription without keys', async () => {
             const res = await agent
                 .post('/api/push/subscriptions')
-                .send({ endpoint: 'https://push.example.com/abc' });
+                .send({ endpoint: 'https://fcm.googleapis.com/fcm/send/x' });
             expect(res.status).toBe(400);
         });
     });
@@ -232,13 +256,16 @@ describe('Push notifications', () => {
             expect(options.agent.options.lookup).toBe(publicOnlyLookup);
         });
 
-        it('never sends to an internal endpoint stored before the check', async () => {
+        it('never sends to a stored push-service endpoint that now resolves internally', async () => {
             await pushRepository.create({
                 user_id: user.id,
-                endpoint: 'https://169.254.169.254/latest/meta-data',
+                endpoint: 'https://fcm.googleapis.com/fcm/send/stale',
                 p256dh: 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA',
                 auth: 'tBHI',
             });
+            dns.promises.lookup.mockResolvedValueOnce([
+                { address: '169.254.169.254', family: 4 },
+            ]);
 
             const sent = await pushService.sendToUser(user.id, { title: 't' });
 
@@ -248,6 +275,23 @@ describe('Push notifications', () => {
                 where: { user_id: user.id },
             });
             expect(row.failure_count).toBe(1);
+        });
+
+        it('drops a stored device outside the push services without sending', async () => {
+            await pushRepository.create({
+                user_id: user.id,
+                endpoint: 'https://10.0.0.5:8443/internal',
+                p256dh: 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA',
+                auth: 'tBHI',
+            });
+
+            const sent = await pushService.sendToUser(user.id, { title: 't' });
+
+            expect(sent).toBe(0);
+            expect(webpush.sendNotification).not.toHaveBeenCalled();
+            expect(
+                await PushSubscription.count({ where: { user_id: user.id } })
+            ).toBe(0);
         });
 
         it('forgets a device the push service says is gone', async () => {
