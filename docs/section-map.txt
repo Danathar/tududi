@@ -102,15 +102,15 @@
 ## Why
   prose: narrative: reasons for the ruleset
 ## The ruleset
-  prose: unchecked: restates the rules in .github/rulesets/main.json, including the required checks
+  joined: scripts/tests/required-checks-pages.test.mjs
 ## Merge queue
-  prose: narrative: why the ruleset has no merge queue rule
+  joined: scripts/tests/required-checks-pages.test.mjs
 ## Applying or changing the ruleset
   prose: narrative: admin commands that apply the file
 ### Renaming a required check
-  prose: unchecked: names the required checks and the ci.yml jobs behind them
+  joined: scripts/tests/required-checks-pages.test.mjs
 ## When there is a second reviewer
-  prose: narrative: a future setting
+  joined: scripts/tests/required-checks-pages.test.mjs
 
 [docs/fork-delta.md]
 ## Keeping it current
@@ -142,13 +142,13 @@
 ## What keeps agents from colliding
   prose: narrative: claiming and branching practice
 ## Who decides what lands
-  prose: unchecked: names the required checks and the ci.yml jobs behind them
+  joined: scripts/tests/required-checks-pages.test.mjs
 ## If you are an agent
   prose: narrative: a reading order and checklist
 
 [docs/quality.md]
 ## Signals
-  prose: unchecked: table of the CI jobs, what each runs and whether it blocks a merge
+  joined: scripts/tests/quality-signals.test.mjs
 ## Mutation check
   prose: unchecked: describes what scripts/mutation-check.mjs and the mutation job in ci.yml do
 ## Where to look
@@ -156,7 +156,7 @@
 ## Baseline (read 2026-10-09)
   prose: narrative: a dated reading, left as it was read
 ## Known weak spots
-  prose: unchecked: says which suites CI does not run
+  joined: scripts/tests/quality-signals.test.mjs
 
 [docs/review-rubric.md]
 ## Severity levels

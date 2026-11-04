@@ -129,8 +129,8 @@ gh api --method PUT repos/Danathar/tududi/rulesets/24817503 \
 
 ### Renaming a required check
 
-That order deadlocks when the pull request renames `test-sqlite` or
-`test-postgres` (or the `ci.yml` job behind it): the pull request reports only
+That order deadlocks when the pull request renames `test-sqlite`,
+`test-postgres` or `agent-tooling` (or the job behind it): the pull request reports only
 the new name while the live ruleset waits for the old one, so it can never
 merge. Stage it instead:
 

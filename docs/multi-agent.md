@@ -133,11 +133,13 @@ reading and settled by the owner.
 
 No agent merges its own pull request unless the owner has set that up.
 
-- **Required checks.** The checks meant to gate a merge are the two jobs in
-  [`ci.yml`](../.github/workflows/ci.yml): `test-sqlite` (lint, backend tests,
-  legacy SQLite upgrade, frontend build) and `test-postgres`. They run on every
-  pull request. The active ruleset "protect main" (set up as an owner settings
-  change for issue #42) requires both, with branches up to date; it is recorded
+- **Required checks.** The checks that gate a merge are the two jobs in
+  [`ci.yml`](../.github/workflows/ci.yml), `test-sqlite` (lint, backend tests,
+  legacy SQLite upgrade, frontend build) and `test-postgres`, and the
+  `agent-tooling` job in
+  [`agent-tooling.yml`](../.github/workflows/agent-tooling.yml). They run on
+  every pull request. The active ruleset "protect main" (set up as an owner
+  settings change for issue #42) requires all three, with branches up to date; it is recorded
   in `.github/rulesets/main.json` and explained in
   [`branch-protection.md`](branch-protection.md) (added by PR #59). Check with
   `gh api repos/Danathar/tududi/rulesets --jq '.[] | [.name, .enforcement] | @tsv'`.

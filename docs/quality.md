@@ -14,23 +14,27 @@ repository is a fork. All work happens here.").
 
 | signal | where it lives | what it tells you | blocks merge |
 |---|---|---|---|
-| `test-sqlite` job | [ci.yml](../.github/workflows/ci.yml) | lint (`npm run lint`), backend Jest on SQLite (`npm run backend:test`), legacy-database upgrade and schema parity (`npm run backend:test:upgrade`), frontend build with `tsc --noEmit` (`npm run build`) | planned: required check, see [branch-protection.md](branch-protection.md) |
-| `test-postgres` job | [ci.yml](../.github/workflows/ci.yml) | bootstraps an empty PostgreSQL database, runs pending migrations, backend Jest on PostgreSQL (`npm run backend:test:pg`), upgrade suite again | planned: required check |
+| `test-sqlite` job | [ci.yml](../.github/workflows/ci.yml) | lint (`npm run lint`), backend Jest on SQLite (`npm run backend:test`), legacy-database upgrade and schema parity (`npm run backend:test:upgrade`), frontend build with `tsc --noEmit` (`npm run build`) | yes, required check, see [branch-protection.md](branch-protection.md) |
+| `test-postgres` job | [ci.yml](../.github/workflows/ci.yml) | bootstraps an empty PostgreSQL database, runs pending migrations, backend Jest on PostgreSQL (`npm run backend:test:pg`), upgrade suite again (`npm run backend:test:upgrade`) | yes, required check |
 | mutation check (`mutation` job) | [ci.yml](../.github/workflows/ci.yml), `scripts/mutation-check.mjs`, [stryker.config.mjs](../stryker.config.mjs), ledger [.mutation-survivors.json](../.mutation-survivors.json) | StrykerJS breaks the backend, frontend, `scripts/` and guard-hook source lines a pull request adds or changes, one small breakage at a time, and lists each one the tests still pass (`Survived`) or never run (`NoCoverage`), minus accepted survivors in the ledger. Skipped for upstream syncs (`chore: sync upstream`); see [Mutation check](#mutation-check) | no, advisory (`continue-on-error`) |
-| coverage gate | [coverage-gate.yml](../.github/workflows/coverage-gate.yml), thresholds in [.coverage-thresholds.json](../.coverage-thresholds.json) | coverage has not dropped below the recorded floor | per that workflow |
+| coverage gate | [coverage-gate.yml](../.github/workflows/coverage-gate.yml), thresholds in [.coverage-thresholds.json](../.coverage-thresholds.json) | coverage has not dropped below the recorded floor | no, not a required check |
 | nightly compliance | [nightly-compliance.yml](../.github/workflows/nightly-compliance.yml) | scheduled re-check of the repository against its own rules | no, notification |
-| policy check | [policy-check.yml](../.github/workflows/policy-check.yml), `scripts/check-policies.mjs`, [policies/](../policies/README.md) | agent-facing policy files are well formed and consistent | per that workflow |
-| agent tooling tests | [agent-tooling.yml](../.github/workflows/agent-tooling.yml) | `node --test` over `scripts/tests/` and `.claude/hooks/tests/` (this includes the PR-metrics tests) | per that workflow |
+| policy check | [policy-check.yml](../.github/workflows/policy-check.yml), `scripts/check-policies.mjs`, [policies/](../policies/README.md) | agent-facing policy files are well formed and consistent | no, not a required check |
+| `agent-tooling` job | [agent-tooling.yml](../.github/workflows/agent-tooling.yml) | `node --test` over `scripts/tests/` and `.claude/hooks/tests/` (this includes the PR-metrics tests), then `node scripts/check-fork-delta.mjs` | yes, required check |
 | PR metrics | [pr-metrics.yml](../.github/workflows/pr-metrics.yml), definitions in [metrics.md](metrics.md), readings in [metrics/](metrics/README.md) | acceptance rate and time to merge, by author class | no, report only |
+| agent audit trail | [agent-audit.yml](../.github/workflows/agent-audit.yml), `scripts/ai-audit-report.mjs` | weekly read-back of who wrote and who merged each agent pull request; a violation fails the run | no, report only |
+| auto issues | [auto-issues.yml](../.github/workflows/auto-issues.yml) | opens or comments on one tracking issue when `CI` or `Publish Docker image` fails on a push to `main` | no, notification |
+| Auto-QA | [auto-qa.yml](../.github/workflows/auto-qa.yml), rules in [.github/auto-qa-tuning.json](../.github/auto-qa-tuning.json) | weekly coverage reading; when a floor can rise it opens or updates one tracking issue holding the proposed diff | no, report only |
 | Codex review | `chatgpt-codex-connector` comments on each PR | automated findings, `P0`-`P3` ([review-rubric.md](review-rubric.md)) | no, advisory |
-| e2e tests | `e2e/tests/` (Playwright), `npm run test:ui` | browser flows | not run in CI; run locally |
-| frontend unit tests | `frontend/__tests__/`, `npm run frontend:test` | component behaviour | not run in CI; run locally |
+| e2e tests | `e2e/tests/` (Playwright), `npm run test:ui` | browser flows | no, not run in CI; run locally |
+| frontend unit tests | `frontend/__tests__/`, `npm run frontend:test` | component behaviour. `ci.yml` leaves them out; [coverage-gate.yml](../.github/workflows/coverage-gate.yml), `nightly-compliance.yml` and `auto-qa.yml` run them for their coverage numbers, with `continue-on-error` on that step | no, a failing test fails no job |
 | image publish | [docker-publish.yml](../.github/workflows/docker-publish.yml) | `ghcr.io/danathar/tududi` builds on push to `main` | no |
 | Docker upgrade test | [upgrade-docker.yml](../.github/workflows/upgrade-docker.yml) | upgrades a volume from the previous release image to a build of the checkout; on demand, on `v*` tags and weekly (Mondays), not per PR | no |
 
-Workflows beyond `ci.yml`, `docker-publish.yml` and `upgrade-docker.yml` arrive
-through their own pull requests; a link above that does not resolve yet means
-that PR has not merged.
+The last column is the ruleset's answer
+([`.github/rulesets/main.json`](../.github/rulesets/main.json)). Hive's merge
+gate also stops on a failed check that is not required (see
+[Mutation check](#mutation-check)).
 
 ## Mutation check
 
@@ -183,9 +187,11 @@ conclusion is a run that had not finished or had been cancelled.
 
 ## Known weak spots
 
-- **CI does not run the frontend unit tests or the e2e suite.** A frontend
-  regression can merge with a green `ci.yml`. The three known frontend
-  failures above are also why the frontend suite cannot be made a gate yet.
+- **CI does not run the e2e suite, and no job fails on a frontend unit test.**
+  `ci.yml` leaves the frontend unit tests out, and the workflows that run them
+  read only their coverage numbers, so a frontend regression can merge with a
+  green `ci.yml`. The three known frontend failures above are also why the
+  frontend suite cannot be made a gate yet.
 - **Locale parity is unchecked.** English has the most keys in
   `public/locales/*/translation.json`; other locales lag and fall back to
   English. Nothing in CI reports it.
