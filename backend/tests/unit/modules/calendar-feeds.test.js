@@ -643,7 +643,7 @@ describe('feeds built to cost the server', () => {
             calendar(
                 ...series(
                     'new-year',
-                    '20000101T000000Z',
+                    '20100101T000000Z',
                     'FREQ=HOURLY;BYMONTH=1;BYMONTHDAY=1'
                 )
             )
@@ -652,6 +652,32 @@ describe('feeds built to cost the server', () => {
         const found = eventsForRange(events, '2026-01-01', '2026-01-01', 'UTC');
 
         expect(found).toHaveLength(24);
+    });
+
+    it('turns a rule down once it has refused too many dates in a row', () => {
+        // Called directly: walking the rule to the limit is what the child
+        // process tests above do, and they cannot see a change to this file
+        // made by a mutation run.
+        const [event] = parseCalendar(
+            calendar(
+                ...series(
+                    'never',
+                    '20200101T000000Z',
+                    'FREQ=DAILY;BYMONTH=2;BYMONTHDAY=30'
+                )
+            )
+        );
+        const iterator = event.component
+            .getFirstPropertyValue('rrule')
+            .iterator(event.startDate);
+
+        for (let refused = 0; refused < 100000; refused++) {
+            iterator.check_contracting_rules();
+        }
+
+        expect(() => iterator.check_contracting_rules()).toThrow(
+            'This calendar has a repeating event with no dates'
+        );
     });
 
     it('keeps an exception on its own series only', () => {
@@ -701,6 +727,92 @@ describe('feeds built to cost the server', () => {
 
         expect(titles).toContain('series-0');
         expect(titles).not.toContain('series-19');
+    });
+
+    it('counts the dates a rule refuses as steps', () => {
+        // Monday 29 February comes about once in 28 years, so this series
+        // passes few dates and refuses hundreds of thousands.
+        const events = parseCalendar(
+            calendar(
+                ...series(
+                    'rare',
+                    '10000101T000000Z',
+                    'FREQ=DAILY;BYMONTH=2;BYMONTHDAY=29;BYDAY=MO'
+                ),
+                'BEGIN:VEVENT',
+                'UID:after',
+                'SUMMARY:after',
+                'DTSTART:20260601T090000Z',
+                'END:VEVENT'
+            )
+        );
+
+        const found = eventsForRange(events, '2026-06-01', '2026-06-01', 'UTC');
+
+        expect(found).toEqual([]);
+    });
+
+    it('counts dates listed one by one, which no rule looks at', () => {
+        const dates = [];
+        for (let year = 1000; year < 1800; year++) {
+            for (let day = 1; day <= 25; day++) {
+                dates.push(`${year}01${String(day).padStart(2, '0')}T000000Z`);
+            }
+        }
+        const lines = [];
+        for (let i = 0; i < 11; i++) {
+            lines.push(
+                'BEGIN:VEVENT',
+                `UID:listed-${i}`,
+                'SUMMARY:listed',
+                'DTSTART:10000101T000000Z',
+                `RDATE:${dates.join(',')}`,
+                'END:VEVENT'
+            );
+        }
+        lines.push(
+            'BEGIN:VEVENT',
+            'UID:after',
+            'SUMMARY:after',
+            'DTSTART:20260601T090000Z',
+            'END:VEVENT'
+        );
+
+        const found = eventsForRange(
+            parseCalendar(calendar(...lines)),
+            '2026-06-01',
+            '2026-06-01',
+            'UTC'
+        );
+
+        expect(found).toEqual([]);
+    });
+
+    it('starts each range with its full allowance of steps', () => {
+        const events = parseCalendar(
+            calendar(
+                ...series(
+                    'rare',
+                    '10000101T000000Z',
+                    'FREQ=DAILY;BYMONTH=2;BYMONTHDAY=29;BYDAY=MO'
+                ),
+                'BEGIN:VEVENT',
+                'UID:first',
+                'SUMMARY:first',
+                'DTSTART:10000101T090000Z',
+                'END:VEVENT'
+            )
+        );
+
+        eventsForRange(events, '2026-06-01', '2026-06-01', 'UTC');
+        const found = eventsForRange(
+            events.slice(1),
+            '1000-01-01',
+            '1000-01-01',
+            'UTC'
+        );
+
+        expect(found.map((event) => event.title)).toEqual(['first']);
     });
 
     it('stops collecting once the feed has filled its occurrences', () => {

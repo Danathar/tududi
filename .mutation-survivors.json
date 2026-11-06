@@ -98,6 +98,20 @@
             "original": "status?.running",
             "replacement": "status.running",
             "reason": "Equivalent: the status?.wanted check before it has already stopped on a missing status, so status is set here."
+        },
+        {
+            "file": "backend/modules/calendar-feeds/icsEvents.js",
+            "mutator": "EqualityOperator",
+            "original": "rangeSteps >= MAX_RANGE_STEPS",
+            "replacement": "rangeSteps > MAX_RANGE_STEPS",
+            "reason": "Harmless: the limit moves by one step out of 200,000, and the limit is a cost bound rather than an exact count."
+        },
+        {
+            "file": "backend/modules/calendar-feeds/icsEvents.js",
+            "mutator": "EqualityOperator",
+            "original": "results.length >= MAX_RANGE_OCCURRENCES",
+            "replacement": "results.length > MAX_RANGE_OCCURRENCES",
+            "reason": "Harmless: the limit moves by one occurrence out of 20,000, and the limit is a cost bound rather than an exact count."
         }
     ]
 }

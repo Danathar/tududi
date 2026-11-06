@@ -7,7 +7,9 @@ const MAX_ITERATIONS = 20000;
 // What one feed may cost for one range, whatever it holds. Both sit far above
 // a calendar a person can read, and an event past them is left out. Without
 // them a few kilobytes of old series hold the server up for seconds, and a
-// feed of long events fills its memory.
+// feed of long events fills its memory. A step is one date a rule looks at,
+// passed or refused: a rule that refuses nearly every date costs as much per
+// date as one that passes them.
 const MAX_RANGE_STEPS = 200000;
 const MAX_RANGE_OCCURRENCES = 20000;
 // Dates a rule may turn down in a row. A real rule's longest gap is years of
@@ -25,7 +27,10 @@ const WINDOW_PAD_DAYS = 3;
 // This check runs on each step, so refusing here ends the loop as an error the
 // feed reports. Patched here because no ical.js release bounds it.
 const passesRuleFilters = ICAL.RecurIterator.prototype.check_contracting_rules;
+// Steps taken in the current eventsForRange call, which runs without yielding.
+let rangeSteps = 0;
 ICAL.RecurIterator.prototype.check_contracting_rules = function () {
+    rangeSteps++;
     if (passesRuleFilters.call(this)) {
         this.refusedDates = 0;
         return true;
@@ -282,11 +287,11 @@ function eventsForRange(events, startDate, endDate, userTimezone) {
         dayNumber(startYear, startMonth, startDay) - WINDOW_PAD_DAYS;
     const lastDay = dayNumber(endYear, endMonth, endDay) + WINDOW_PAD_DAYS;
     const results = [];
-    let steps = 0;
+    rangeSteps = 0;
 
     for (const event of events) {
         if (
-            steps >= MAX_RANGE_STEPS ||
+            rangeSteps >= MAX_RANGE_STEPS ||
             results.length >= MAX_RANGE_OCCURRENCES
         ) {
             break;
@@ -331,7 +336,7 @@ function eventsForRange(events, startDate, endDate, userTimezone) {
         while (
             (next = iterator.next()) &&
             count++ < MAX_ITERATIONS &&
-            steps++ < MAX_RANGE_STEPS &&
+            rangeSteps++ < MAX_RANGE_STEPS &&
             results.length < MAX_RANGE_OCCURRENCES
         ) {
             const day = timeDayNumber(next);
