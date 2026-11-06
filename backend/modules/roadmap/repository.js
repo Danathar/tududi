@@ -43,7 +43,13 @@ class RoadmapRepository {
 
     async findVisibleProjects(userId) {
         const projects = await Project.findAll({
-            where: await visibleWhere('project', userId),
+            // Templates are listed under /api/templates, not as projects.
+            where: {
+                [Op.and]: [
+                    { is_template: false },
+                    await visibleWhere('project', userId),
+                ],
+            },
             attributes: [
                 'id',
                 'uid',

@@ -190,6 +190,20 @@ describe('GET /api/roadmap', () => {
         expect(findProject(res.body, 'BIM reviews')).toBeDefined();
     });
 
+    it('leaves project templates off the chart', async () => {
+        await Project.create({
+            name: 'Template',
+            user_id: owner.id,
+            area_id: area.id,
+            is_template: true,
+        });
+
+        const res = await agent.get(Q4);
+
+        expect(findProject(res.body, 'Template')).toBeUndefined();
+        expect(findProject(res.body, 'BIM reviews')).toBeDefined();
+    });
+
     it('puts projects without an area in a last group', async () => {
         await Project.create({ name: 'Loose', user_id: owner.id });
 
