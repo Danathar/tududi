@@ -189,7 +189,7 @@ configure; `pg_trgm` ships with PostgreSQL.
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d db
-# or: docker run -d --name tududi-pg -p 5432:5432 \
+# or: docker run -d --name tududi-pg -p 127.0.0.1:5432:5432 \
 #   -e POSTGRES_USER=tududi -e POSTGRES_PASSWORD=tududi -e POSTGRES_DB=tududi_dev \
 #   postgres:16-alpine
 
