@@ -23,11 +23,13 @@ permissions:
 
 jobs:
   tune:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       issues: write
     timeout-minutes: 30
+    env:
+      DATABASE_URL: postgres://tududi:tududi@localhost:5432/tududi_test
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -40,6 +42,16 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # The backend suite needs a PostgreSQL server. The runner image ships
+      # PostgreSQL 16 (service disabled by default), as in ci.yml.
+      - name: Start PostgreSQL
+        run: |
+          psql --version
+          sudo systemctl start postgresql.service
+          pg_isready --timeout=30
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE ROLE tududi LOGIN SUPERUSER PASSWORD 'tududi'"
+          sudo -u postgres createdb -O tududi tududi_test
 
       - name: Backend coverage
         run: npm run backend:test:coverage -- --coverageReporters=json-summary --coverageReporters=text-summary
