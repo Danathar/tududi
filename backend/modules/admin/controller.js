@@ -132,14 +132,6 @@ const adminController = {
         }
     },
 
-    async database(req, res, next) {
-        try {
-            res.json(await adminService.database(getRequesterId(req)));
-        } catch (error) {
-            next(error);
-        }
-    },
-
     async listRoles(req, res, next) {
         try {
             const requesterId = getRequesterId(req);
