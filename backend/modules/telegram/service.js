@@ -2,8 +2,6 @@
 
 const { User } = require('../../models');
 const { logError } = require('../../services/logService');
-const { getConfig } = require('../../config/config');
-const { isPostgres } = require('../../utils/db-dialect');
 const telegramPoller = require('./telegramPoller');
 const { canPollHere } = require('./telegramInitializer');
 const { getBotInfo } = require('./telegramApi');
@@ -72,17 +70,15 @@ async function sendWelcomeMessage(token, chatId) {
 // One user's polling status, correct from any process. Only the caller's own
 // poller entry is reported: the poller tracks every user on the instance, and
 // that map is not this user's business. A process that does not poll cannot
-// see the poller's memory, so its `running` follows the wish in the database,
-// unless nothing can be polling: SQLite has only this one process.
+// see the poller's memory, so its `running` follows the wish in the database.
 function pollingStatusFor(userId, user) {
     const local = telegramPoller.getStatusForUser(userId);
     const wanted = telegramPoller.isPollingWanted(user);
     const pollingHere = canPollHere();
-    const pollerMayExist = isPostgres() || !getConfig().disableTelegram;
 
     return {
         ...local,
-        running: pollingHere ? local.running : wanted && pollerMayExist,
+        running: pollingHere ? local.running : wanted,
         wanted,
         pollingHere,
     };

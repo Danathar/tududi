@@ -7,7 +7,6 @@ const { User } = require('../../models');
 const { getConfig } = require('../../config/config');
 const jobLock = require('../../services/jobLock');
 const entitlements = require('../../services/entitlementsService');
-const { isPostgres } = require('../../utils/db-dialect');
 const telegramPoller = require('../../modules/telegram/telegramPoller');
 const telegramService = require('../../modules/telegram/service');
 const {
@@ -119,8 +118,8 @@ describe('Only the polling process polls Telegram', () => {
         });
 
         it('is covered by the first rescan when made before the lock is taken', async () => {
-            // Single-process SQLite: isLeader is false until the startup
-            // delay ends, so this request can only record the wish.
+            // isLeader is false until the startup delay ends, so this
+            // request can only record the wish.
             await user.update({ telegram_polling_enabled: false });
             await agent.post('/api/telegram/start-polling');
             expect(isPolled(user)).toBe(false);
@@ -213,13 +212,13 @@ describe('Only the polling process polls Telegram', () => {
             expect(after.body.status.usersCount).toBe(1);
         });
 
-        it('does not claim a poller under DISABLE_TELEGRAM on SQLite, where no other process exists', async () => {
+        it('follows the wish under DISABLE_TELEGRAM, since another process may poll', async () => {
             getConfig().disableTelegram = true;
 
             const response = await agent.get('/api/telegram/polling-status');
 
             expect(response.body.status.wanted).toBe(true);
-            expect(response.body.status.running).toBe(isPostgres());
+            expect(response.body.status.running).toBe(true);
         });
     });
 
