@@ -69,9 +69,8 @@ remove a workflow permanently, delete the file in a pull request.
 
 | file | what it does | trigger | turn off |
 |---|---|---|---|
-| `ci.yml` | `test-sqlite` (lint, backend tests, legacy SQLite upgrade, frontend build) and `test-postgres`; two of the three checks the "protect main" ruleset requires | PR to `main`, push to `main` | `gh workflow disable "CI" --repo Danathar/tududi` |
+| `ci.yml` | `test-sqlite` (frontend build; the name is kept for the ruleset) and `test-postgres` (lint, migrations, backend tests on PostgreSQL); two of the three checks the "protect main" ruleset requires | PR to `main`, push to `main` | `gh workflow disable "CI" --repo Danathar/tududi` |
 | `docker-publish.yml` | builds per platform and pushes `ghcr.io/danathar/tududi` as `:latest`, `:sha-<short>`, `:v<version>-<short>`; refuses manual runs from any branch but `main` | push to `main`, manual | `gh workflow disable "Publish Docker image" --repo Danathar/tududi` |
-| `upgrade-docker.yml` | upgrades a volume from the previous release image to an image built from the checkout and checks data, logins and backups survive | manual, `v*` tags, weekly (Monday 06:00 UTC) | `gh workflow disable "Docker upgrade test" --repo Danathar/tududi` |
 | `coverage-gate.yml` | fails a PR whose coverage falls below the floors in `.coverage-thresholds.json` | pull request | disable it by its `name:` |
 | `auto-qa.yml` | runs `scripts/auto-qa-tuner.mjs` against `.github/auto-qa-tuning.json` to report whether a floor should move | see the file header | disable it by its `name:` |
 | `nightly-compliance.yml` | scheduled compliance checks | nightly | disable it by its `name:` |
@@ -107,10 +106,8 @@ gh run view "$RUN" --repo Danathar/tududi --json jobs \
 gh run view "$RUN" --repo Danathar/tududi --log-failed
 ```
 
-1. **Which job.** `test-sqlite` failing on a step: lint, `backend:test`,
-   `backend:test:upgrade` (legacy SQLite upgrade and schema parity) or the
-   frontend build. `test-postgres` failing alone points at a Postgres-only
-   difference in a migration or query.
+1. **Which job.** `test-sqlite` failing is the frontend build. `test-postgres`
+   failing on a step: lint, the database bootstrap, or `backend:test`.
 2. **Was it the last commit or the environment.** Re-run once
    (`gh run rerun "$RUN" --repo Danathar/tududi --failed`). A pass on re-run is a
    flake; note it in the tracking issue. If a recent sync merged upstream
@@ -228,7 +225,7 @@ same files, or acting outside its issue.
 
 ## A scheduled run did not fire
 
-Scheduled workflows (`upgrade-docker.yml`, and others with a `schedule:`) run
+Scheduled workflows (`auto-qa.yml`, and others with a `schedule:`) run
 only from the default branch, can be delayed under load, and GitHub disables
 schedules in a repository with no activity for 60 days. Check with
 `gh workflow list --repo Danathar/tududi --all`; re-enable a disabled one with

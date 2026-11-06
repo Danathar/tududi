@@ -84,8 +84,7 @@ class InboxRepository extends BaseRepository {
     }
 
     // A project the user owns or has been shared, matched by name the way
-    // the +project token matches it (case-insensitive). Names are compared
-    // in JS because SQLite lower() only lowercases ASCII letters.
+    // the +project token matches it (case-insensitive).
     async findAccessibleProjectUidByName(userId, name) {
         const accessWhere = await ownershipOrPermissionWhere('project', userId);
         const projects = await Project.findAll({
@@ -101,8 +100,7 @@ class InboxRepository extends BaseRepository {
     }
 
     // An area the user can add tasks to (own or shared read-write), matched
-    // by name the way the ~area token matches it (case-insensitive). Names
-    // are compared in JS because SQLite lower() only lowercases ASCII.
+    // by name the way the ~area token matches it (case-insensitive).
     async findWritableAreaByName(userId, name) {
         const accessWhere = await ownershipOrPermissionWhere('area', userId);
         const candidates = await Area.findAll({

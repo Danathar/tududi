@@ -19,7 +19,7 @@ and `P3` are defined here so the scale is complete.
 | level | meaning | merge? |
 |---|---|---|
 | P0 | Data loss or corruption, a security hole (authorization bypass, secret exposure), a broken migration on either database, or a licence violation | Never. Fix first, even if CI is green |
-| P1 | Wrong behaviour users or deployments will hit: a feature that does not do what it claims, a workflow that publishes or deletes the wrong thing, a migration that fails on one dialect | Not until fixed, or the owner accepts the risk in the PR thread |
+| P1 | Wrong behaviour users or deployments will hit: a feature that does not do what it claims, a workflow that publishes or deletes the wrong thing, a migration that fails on an existing database | Not until fixed, or the owner accepts the risk in the PR thread |
 | P2 | Real but narrow: an edge case, a missing test for a risky path, a mis-scoped predicate, a retry that marks work done too early | Fix in the PR, or reply with why it does not apply and resolve the thread |
 | P3 | Style, naming, small cleanup, documentation wording | Optional; do not block on it |
 
@@ -63,21 +63,17 @@ with the reasoning and resolve the thread either way.
 
 ## 3. Database and migrations
 
-Every new migration runs on both SQLite and PostgreSQL. The full checklist is
-[docs/database.md](database.md), "Writing dialect-safe migrations".
+Every new migration runs on an existing PostgreSQL database. The full checklist
+is [docs/database.md](database.md), "Writing migrations".
 
 - [ ] Uses the `safe*` helpers from `backend/utils/migration-utils.js`; no
-      `PRAGMA`, `sqlite_master`, `AUTOINCREMENT`, backtick identifiers or
-      hand-rolled table rebuilds (the one documented exception is the pattern
-      in `20260920000002-make-user-email-nullable.js`).
+      hand-rolled table rebuilds.
 - [ ] Booleans compared and written as `true`/`false`; JSON columns guarded
       with `typeof value === 'string'`; raw-SQL aliases quoted.
-- [ ] Per-engine application code goes through `backend/utils/db-dialect.js`
-      only.
-- [ ] The model and the migration agree. `npm run backend:test:upgrade`
-      compares the schema an upgraded legacy database ends up with against the
-      models; a new column needs both. CI runs it on SQLite and on PostgreSQL
-      (`test-sqlite`, `test-postgres` in `.github/workflows/ci.yml`).
+- [ ] The model and the migration agree: a fresh install gets its schema from
+      the models and an existing one only from migrations, so a new column
+      needs both. CI builds its test database from the models and never runs
+      the new migration, so the PR says how it was run on an existing database.
 - [ ] Released migrations are not edited. `up` and `down` both exist.
 - [ ] A migration that loses data on failure runs in a transaction, snapshots
       first where docs/backups.md says to, and is a no-op when already applied.

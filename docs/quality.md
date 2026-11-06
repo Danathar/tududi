@@ -14,8 +14,8 @@ repository is a fork. All work happens here.").
 
 | signal | where it lives | what it tells you | blocks merge |
 |---|---|---|---|
-| `test-sqlite` job | [ci.yml](../.github/workflows/ci.yml) | lint (`npm run lint`), backend Jest on SQLite (`npm run backend:test`), legacy-database upgrade and schema parity (`npm run backend:test:upgrade`), frontend build with `tsc --noEmit` (`npm run build`) | yes, required check, see [branch-protection.md](branch-protection.md) |
-| `test-postgres` job | [ci.yml](../.github/workflows/ci.yml) | bootstraps an empty PostgreSQL database, runs pending migrations, backend Jest on PostgreSQL (`npm run backend:test:pg`), upgrade suite again (`npm run backend:test:upgrade`) | yes, required check |
+| `test-sqlite` job | [ci.yml](../.github/workflows/ci.yml) | frontend build with `tsc --noEmit` (`npm run build`); it keeps this name only because the ruleset requires that check, SQLite itself left with v2.0.0 | yes, required check, see [branch-protection.md](branch-protection.md) |
+| `test-postgres` job | [ci.yml](../.github/workflows/ci.yml) | lint (`npm run lint`), bootstraps an empty PostgreSQL database, runs pending migrations, backend Jest on PostgreSQL (`npm run backend:test`) | yes, required check |
 | mutation check (`mutation` job) | [ci.yml](../.github/workflows/ci.yml), `scripts/mutation-check.mjs`, [stryker.config.mjs](../stryker.config.mjs), ledger [.mutation-survivors.json](../.mutation-survivors.json) | StrykerJS breaks the backend, frontend, `scripts/` and guard-hook source lines a pull request adds or changes, one small breakage at a time, and lists each one the tests still pass (`Survived`) or never run (`NoCoverage`), minus accepted survivors in the ledger. Skipped for upstream syncs (`chore: sync upstream`); see [Mutation check](#mutation-check) | no, advisory (`continue-on-error`) |
 | coverage gate | [coverage-gate.yml](../.github/workflows/coverage-gate.yml), thresholds in [.coverage-thresholds.json](../.coverage-thresholds.json) | coverage has not dropped below the recorded floor | no, not a required check |
 | nightly compliance | [nightly-compliance.yml](../.github/workflows/nightly-compliance.yml) | scheduled re-check of the repository against its own rules | no, notification |
@@ -29,7 +29,6 @@ repository is a fork. All work happens here.").
 | e2e tests | `e2e/tests/` (Playwright), `npm run test:ui` | browser flows | no, not run in CI; run locally |
 | frontend unit tests | `frontend/__tests__/`, `npm run frontend:test` | component behaviour. `ci.yml` leaves them out; [coverage-gate.yml](../.github/workflows/coverage-gate.yml), `nightly-compliance.yml` and `auto-qa.yml` run them for their coverage numbers, with `continue-on-error` on that step | no, a failing test fails no job |
 | image publish | [docker-publish.yml](../.github/workflows/docker-publish.yml) | `ghcr.io/danathar/tududi` builds on push to `main` | no |
-| Docker upgrade test | [upgrade-docker.yml](../.github/workflows/upgrade-docker.yml) | upgrades a volume from the previous release image to a build of the checkout; on demand, on `v*` tags and weekly (Mondays), not per PR | no |
 
 The last column is the ruleset's answer
 ([`.github/rulesets/main.json`](../.github/rulesets/main.json)). Hive's merge

@@ -37,8 +37,7 @@ class AdminAiUsageRepository {
 
     // Per-user counts for one page's worth of users, keyed by user_id -
     // kept separate from listUsers() rather than a join, since aggregating
-    // a filtered/paginated join portably across SQLite and Postgres is more
-    // trouble than a second flat query.
+    // a filtered/paginated join is more trouble than a second flat query.
     async usageByUserIds(userIds, periodKey) {
         if (userIds.length === 0) return new Map();
         const rows = await UsageCounter.findAll({

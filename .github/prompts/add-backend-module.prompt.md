@@ -19,8 +19,7 @@ Task: add a `<feature>` backend module.
 4. Register the module in `backend/app.js`, the same way `areasModule` is
    required and mounted.
 5. Add tests in `backend/tests/unit/` and `backend/tests/integration/`.
-6. Run `npm run lint`, `npm test`, and, when a migration was added,
-   `npm run backend:test:upgrade`.
+6. Run `npm run lint` and `npm test`.
 7. Commit with a Conventional Commit message (no `git commit -s`), push to
    `origin`, and open the PR with the `gh` command above. Check the printed URL
    starts with `https://github.com/Danathar/tududi/`.

@@ -16,8 +16,9 @@ Codebase guide: `CLAUDE.md`.
 
 - Dev: `npm start` (frontend :8080, backend :3002), after `npm run db:init`.
 - Checks: `npm run lint`, `npm run format`, `npm test`,
-  `npm run frontend:test`, `npm run build`, `npm run backend:test:upgrade`.
-- PostgreSQL: `npm run backend:test:pg` with `DATABASE_URL` set.
+  `npm run frontend:test`, `npm run build`.
+- PostgreSQL: backend tests need a server, for example
+  `docker compose -f docker-compose.dev.yml up -d db`.
 - Migrations: `npm run migration:create <name>`, `npm run db:migrate`,
   `npm run migration:status`.
 - PR #9 reported `npm run frontend:test` failing on a clean `main` for
@@ -37,10 +38,9 @@ Codebase guide: `CLAUDE.md`.
 
 ## Migrations
 
-Every new migration runs on SQLite and PostgreSQL. Use the `safe*` helpers in
-`backend/utils/migration-utils.js`; no `PRAGMA`, `sqlite_master`,
-`AUTOINCREMENT`, backtick identifiers or `0`/`1` booleans. See
-`docs/database.md`, "Writing dialect-safe migrations".
+Every new migration runs on an existing PostgreSQL database. Use the `safe*`
+helpers in `backend/utils/migration-utils.js`, and write booleans as
+`true`/`false`. See `docs/database.md`, "Writing migrations".
 
 ## Translations
 

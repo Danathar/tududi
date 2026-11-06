@@ -661,9 +661,8 @@ describe('Subtasks Completion Logic Integration', () => {
                 password: 'password123',
             });
             const sessionCookie = loginResponse.headers['set-cookie'];
-            // Batches of 10 keep the load realistic: 50 simultaneous writers
-            // starve each other on SQLite's single write lock when the suite
-            // runs in parallel.
+            // Batches of 10 keep the load realistic when the suite runs in
+            // parallel.
             const batchSize = 10;
             const responses = [];
 

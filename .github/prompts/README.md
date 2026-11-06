@@ -14,7 +14,7 @@ must repeat this rule.
 | Prompt | Use it to |
 |--------|-----------|
 | [add-backend-module.prompt.md](add-backend-module.prompt.md) | Add a feature module under `backend/modules/` |
-| [add-migration.prompt.md](add-migration.prompt.md) | Add a migration that runs on SQLite and PostgreSQL |
+| [add-migration.prompt.md](add-migration.prompt.md) | Add a migration that runs on an existing PostgreSQL database |
 | [add-translation.prompt.md](add-translation.prompt.md) | Add or change UI strings in all 25 locales |
 | [sync-upstream.prompt.md](sync-upstream.prompt.md) | Bring upstream `chrisvel/tududi` changes into the fork |
 

@@ -18,7 +18,7 @@ directory level.
 
 | Tier | Name | Covers | Required commands | Review |
 | ---- | ---- | ------ | ----------------- | ------ |
-| 1 | critical | `backend/migrations/**`, `backend/models/**`, `backend/middleware/**`, `backend/services/backupService.js`, `Dockerfile`, `scripts/docker-entrypoint.sh`, `.github/workflows/**`, `.github/CODEOWNERS`, `policies/**`, `scripts/check-policies.mjs`, `risk-config.json`, `LICENSE*`, `package.json`, `package-lock.json`, `AGENTS.md`, `.claude/settings.json`, `.claude/hooks/**` | `npm run lint`, `npm run backend:test`, `npm run backend:test:pg`, `npm run backend:test:upgrade` | `owner` |
+| 1 | critical | `backend/migrations/**`, `backend/models/**`, `backend/middleware/**`, `backend/services/backupService.js`, `Dockerfile`, `scripts/docker-entrypoint.sh`, `.github/workflows/**`, `.github/CODEOWNERS`, `policies/**`, `scripts/check-policies.mjs`, `risk-config.json`, `LICENSE*`, `package.json`, `package-lock.json`, `AGENTS.md`, `.claude/settings.json`, `.claude/hooks/**` | `npm run lint`, `npm run backend:test` | `owner` |
 | 2 | high | `backend/modules/auth/**`, `backend/modules/oidc/**`, `backend/modules/oauth/**`, `backend/modules/backup/**`, `backend/modules/telegram/**`, `backend/modules/mcp/**`, `backend/modules/ai-assistant/**`, `backend/config/**`, `backend/services/permissionsService.js`, `backend/services/sessionService.js`, `docker-compose.yml`, `docker-compose.dev.yml` | `npm run lint`, `npm run backend:test` | `owner` |
 | 3 | medium | `backend/modules/**`, `backend/services/**`, `backend/utils/**`, `backend/tests/**`, `frontend/**`, `e2e/**`, `CLAUDE.md` | `npm run lint`, `npm run backend:test`, `npm run frontend:test` | `ci` |
 | 4 | low | `docs/**`, `public/locales/**`, `*.md`, `.editorconfig` | none | `ci` |
@@ -50,10 +50,9 @@ path table assigns to each path.
 
 - **`backend/migrations/**` and `backend/models/**`.** Migrations rewrite users'
   data in place and run when the container starts (`backend/cmd/start.sh`). Models define the schema the
-  migrations must reproduce. `npm run backend:test:upgrade` runs the real migrations
-  against legacy SQLite databases and checks schema parity, and `backend:test:pg`
-  repeats the suite on PostgreSQL, because SQLite accepts SQL that PostgreSQL
-  rejects.
+  migrations must reproduce. `npm run backend:test` runs the suite on PostgreSQL,
+  but a test database is built from the models, so a new migration has to be run
+  by hand against an existing database ([docs/database.md](database.md)).
 - **`backend/middleware/**`.** Authentication, authorization, CSRF, rate
   limiting and upload access control. A mistake here exposes other users' data
   and no test needs to fail for it to happen.
@@ -82,9 +81,9 @@ path table assigns to each path.
   suite without a local server).
 - Tier 1 changes to a workflow: say what was verified and what could not be
   (a cron schedule cannot be proven before it fires).
-- Tier 1 changes to `backend/migrations/**`: run `npm run backend:test:upgrade`
-  and read [docs/testing.md](testing.md) and [docs/database.md](database.md)
-  first.
+- Tier 1 changes to `backend/migrations/**`: run the migration against a
+  disposable PostgreSQL database created before it, and read
+  [docs/testing.md](testing.md) and [docs/database.md](database.md) first.
 
 See also [`.github/CODEOWNERS`](../.github/CODEOWNERS) and the
 [review rubric](review-rubric.md).

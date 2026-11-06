@@ -34,7 +34,7 @@ function requireStringParam(value, name) {
 
 /**
  * Escape LIKE wildcards so user text matches literally. Use together with an
- * ESCAPE clause naming LIKE_ESCAPE_CHAR (SQLite has no default escape char).
+ * ESCAPE clause naming LIKE_ESCAPE_CHAR.
  */
 const LIKE_ESCAPE_CHAR = '!';
 

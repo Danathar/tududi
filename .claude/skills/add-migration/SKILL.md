@@ -1,6 +1,6 @@
 ---
 name: add-migration
-description: Create a Sequelize migration that runs on both SQLite and PostgreSQL, update the model, and run the schema-parity checks.
+description: Create a Sequelize migration that runs on an existing PostgreSQL database, update the model, and run it against a disposable database.
 ---
 
 # Add a dialect-safe migration
@@ -16,14 +16,10 @@ after the baseline, so every new migration runs on both engines.
 1. `npm run migration:create <kebab-case-name>` (writes a template into
    `backend/migrations/`).
 2. Implement `up` and a reversing `down` with the `safe*` helpers from
-   `backend/utils/migration-utils.js`. Do not use `PRAGMA`, `sqlite_master`,
-   `AUTOINCREMENT`, backtick identifiers or `0`/`1` booleans. Branch on
-   `queryInterface.sequelize.getDialect()` only when unavoidable.
+   `backend/utils/migration-utils.js`. Write booleans as `true`/`false`.
 3. Update the model in `backend/models/` so a fresh install matches.
 4. `npm run db:migrate` and `npm run migration:status`.
-5. `npm run backend:test:upgrade` (compares migrated legacy databases with the
-   models; accepted differences are in
-   `backend/tests/upgrade/known-schema-drift.json`), then `npm test`. With
-   `DATABASE_URL` set to PostgreSQL, also `npm run backend:test:pg`.
+5. `npm test`. It builds its database from the models and never runs the new
+   migration, so step 4 on a disposable database is the real check.
 6. Never edit a merged migration. Details: `docs/database.md`, "Writing
-   dialect-safe migrations".
+   migrations".

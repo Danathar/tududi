@@ -57,6 +57,6 @@ against a commit, a PR or a file does not get an entry.
 | [gh-defaults-to-upstream](gh-defaults-to-upstream.md) | `gh` in a fork clone targets `chrisvel/tududi` unless told otherwise |
 | [no-package-version-bump](no-package-version-bump.md) | Never bump `package.json` version; backup restore compares it |
 | [license-mit-verbatim](license-mit-verbatim.md) | `LICENSE.MIT` stays byte-identical to upstream's notice |
-| [dialect-safe-migrations](dialect-safe-migrations.md) | Migrations must run on SQLite and PostgreSQL |
+| [dialect-safe-migrations](dialect-safe-migrations.md) | Migrations must run on an existing PostgreSQL database |
 | [known-frontend-test-failures](known-frontend-test-failures.md) | Three frontend suites already fail on main; verify before claiming a regression |
 | [hosted-only-upstream-code](hosted-only-upstream-code.md) | Check reachability before patching upstream's hosted-mode (Cloud) code, and record the decision |

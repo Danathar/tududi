@@ -19,7 +19,7 @@ class SearchService {
     /**
      * Case-insensitive "contains" match on a column. The search text is
      * escaped so %, _ and the escape char match literally, and the ESCAPE
-     * clause is explicit because SQLite has no default escape character.
+     * clause names the character escapeLike uses.
      */
     likeContains(columnName, lowerQuery) {
         const pattern = `%${escapeLike(lowerQuery)}%`;

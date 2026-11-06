@@ -55,7 +55,6 @@ When deploying tududi, we recommend:
 TUDUDI_SESSION_SECRET=$(openssl rand -hex 64)
 
 # Use secure volumes with proper permissions
-chmod 700 ~/tududi_db
 chmod 700 ~/tududi_uploads
 ```
 
@@ -78,7 +77,7 @@ chmod 700 ~/tududi_uploads
 
 ### Data Storage
 
-- SQLite database stores all user data
+- A PostgreSQL database stores all user data; keep it off the public network and use TLS (`DB_SSL`) when it runs on another host
 - Uploads are stored in the filesystem
 - Ensure proper file permissions on production servers
 

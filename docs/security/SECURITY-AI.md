@@ -142,7 +142,7 @@ Without the owner's explicit, in-conversation instruction, an agent never:
 - edits `.github/rulesets`, repository settings, labels, secrets or deploy keys;
 - adds a scheduled upstream sync or reintroduces upstream's release workflow;
 - writes migrations that drop or rewrite user data without a tested path
-  through `npm run backend:test:upgrade`;
+  on a disposable PostgreSQL database;
 - runs against a production database, real user data, or a live account;
 - weakens authentication, authorization, CSRF, rate limiting or upload access
   checks in `backend/middleware/**` to make a test pass;

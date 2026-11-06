@@ -11,6 +11,7 @@
 #   docker compose up -d
 #
 # Secrets live in .env on the server, never in this file.
+# Moving from a 1.x SQLite install: docs/30-moving-to-postgres.md
 
 services:
     caddy:
@@ -50,7 +51,7 @@ services:
         restart: unless-stopped
 
     web:
-        image: chrisvel/tududi:${TUDUDI_VERSION:-latest}
+        image: ghcr.io/danathar/tududi:${TUDUDI_VERSION:-latest}
         container_name: tududi-web
         env_file: .env
         environment:
@@ -72,7 +73,7 @@ services:
         restart: unless-stopped
 
     worker:
-        image: chrisvel/tududi:${TUDUDI_VERSION:-latest}
+        image: ghcr.io/danathar/tududi:${TUDUDI_VERSION:-latest}
         container_name: tududi-worker
         env_file: .env
         environment:

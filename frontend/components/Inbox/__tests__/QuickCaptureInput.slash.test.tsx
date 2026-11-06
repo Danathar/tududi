@@ -284,7 +284,7 @@ describe('QuickCaptureInput slash menu', () => {
         'assigns the picked existing area "%s" without creating a duplicate',
         async (areaName) => {
             // The server cannot match these names back from "~Name" text
-            // (it cuts punctuation and SQLite lower() skips non-ASCII).
+            // (it cuts punctuation).
             const { areasStore } = useStore.getState();
             const before = areasStore.areas;
             areasStore.setAreas([

@@ -134,8 +134,9 @@ reading and settled by the owner.
 No agent merges its own pull request unless the owner has set that up.
 
 - **Required checks.** The checks that gate a merge are the two jobs in
-  [`ci.yml`](../.github/workflows/ci.yml), `test-sqlite` (lint, backend tests,
-  legacy SQLite upgrade, frontend build) and `test-postgres`, and the
+  [`ci.yml`](../.github/workflows/ci.yml), `test-sqlite` (the frontend build;
+  the name is kept for the ruleset) and `test-postgres` (lint, migrations and
+  backend tests on PostgreSQL), and the
   `agent-tooling` job in
   [`agent-tooling.yml`](../.github/workflows/agent-tooling.yml). They run on
   every pull request. The active ruleset "protect main" (set up as an owner
