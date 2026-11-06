@@ -4,11 +4,38 @@ const ICAL = require('ical.js');
 const moment = require('moment-timezone');
 
 const MAX_ITERATIONS = 20000;
+// What one feed may cost for one range, whatever it holds. Both sit far above
+// a calendar a person can read, and an event past them is left out. Without
+// them a few kilobytes of old series hold the server up for seconds, and a
+// feed of long events fills its memory.
+const MAX_RANGE_STEPS = 200000;
+const MAX_RANGE_OCCURRENCES = 20000;
+// Dates a rule may turn down in a row. A real rule's longest gap is years of
+// days, so only a rule no date can satisfy gets here.
+const MAX_REFUSED_DATES = 100000;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 // Dates are compared as printed in the event's own zone, which can sit more
 // than a day from the user's. The pad only ever lets extra events through to
 // the exact, zone-aware check.
 const WINDOW_PAD_DAYS = 3;
+
+// ical.js steps through time until a date passes all of a rule's BY filters.
+// Below MONTHLY that loop has no limit, so a rule no date can pass (every day
+// that is 30 February) never returns and every user's request waits behind it.
+// This check runs on each step, so refusing here ends the loop as an error the
+// feed reports. Patched here because no ical.js release bounds it.
+const passesRuleFilters = ICAL.RecurIterator.prototype.check_contracting_rules;
+ICAL.RecurIterator.prototype.check_contracting_rules = function () {
+    if (passesRuleFilters.call(this)) {
+        this.refusedDates = 0;
+        return true;
+    }
+    this.refusedDates = (this.refusedDates || 0) + 1;
+    if (this.refusedDates > MAX_REFUSED_DATES) {
+        throw new Error('This calendar has a repeating event with no dates');
+    }
+    return false;
+};
 
 function parseCalendar(text) {
     const root = new ICAL.Component(ICAL.parse(text));
@@ -24,7 +51,10 @@ function parseCalendar(text) {
     const masters = new Map();
     const exceptions = [];
     for (const vevent of root.getAllSubcomponents('vevent')) {
-        const event = new ICAL.Event(vevent);
+        // Exceptions are matched to their series by UID below. Without this
+        // option each event would scan every other one and keep a copy of
+        // every exception in the feed, whichever series it belongs to.
+        const event = new ICAL.Event(vevent, { exceptions: [] });
         if (!event.uid) continue;
         if (event.isRecurrenceException()) {
             exceptions.push(event);
@@ -252,8 +282,16 @@ function eventsForRange(events, startDate, endDate, userTimezone) {
         dayNumber(startYear, startMonth, startDay) - WINDOW_PAD_DAYS;
     const lastDay = dayNumber(endYear, endMonth, endDay) + WINDOW_PAD_DAYS;
     const results = [];
+    let steps = 0;
 
     for (const event of events) {
+        if (
+            steps >= MAX_RANGE_STEPS ||
+            results.length >= MAX_RANGE_OCCURRENCES
+        ) {
+            break;
+        }
+
         const tzid = event.component
             .getFirstProperty('dtstart')
             ?.getParameter('tzid');
@@ -290,7 +328,12 @@ function eventsForRange(events, startDate, endDate, userTimezone) {
         );
         let next;
         let count = 0;
-        while ((next = iterator.next()) && count++ < MAX_ITERATIONS) {
+        while (
+            (next = iterator.next()) &&
+            count++ < MAX_ITERATIONS &&
+            steps++ < MAX_RANGE_STEPS &&
+            results.length < MAX_RANGE_OCCURRENCES
+        ) {
             const day = timeDayNumber(next);
             if (day > lastDay) break;
             if (canSkipOld && day <= lastStartToSkip) continue;

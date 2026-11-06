@@ -5,6 +5,8 @@ const {
 } = require('../../../modules/calendar-feeds/icsEvents');
 const axios = require('axios');
 const dns = require('dns');
+const path = require('path');
+const { spawnSync } = require('child_process');
 const {
     fetchFeed,
     normalizeFeedUrl,
@@ -562,5 +564,165 @@ describe('fetchFeed', () => {
         const config = get.mock.calls[0][1];
         expect(config.httpsAgent.keepAlive).toBe(true);
         expect(config.httpAgent.keepAlive).toBe(true);
+    });
+});
+
+describe('feeds built to cost the server', () => {
+    const calendar = (...lines) =>
+        [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//test//EN',
+            ...lines,
+            'END:VCALENDAR',
+        ].join('\r\n');
+
+    const series = (uid, start, rule) => [
+        'BEGIN:VEVENT',
+        `UID:${uid}`,
+        `SUMMARY:${uid}`,
+        `DTSTART:${start}`,
+        `RRULE:${rule}`,
+        'END:VEVENT',
+    ];
+
+    // In a child process: a regression is an endless loop, which would stop
+    // this test run for good rather than fail it.
+    const expandInChild = (rule) => {
+        const icsEvents = path.resolve(
+            __dirname,
+            '../../../modules/calendar-feeds/icsEvents'
+        );
+        const script = `
+            const { parseCalendar, eventsForRange } = require(${JSON.stringify(icsEvents)});
+            const feed = parseCalendar(process.argv[1]);
+            eventsForRange(feed, '2026-06-01', '2026-06-30', 'UTC');
+        `;
+        return spawnSync(
+            process.execPath,
+            [
+                '-e',
+                script,
+                calendar(...series('never', '20200101T000000Z', rule)),
+            ],
+            { encoding: 'utf8', timeout: 30000 }
+        );
+    };
+
+    it.each([
+        'FREQ=DAILY;BYMONTH=2;BYMONTHDAY=30',
+        'FREQ=HOURLY;BYMONTH=2;BYMONTHDAY=30',
+        'FREQ=MINUTELY;BYMONTH=2;BYMONTHDAY=30',
+        'FREQ=SECONDLY;BYMONTH=2;BYMONTHDAY=30',
+    ])('reports %s, which no date can pass, instead of hanging', (rule) => {
+        const child = expandInChild(rule);
+
+        expect(child.signal).toBeNull();
+        expect(child.stderr).toContain('repeating event with no dates');
+    });
+
+    it('keeps a rule whose dates are years apart', () => {
+        const events = parseCalendar(
+            calendar(
+                ...series(
+                    'leap',
+                    '20200229T090000Z',
+                    'FREQ=DAILY;BYMONTH=2;BYMONTHDAY=29'
+                )
+            )
+        );
+
+        const found = eventsForRange(events, '2028-02-29', '2028-02-29', 'UTC');
+
+        expect(found.map((event) => event.title)).toEqual(['leap']);
+    });
+
+    it('counts refused dates from the last date a rule passed', () => {
+        // Over 100,000 refused hours by 2026, about 8,800 between matches.
+        const events = parseCalendar(
+            calendar(
+                ...series(
+                    'new-year',
+                    '20000101T000000Z',
+                    'FREQ=HOURLY;BYMONTH=1;BYMONTHDAY=1'
+                )
+            )
+        );
+
+        const found = eventsForRange(events, '2026-01-01', '2026-01-01', 'UTC');
+
+        expect(found).toHaveLength(24);
+    });
+
+    it('keeps an exception on its own series only', () => {
+        const events = parseCalendar(
+            calendar(
+                ...series('a', '20260601T090000Z', 'FREQ=DAILY;COUNT=5'),
+                ...series('b', '20260601T090000Z', 'FREQ=DAILY;COUNT=5'),
+                'BEGIN:VEVENT',
+                'UID:a',
+                'SUMMARY:a moved',
+                'RECURRENCE-ID:20260603T090000Z',
+                'DTSTART:20260603T150000Z',
+                'END:VEVENT'
+            )
+        );
+
+        const found = eventsForRange(events, '2026-06-03', '2026-06-03', 'UTC');
+
+        expect(found.map((event) => event.title).sort()).toEqual([
+            'a moved',
+            'b',
+        ]);
+        for (const event of events) {
+            const expected = event.uid === 'a' ? 1 : 0;
+            expect(Object.keys(event.exceptions)).toHaveLength(expected);
+        }
+    });
+
+    it('stops walking series once the feed has used its steps', () => {
+        const lines = [];
+        for (let i = 0; i < 20; i++) {
+            lines.push(
+                ...series(
+                    `series-${i}`,
+                    '10000101T000000Z',
+                    'FREQ=MONTHLY;BYMONTHDAY=1'
+                )
+            );
+        }
+
+        const titles = eventsForRange(
+            parseCalendar(calendar(...lines)),
+            '2026-06-01',
+            '2026-06-01',
+            'UTC'
+        ).map((event) => event.title);
+
+        expect(titles).toContain('series-0');
+        expect(titles).not.toContain('series-19');
+    });
+
+    it('stops collecting once the feed has filled its occurrences', () => {
+        const lines = [];
+        for (let i = 0; i < 400; i++) {
+            lines.push(
+                'BEGIN:VEVENT',
+                `UID:long-${i}`,
+                'DTSTART;VALUE=DATE:20260101',
+                'DTEND;VALUE=DATE:20270101',
+                'END:VEVENT'
+            );
+        }
+
+        const found = eventsForRange(
+            parseCalendar(calendar(...lines)),
+            '2026-06-01',
+            '2026-08-01',
+            'UTC'
+        );
+
+        expect(found.length).toBeGreaterThanOrEqual(20000);
+        expect(found.length).toBeLessThan(20100);
     });
 });
