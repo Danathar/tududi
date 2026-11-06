@@ -432,7 +432,7 @@ Backend tests never touch the development database. `backend/tests/helpers/setup
 Run the suite locally with:
 
 ```bash
-docker run -d -p 5432:5432 -e POSTGRES_USER=tududi -e POSTGRES_PASSWORD=tududi -e POSTGRES_DB=tududi_test postgres:16-alpine
+docker run -d -p 127.0.0.1:5432:5432 -e POSTGRES_USER=tududi -e POSTGRES_PASSWORD=tududi -e POSTGRES_DB=tududi_test postgres:16-alpine
 DATABASE_URL=postgres://tududi:tududi@localhost:5432/tududi_test npm run backend:test
 ```
 
