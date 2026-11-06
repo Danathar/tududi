@@ -134,7 +134,12 @@ through the database so that several containers can share it safely:
 - **Telegram polling.** Bot update offsets live in memory, so one process
   holds a long-lived leader lock and polls; the others retry every minute
   and take over if it goes away. Bots are polled in parallel batches
-  (`TELEGRAM_POLL_CONCURRENCY`, default 10).
+  (`TELEGRAM_POLL_CONCURRENCY`, default 10). Starting or stopping polling
+  from any process records the wish in the database. The polling process
+  reads it back about once a minute, so a new bot starts being polled within
+  about a minute, or at once if the request reached the polling process. A
+  stop applies within a few seconds. A bot stopped this way stays stopped
+  across restarts until someone starts it again.
 - **Rate limits.** Hit counters are kept in the `rate_limits` table instead
   of per-process memory, so limits are the same however many processes
   serve requests and survive restarts. Expired rows are swept nightly.

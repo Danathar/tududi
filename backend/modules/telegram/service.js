@@ -2,7 +2,10 @@
 
 const { User } = require('../../models');
 const { logError } = require('../../services/logService');
+const { getConfig } = require('../../config/config');
+const { isPostgres } = require('../../utils/db-dialect');
 const telegramPoller = require('./telegramPoller');
+const { canPollHere } = require('./telegramInitializer');
 const { getBotInfo } = require('./telegramApi');
 const {
     NotFoundError,
@@ -66,11 +69,44 @@ async function sendWelcomeMessage(token, chatId) {
     });
 }
 
+// One user's polling status, correct from any process. Only the caller's own
+// poller entry is reported: the poller tracks every user on the instance, and
+// that map is not this user's business. A process that does not poll cannot
+// see the poller's memory, so its `running` follows the wish in the database,
+// unless nothing can be polling: SQLite has only this one process.
+function pollingStatusFor(userId, user) {
+    const local = telegramPoller.getStatusForUser(userId);
+    const wanted = telegramPoller.isPollingWanted(user);
+    const pollingHere = canPollHere();
+    const pollerMayExist = isPostgres() || !getConfig().disableTelegram;
+
+    return {
+        ...local,
+        running: pollingHere ? local.running : wanted && pollerMayExist,
+        wanted,
+        pollingHere,
+    };
+}
+
 class TelegramService {
+    // The wish goes in the database first. Only the polling process touches
+    // its poller here; any other process leaves the bot to that process's
+    // next rescan, which also covers a request made before leadership is
+    // taken at startup.
     async startPolling(userId) {
         const user = await User.findByPk(userId);
         if (!user || !user.telegram_bot_token) {
             throw new ValidationError('Telegram bot token not set.');
+        }
+
+        await user.update({ telegram_polling_enabled: true });
+
+        if (!canPollHere()) {
+            return {
+                success: true,
+                message: 'Telegram polling requested',
+                status: pollingStatusFor(userId, user),
+            };
         }
 
         const success = await telegramPoller.addUser(user);
@@ -79,7 +115,7 @@ class TelegramService {
             return {
                 success: true,
                 message: 'Telegram polling started',
-                status: telegramPoller.getStatus(),
+                status: pollingStatusFor(userId, user),
             };
         } else {
             throw new Error('Failed to start Telegram polling.');
@@ -87,21 +123,32 @@ class TelegramService {
     }
 
     async stopPolling(userId) {
-        const success = telegramPoller.removeUser(userId);
+        // Stored as false, never NULL: NULL counts as wanted. The polling
+        // process sees this on its next poll of this user.
+        const user = await User.findByPk(userId);
+        if (user) await user.update({ telegram_polling_enabled: false });
+
+        if (canPollHere()) telegramPoller.removeUser(userId);
 
         return {
             success: true,
             message: 'Telegram polling stopped',
-            status: telegramPoller.getStatus(),
+            status: pollingStatusFor(userId, user),
         };
     }
 
-    // Only the caller's own poller entry is reported. The poller tracks
-    // every user on the instance, and that map is not this user's business.
-    getPollingStatus(userId) {
+    async getPollingStatus(userId) {
+        const user = await User.findByPk(userId, {
+            attributes: [
+                'id',
+                'telegram_bot_token',
+                'telegram_polling_enabled',
+            ],
+        });
+
         return {
             success: true,
-            status: telegramPoller.getStatusForUser(userId),
+            status: pollingStatusFor(userId, user),
         };
     }
 

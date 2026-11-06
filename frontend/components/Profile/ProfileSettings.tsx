@@ -33,7 +33,10 @@ import TelegramIcon from '../Shared/Icons/TelegramIcon';
 import { useToast } from '../Shared/ToastContext';
 import { dispatchTelegramStatusChange } from '../../contexts/TelegramStatusContext';
 import ConfirmDialog from '../Shared/ConfirmDialog';
-import { getLocaleFirstDayOfWeek } from '../../utils/profileService';
+import {
+    getLocaleFirstDayOfWeek,
+    shouldAutoStartPolling,
+} from '../../utils/profileService';
 import {
     getTimezonesByRegion,
     getRegionDisplayName,
@@ -699,12 +702,12 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                         const pollingData = await pollingResponse.json();
                         setIsPolling(pollingData.status?.running || false);
 
-                        if (!pollingData.status?.running) {
+                        if (pollingData.status?.running) {
+                            dispatchTelegramStatusChange('healthy');
+                        } else if (shouldAutoStartPolling(pollingData.status)) {
                             setTimeout(() => {
                                 handleStartPolling();
                             }, 1000);
-                        } else {
-                            dispatchTelegramStatusChange('healthy');
                         }
                     }
                 } catch (error) {
