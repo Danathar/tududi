@@ -162,6 +162,18 @@ export const sendTaskSummaryNow = async (): Promise<any> => {
     return await response.json();
 };
 
+// The page starts polling on its own only for a bot that should be polled but
+// is not yet, and only where a start can take effect at once. A stop the user
+// asked for stays, and any other process's rescan picks up a wanted bot anyway.
+export const shouldAutoStartPolling = (
+    status?: {
+        running?: boolean;
+        wanted?: boolean;
+        pollingHere?: boolean;
+    } | null
+): boolean =>
+    Boolean(status?.wanted && status?.pollingHere && !status?.running);
+
 export const fetchTelegramPollingStatus = async (): Promise<any> => {
     const response = await fetch(getApiPath('telegram/polling-status'), {
         credentials: 'include',

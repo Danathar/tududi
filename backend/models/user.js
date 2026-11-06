@@ -99,6 +99,12 @@ module.exports = (sequelize) => {
                 type: DataTypes.STRING,
                 allowNull: true,
             },
+            // NULL means no wish recorded and counts as wanted; only an
+            // explicit stop is false. See isPollingWanted in telegramPoller.
+            telegram_polling_enabled: {
+                type: DataTypes.BOOLEAN,
+                allowNull: true,
+            },
             apprise_url: {
                 type: DataTypes.TEXT,
                 allowNull: true,

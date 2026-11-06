@@ -18,6 +18,13 @@ const createPollerState = () => ({
 // Global mutable state (managed functionally)
 let pollerState = createPollerState();
 
+// Whether this user's bot should be polled. NULL in telegram_polling_enabled
+// means no wish was ever recorded, which counts as wanted: every bot with a
+// token was polled before the wish was stored. Only an explicit stop is false.
+const isPollingWanted = (user) =>
+    Boolean(user && user.telegram_bot_token) &&
+    user.telegram_polling_enabled !== false;
+
 // Check if user exists in list
 const userExistsInList = (users, userId) => users.some((u) => u.id === userId);
 
@@ -543,11 +550,12 @@ const pollUpdates = async () => {
 };
 
 // Re-read the user row so changes made after polling started (new token,
-// cleared token, edited allow-list, reset chat id) apply on the next poll.
+// cleared token, stop request, edited allow-list, reset chat id) apply on the
+// next poll, whichever process took the request.
 // Returns the fresh user, or null when the user should no longer be polled.
 const refreshPolledUser = async (user) => {
     const fresh = await User.findByPk(user.id);
-    if (!fresh || !fresh.telegram_bot_token) {
+    if (!isPollingWanted(fresh)) {
         removeUser(user.id);
         return null;
     }
@@ -736,6 +744,9 @@ const getStatus = () => ({
     userStatus: pollerState.userStatus,
 });
 
+// Ids of the users this process is polling.
+const getPolledUserIds = () => pollerState.usersToPool.map((u) => u.id);
+
 // Status as seen by one user: whether their own bot is being polled, plus
 // only their own entry of the per-user status map.
 const getStatusForUser = (userId) => {
@@ -757,6 +768,8 @@ module.exports = {
     stopPolling,
     getStatus,
     getStatusForUser,
+    getPolledUserIds,
+    isPollingWanted,
     sendTelegramMessage,
     // For testing
     _createPollerState: createPollerState,
