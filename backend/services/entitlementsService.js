@@ -418,8 +418,8 @@ async function incrementWithinLimit(userId, metric, period, n, limit) {
     const { UsageCounter } = models();
     const where = { user_id: userId, metric, period_key: period };
     // Make sure the row exists. A single INSERT that skips on the unique
-    // index (no findOrCreate transaction, which deadlocks on SQLite when
-    // several first calls of the month race) lets one caller create it.
+    // index (no findOrCreate transaction, so several first calls of the
+    // month can race safely) lets one caller create it.
     await UsageCounter.bulkCreate([{ ...where, count: 0 }], {
         ignoreDuplicates: true,
     });

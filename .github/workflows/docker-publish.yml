@@ -98,7 +98,7 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           docker run --rm --entrypoint sh "$IMAGE@$DIGEST" -c \
-            "cd /app/backend && node -e \"require('sequelize'); require('sqlite3'); require('express')\""
+            "cd /app/backend && node -e \"require('sequelize'); require('pg'); require('express')\""
           docker run --rm --entrypoint sh "$IMAGE@$DIGEST" -c \
             "test \"\$TUDUDI_BUILD_COMMIT\" = \"$GITHUB_SHA\""
 

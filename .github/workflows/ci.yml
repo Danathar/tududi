@@ -16,6 +16,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Keeps this name only because the "protect main" ruleset requires a check
+  # called test-sqlite. SQLite left with v2.0.0: the backend suite runs in
+  # test-postgres, and this job is the frontend build. Renaming it is a staged
+  # change, see "Renaming a required check" in docs/branch-protection.md.
   test-sqlite:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -32,15 +36,6 @@ jobs:
 
     - name: Install dependencies
       run: npm install
-
-    - name: Run linting
-      run: npm run lint
-
-    - name: Run backend tests
-      run: npm run backend:test
-
-    - name: Upgrade legacy SQLite databases and check schema parity
-      run: npm run backend:test:upgrade
 
     - name: Build frontend
       run: npm run build
@@ -75,6 +70,9 @@ jobs:
     - name: Install dependencies
       run: npm install
 
+    - name: Run linting
+      run: npm run lint
+
     - name: Bootstrap an empty database and run pending migrations
       working-directory: backend
       run: |
@@ -84,13 +82,8 @@ jobs:
       env:
         NODE_ENV: production
 
-    - name: Run backend tests against PostgreSQL
-      run: npm run backend:test:pg
-
-    # Legacy fixtures are always SQLite; with DATABASE_URL set the parity test
-    # also compares the PostgreSQL schema produced by db-prepare.
-    - name: Upgrade legacy SQLite databases and check schema parity
-      run: npm run backend:test:upgrade
+    - name: Run backend tests
+      run: npm run backend:test
 
   # Advisory: breaks the lines this PR changes on purpose (StrykerJS) and
   # reports each break the backend or frontend tests still pass, minus the

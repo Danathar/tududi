@@ -6,7 +6,6 @@ const {
 } = require('../../../models');
 const taskRepository = require('../repository');
 const { deleteAttachmentFiles } = require('../../../utils/attachment-utils');
-const { withForeignKeyChecksDisabled } = require('../../../utils/db-dialect');
 const { logError } = require('../../../services/logService');
 
 // The one way to delete a task. The REST route, the MCP delete_task tool and
@@ -74,9 +73,8 @@ async function deleteFromCaldavRemotes(task) {
 }
 
 // Dependent rows are removed in dependency order, which is what PostgreSQL
-// relies on; older SQLite databases additionally get constraint checks
-// switched off by the caller. `skipWebhooks` keeps a bulk caller (undoing an
-// import) from sending one task.deleted per row.
+// relies on. `skipWebhooks` keeps a bulk caller (undoing an import) from
+// sending one task.deleted per row.
 async function removeTaskRows(task, { skipWebhooks = false } = {}) {
     const taskId = task.id;
 
@@ -124,11 +122,10 @@ async function deleteTask(task) {
         await deleteFromCaldavRemotes(each);
     }
 
-    await withForeignKeyChecksDisabled(sequelize, async () => {
-        for (const each of tasks) {
-            await removeTaskRows(each);
-        }
-    });
+    // Dependent rows are removed in dependency order: constraints stay on.
+    for (const each of tasks) {
+        await removeTaskRows(each);
+    }
 }
 
 // Removes one task row and everything that hangs off it, including its
@@ -137,9 +134,7 @@ async function deleteTask(task) {
 // created.
 async function destroyTaskRows(task, { skipWebhooks = false } = {}) {
     await deleteFromCaldavRemotes(task);
-    await withForeignKeyChecksDisabled(sequelize, async () => {
-        await removeTaskRows(task, { skipWebhooks });
-    });
+    await removeTaskRows(task, { skipWebhooks });
 }
 
 module.exports = {
