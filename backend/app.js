@@ -222,6 +222,15 @@ app.use((req, res, next) => {
     })(req, res, next);
 });
 
+// Past this point a request can be refused before its body has been read (the
+// auth guard, a rate limiter, a feature gate). Ending the response then tears
+// the socket down under a client that is still uploading, which reaches it as
+// ECONNRESET rather than the refusal we sent - see drainRequestBody.js. It sits
+// after the parsers, so a JSON or urlencoded body has already been consumed and
+// the response is untouched.
+const drainRequestBody = require('./middleware/drainRequestBody');
+app.use(drainRequestBody({ maxBytes: config.fileUploadLimitMB * 1024 * 1024 }));
+
 // RFC 9728 - Protected Resource Metadata (no auth required)
 const oauthRoutes = require('./modules/oauth/routes');
 app.use(oauthRoutes);
@@ -448,6 +457,7 @@ const membersModule = require('./modules/members');
 const templatesModule = require('./modules/templates');
 const reportsModule = require('./modules/reports');
 const everyoneModule = require('./modules/everyone');
+const roadmapModule = require('./modules/roadmap');
 const groupsModule = require('./modules/groups');
 const feedbackModule = require('./modules/feedback');
 const pushModule = require('./modules/push');
@@ -581,6 +591,7 @@ const registerApiRoutes = (basePath) => {
     app.use(basePath, templatesModule.routes);
     app.use(basePath, reportsModule.routes);
     app.use(basePath, everyoneModule.routes);
+    app.use(basePath, roadmapModule.routes);
     app.use(basePath, groupsModule.routes);
     app.use(basePath, feedbackModule.routes);
     app.use(basePath, pushModule.routes);
