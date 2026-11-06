@@ -55,7 +55,6 @@ When deploying tududi, we recommend:
 TUDUDI_SESSION_SECRET=$(openssl rand -hex 64)
 
 # Use secure volumes with proper permissions
-chmod 700 ~/tududi_db
 chmod 700 ~/tududi_uploads
 ```
 

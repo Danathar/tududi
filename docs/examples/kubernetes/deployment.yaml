@@ -24,9 +24,9 @@ spec:
         fsGroup: 1001
       containers:
         - name: tududi
-          # Pin a release tag instead of latest so upgrades happen when you
-          # choose. Check the release notes before bumping it.
-          image: docker.io/chrisvel/tududi:2.0.0
+          # Pin a :v<version>-<short commit> tag instead of latest so upgrades
+          # happen when you choose.
+          image: ghcr.io/danathar/tududi:latest
           ports:
             - name: http
               containerPort: 3002

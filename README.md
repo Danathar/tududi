@@ -90,6 +90,9 @@ Get up and running quickly with our comprehensive documentation:
 
 ### Quick Start
 
+> [!WARNING]
+> **Still on the older built-in SQLite database?** This fork now follows version 2, which runs on PostgreSQL only, and `ghcr.io/danathar/tududi:latest` refuses to start on a SQLite volume. Move your data first with [docs/30-moving-to-postgres.md](docs/30-moving-to-postgres.md). Until then, pin a `:v1.15.0-` build of this image instead of `:latest`.
+
 tududi stores its data in PostgreSQL. The repo's `docker-compose.yml` runs tududi together with a `postgres:16-alpine` database, so that is the quickest way in. It reads its configuration from a `.env` file:
 
 ```bash

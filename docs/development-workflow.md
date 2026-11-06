@@ -562,15 +562,17 @@ docker build -t tududi:latest .
 
 # Run container
 docker run \
+  -e DATABASE_URL=postgres://tududi:secret@your-db-host:5432/tududi \
   -e TUDUDI_USER_EMAIL=admin@example.com \
   -e TUDUDI_USER_PASSWORD=secure-password \
   -e TUDUDI_SESSION_SECRET=$(openssl rand -hex 64) \
-  -v ~/tududi_db:/app/db \
   -v ~/tududi_uploads:/app/uploads \
   -v ~/tududi_backups:/app/backups \
   -p 3002:3002 \
   -d tududi:latest
 ```
+
+Coming from a 1.x SQLite volume? Move your data first with [30-moving-to-postgres.md](30-moving-to-postgres.md).
 
 ---
 
