@@ -22,16 +22,16 @@ Node 22.
 - `npm run lint` (frontend + backend ESLint), `npm run lint:fix`,
   `npm run format` / `npm run format:fix` (Prettier).
 - `npm test` (backend Jest), `npm run backend:test:unit`,
-  `npm run backend:test:integration`, `npm run backend:test:pg` (with
-  `DATABASE_URL` set), `npm run backend:test:upgrade`.
+  `npm run backend:test:integration`. These need a PostgreSQL server
+  (`docker compose -f docker-compose.dev.yml up -d db`).
 - `npm run frontend:test`, `npm run test:ui` (Playwright), `npm run build`
   (`tsc --noEmit` + Webpack).
 - `npm run migration:create <name>`, `npm run db:migrate`,
   `npm run migration:status`.
 
-CI (`.github/workflows/ci.yml`) runs `test-sqlite` (lint, backend tests,
-upgrade tests, build) and `test-postgres` (migrations and backend tests on
-PostgreSQL 16). Both must pass.
+CI (`.github/workflows/ci.yml`) runs `test-sqlite` (the frontend build; the
+name is kept for the ruleset) and `test-postgres` (lint, migrations and backend
+tests on PostgreSQL 16). Both must pass.
 
 ## Backend pattern
 
@@ -57,11 +57,9 @@ failing suite on current `main` before calling it pre-existing.
 ## Migrations must run on both databases
 
 Fresh PostgreSQL databases skip history and run only newer migrations, so every
-new migration runs on SQLite and PostgreSQL. Use the `safe*` helpers in
-`backend/utils/migration-utils.js`; no `PRAGMA`, `sqlite_master`,
-`AUTOINCREMENT` or backtick identifiers; booleans as `true`/`false`. Run
-`npm run backend:test:upgrade` after adding one. Checklist:
-[docs/database.md](../docs/database.md), "Writing dialect-safe migrations".
+new migration runs on an existing PostgreSQL database. Use the `safe*` helpers
+in `backend/utils/migration-utils.js`; booleans as `true`/`false`. Checklist:
+[docs/database.md](../docs/database.md), "Writing migrations".
 
 ## Translations
 

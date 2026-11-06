@@ -65,9 +65,10 @@ Entry format:
 - **Fork-only features:** All Tasks "Group by Area" and the project's area on
   the task page (PR #8, issue #6); drag a task from All Tasks onto a sidebar area
   to set its area (PR #9, issue #7).
-- **CI:** `.github/workflows/ci.yml` runs `test-sqlite` and `test-postgres` on
-  PRs to `main` and pushes to `main` (PostgreSQL image from ECR Public's Docker
-  library mirror since PR #58). It does not run `npm run frontend:test`;
+- **CI:** `.github/workflows/ci.yml` runs `test-sqlite` (the frontend build; the
+  name is kept for the ruleset) and `test-postgres` on PRs to `main` and pushes
+  to `main` (the runner image's PostgreSQL 16). It does not run
+  `npm run frontend:test`;
   `coverage-gate.yml` runs the frontend suite for coverage and tolerates its
   known failures.
 - **Branch protection:** ruleset `protect main` (id 24817503) is active: pull

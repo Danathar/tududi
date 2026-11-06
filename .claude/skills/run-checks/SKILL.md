@@ -16,14 +16,14 @@ commands in the jobs `test-sqlite` and `test-postgres`.
 ```bash
 npm run lint                  # frontend + backend ESLint
 npm run format                # Prettier check (format:fix to write)
-npm test                      # backend Jest
-npm run backend:test:upgrade  # legacy-database upgrade and schema parity
+npm test                      # backend Jest, needs PostgreSQL (below)
 npm run frontend:test         # frontend Jest
 npm run build                 # tsc --noEmit + Webpack
 ```
 
-For migrations or SQL, also run `npm run backend:test:pg` with `DATABASE_URL`
-pointing at a PostgreSQL database. Playwright (`npm run test:ui`) is optional.
+Backend tests need a PostgreSQL server; start one with
+`docker compose -f docker-compose.dev.yml up -d db`. Playwright
+(`npm run test:ui`) is optional.
 
 Known frontend failures: when PR #9 was prepared, `npm run frontend:test` failed
 `MermaidDiagram`, `MarkdownRenderer.publicLinks` and `roleLabels` on a clean

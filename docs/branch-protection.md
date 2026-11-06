@@ -68,7 +68,9 @@ import format, so it applies as-is.
   pull request through the API.
 - **Three required checks: `test-sqlite`, `test-postgres` and
   `agent-tooling`.** The first two are the jobs in
-  [`ci.yml`](../.github/workflows/ci.yml); `agent-tooling` is the job in
+  [`ci.yml`](../.github/workflows/ci.yml): `test-sqlite` keeps that name only
+  because this ruleset requires it, and since v2.0.0 it is the frontend build,
+  with the backend suite in `test-postgres`. `agent-tooling` is the job in
   [`agent-tooling.yml`](../.github/workflows/agent-tooling.yml), which runs the
   tests of the Bash guard hook (`.claude/hooks/tests/`) and of the helper
   scripts (`scripts/tests/`), then runs `node scripts/check-fork-delta.mjs` on
