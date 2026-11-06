@@ -14,6 +14,90 @@
             "original": "{ files: {} }",
             "replacement": "{}",
             "reason": "Equivalent: survivors() reads a report without a files map as empty, so an empty report and {} give the same result (pinned by the test 'survivors of an empty or file-less report is empty')."
+        },
+        {
+            "file": "backend/modules/telegram/service.js",
+            "mutator": "ObjectLiteral",
+            "original": "{\n            attributes: [\n                'id',\n                'telegram_bot_token',\n                'telegram_polling_enabled',\n            ],\n        }",
+            "replacement": "{}",
+            "reason": "Equivalent: the list only narrows the columns read; every column the status needs is in the full row too."
+        },
+        {
+            "file": "backend/modules/telegram/telegramInitializer.js",
+            "mutator": "ObjectLiteral",
+            "original": "{\n            where: { telegram_bot_token: { [Op.ne]: null } },\n        }",
+            "replacement": "{}",
+            "reason": "Equivalent: isPollingWanted drops a user without a token on the next line, so the filter only saves reading those rows."
+        },
+        {
+            "file": "backend/modules/telegram/telegramInitializer.js",
+            "mutator": "ObjectLiteral",
+            "original": "{ telegram_bot_token: { [Op.ne]: null } }",
+            "replacement": "{}",
+            "reason": "Equivalent: isPollingWanted drops a user without a token on the next line, so the filter only saves reading those rows."
+        },
+        {
+            "file": "backend/modules/telegram/telegramInitializer.js",
+            "mutator": "ArrayDeclaration",
+            "original": "[]",
+            "replacement": "[\"Stryker was here\"]",
+            "reason": "Harmless: a stray string has no token, so addUser refuses it and nothing is polled; the only trace is the count in a log line."
+        },
+        {
+            "file": "backend/modules/telegram/telegramInitializer.js",
+            "mutator": "ConditionalExpression",
+            "original": "newUsers.length > 0",
+            "replacement": "true",
+            "reason": "Harmless: only decides whether one informational log line prints when new bots are picked up; polling is unchanged."
+        },
+        {
+            "file": "backend/modules/telegram/telegramInitializer.js",
+            "mutator": "ConditionalExpression",
+            "original": "newUsers.length > 0",
+            "replacement": "false",
+            "reason": "Harmless: only decides whether one informational log line prints when new bots are picked up; polling is unchanged."
+        },
+        {
+            "file": "backend/modules/telegram/telegramInitializer.js",
+            "mutator": "EqualityOperator",
+            "original": "newUsers.length > 0",
+            "replacement": "newUsers.length >= 0",
+            "reason": "Harmless: only decides whether one informational log line prints when new bots are picked up; polling is unchanged."
+        },
+        {
+            "file": "backend/modules/telegram/telegramInitializer.js",
+            "mutator": "EqualityOperator",
+            "original": "newUsers.length > 0",
+            "replacement": "newUsers.length <= 0",
+            "reason": "Harmless: only decides whether one informational log line prints when new bots are picked up; polling is unchanged."
+        },
+        {
+            "file": "backend/modules/telegram/telegramInitializer.js",
+            "mutator": "BlockStatement",
+            "original": "{\n            console.log(\n                `Initializing Telegram polling for ${newUsers.length} user(s)...`\n            );\n        }",
+            "replacement": "{}",
+            "reason": "Harmless: only decides whether one informational log line prints when new bots are picked up; polling is unchanged."
+        },
+        {
+            "file": "backend/modules/telegram/telegramInitializer.js",
+            "mutator": "StringLiteral",
+            "original": "`Initializing Telegram polling for ${newUsers.length} user(s)...`",
+            "replacement": "``",
+            "reason": "Harmless: only decides whether one informational log line prints when new bots are picked up; polling is unchanged."
+        },
+        {
+            "file": "frontend/utils/profileService.ts",
+            "mutator": "OptionalChaining",
+            "original": "status?.pollingHere",
+            "replacement": "status.pollingHere",
+            "reason": "Equivalent: the status?.wanted check before it has already stopped on a missing status, so status is set here."
+        },
+        {
+            "file": "frontend/utils/profileService.ts",
+            "mutator": "OptionalChaining",
+            "original": "status?.running",
+            "replacement": "status.running",
+            "reason": "Equivalent: the status?.wanted check before it has already stopped on a missing status, so status is set here."
         }
     ]
 }

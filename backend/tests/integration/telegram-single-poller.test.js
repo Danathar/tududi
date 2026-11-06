@@ -9,6 +9,7 @@ const jobLock = require('../../services/jobLock');
 const entitlements = require('../../services/entitlementsService');
 const { isPostgres } = require('../../utils/db-dialect');
 const telegramPoller = require('../../modules/telegram/telegramPoller');
+const telegramService = require('../../modules/telegram/service');
 const {
     initializeTelegramPolling,
     rescanPolledUsers,
@@ -97,6 +98,7 @@ describe('Only the polling process polls Telegram', () => {
 
             expect(response.status).toBe(200);
             expect(response.body.success).toBe(true);
+            expect(response.body.message).toBe('Telegram polling requested');
             expect(response.body.status.wanted).toBe(true);
             expect(telegramPoller.getStatus().running).toBe(false);
             expect(isPolled(user)).toBe(false);
@@ -158,6 +160,14 @@ describe('Only the polling process polls Telegram', () => {
 
             expect(getSpy).not.toHaveBeenCalled();
             expect(isPolled(user)).toBe(false);
+        });
+    });
+
+    describe('stopPolling for a user that is gone', () => {
+        it('still reports the stop', async () => {
+            const result = await telegramService.stopPolling(user.id + 100000);
+
+            expect(result.success).toBe(true);
         });
     });
 
@@ -280,10 +290,32 @@ describe('Only the polling process polls Telegram', () => {
             await rescanPolledUsers();
             expect(isPolled(user)).toBe(true);
 
-            jest.spyOn(entitlements, 'hasFeature').mockResolvedValue(false);
+            const hasFeature = jest
+                .spyOn(entitlements, 'hasFeature')
+                .mockResolvedValue(false);
             await rescanPolledUsers();
 
+            expect(hasFeature).toHaveBeenCalledWith(user.id, 'telegram');
             expect(isPolled(user)).toBe(false);
+        });
+
+        it('leaves a bot it already polls alone', async () => {
+            await rescanPolledUsers();
+            expect(isPolled(user)).toBe(true);
+
+            const addUser = jest.spyOn(telegramPoller, 'addUser');
+            await rescanPolledUsers();
+
+            expect(isPolled(user)).toBe(true);
+            expect(addUser).not.toHaveBeenCalled();
+        });
+
+        it('keeps a wanted bot through a poll', async () => {
+            await rescanPolledUsers();
+
+            await telegramPoller._pollUpdates();
+
+            expect(isPolled(user)).toBe(true);
         });
 
         it('keeps polling when the database cannot be read', async () => {
@@ -296,6 +328,10 @@ describe('Only the polling process polls Telegram', () => {
             await rescanPolledUsers();
 
             expect(isPolled(user)).toBe(true);
+            expect(console.error).toHaveBeenCalledWith(
+                'Error rescanning Telegram users:',
+                'database is away'
+            );
         });
 
         it('does nothing without the lock', async () => {
@@ -312,6 +348,21 @@ describe('Only the polling process polls Telegram', () => {
             await rescanPolledUsers();
 
             expect(isPolled(user)).toBe(false);
+        });
+
+        it('does not read the database when Telegram is turned off', async () => {
+            const config = getConfig();
+            const savedTelegramEnabled = config.telegramEnabled;
+            config.telegramEnabled = false;
+            const findAll = jest.spyOn(User, 'findAll');
+
+            try {
+                await rescanPolledUsers();
+
+                expect(findAll).not.toHaveBeenCalled();
+            } finally {
+                config.telegramEnabled = savedTelegramEnabled;
+            }
         });
     });
 
@@ -341,8 +392,38 @@ describe('Only the polling process polls Telegram', () => {
 
                 expect(findAll).toHaveBeenCalledTimes(2);
                 expect(isPolled(user)).toBe(true);
+
+                await jest.advanceTimersByTimeAsync(2 * RESCAN_INTERVAL_MS);
+
+                expect(findAll.mock.calls.length).toBeGreaterThanOrEqual(3);
             } finally {
                 telegramPoller.removeUser(user.id);
+                jest.clearAllTimers();
+                jest.useRealTimers();
+                config.environment = savedEnvironment;
+            }
+        });
+
+        it('waits for the lock and tries again a minute later', async () => {
+            const config = getConfig();
+            const savedEnvironment = config.environment;
+            config.environment = 'production';
+            jest.spyOn(jobLock, 'tryBecomeLeader')
+                .mockResolvedValueOnce(false)
+                .mockResolvedValue(true);
+            jest.spyOn(jobLock, 'isLeader').mockReturnValue(true);
+            const findAll = jest.spyOn(User, 'findAll').mockResolvedValue([]);
+            jest.useFakeTimers({ doNotFake: ['nextTick'] });
+
+            try {
+                await initializeTelegramPolling();
+
+                await jest.advanceTimersByTimeAsync(10000);
+                expect(findAll).not.toHaveBeenCalled();
+
+                await jest.advanceTimersByTimeAsync(60000);
+                expect(findAll).toHaveBeenCalledTimes(1);
+            } finally {
                 jest.clearAllTimers();
                 jest.useRealTimers();
                 config.environment = savedEnvironment;
