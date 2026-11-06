@@ -752,6 +752,42 @@ describe('feeds built to cost the server', () => {
         expect(found).toEqual([]);
     });
 
+    it('counts dates listed one by one, which no rule looks at', () => {
+        const dates = [];
+        for (let year = 1000; year < 1800; year++) {
+            for (let day = 1; day <= 25; day++) {
+                dates.push(`${year}01${String(day).padStart(2, '0')}T000000Z`);
+            }
+        }
+        const lines = [];
+        for (let i = 0; i < 11; i++) {
+            lines.push(
+                'BEGIN:VEVENT',
+                `UID:listed-${i}`,
+                'SUMMARY:listed',
+                'DTSTART:10000101T000000Z',
+                `RDATE:${dates.join(',')}`,
+                'END:VEVENT'
+            );
+        }
+        lines.push(
+            'BEGIN:VEVENT',
+            'UID:after',
+            'SUMMARY:after',
+            'DTSTART:20260601T090000Z',
+            'END:VEVENT'
+        );
+
+        const found = eventsForRange(
+            parseCalendar(calendar(...lines)),
+            '2026-06-01',
+            '2026-06-01',
+            'UTC'
+        );
+
+        expect(found).toEqual([]);
+    });
+
     it('starts each range with its full allowance of steps', () => {
         const events = parseCalendar(
             calendar(
