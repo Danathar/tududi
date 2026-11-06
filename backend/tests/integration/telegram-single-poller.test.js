@@ -395,7 +395,12 @@ describe('Only the polling process polls Telegram', () => {
 
                 await jest.advanceTimersByTimeAsync(2 * RESCAN_INTERVAL_MS);
 
-                expect(findAll.mock.calls.length).toBeGreaterThanOrEqual(3);
+                // Polling re-reads the user with findByPk, which also goes
+                // through findAll, so count only the rescan's own query.
+                const rescans = findAll.mock.calls.filter(
+                    ([options]) => options?.where?.telegram_bot_token
+                );
+                expect(rescans.length).toBeGreaterThanOrEqual(3);
             } finally {
                 telegramPoller.removeUser(user.id);
                 jest.clearAllTimers();
