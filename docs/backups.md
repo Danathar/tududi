@@ -104,7 +104,9 @@ On a self-hosted instance an admin can export the whole instance: every account 
 
 ### Export Format
 
-Exports are JSON (`format: 2`) with every relation expressed by uid (`area_uid`, `project_uid`, `parent_task_uid`, ...), attachment files embedded as base64, and goals and people included alongside areas, projects, tasks, tags, notes, inbox items and views. Because references are by uid, a backup restores cleanly on a different instance and can never point at another user's rows. If a uid is already taken by another account on the same instance, the imported row gets a fresh uid and its references follow. The exporting user's own contact card maps onto the importing user's own card instead of becoming a duplicate. Format 1 backups (numeric ids only) still import; their references resolve only among the importing user's rows.
+Exports are JSON (`format: 2`) with relations between one account's rows expressed by uid (`area_uid`, `project_uid`, `parent_task_uid`, ...), attachment files embedded as base64, and goals and people included alongside areas, projects, tasks, tags, notes, inbox items and views. Because references are by uid, a backup restores cleanly on a different instance and can never point at another user's rows. If a uid is already taken by another account on the same instance, the imported row gets a fresh uid and its references follow. The exporting user's own contact card maps onto the importing user's own card instead of becoming a duplicate. Format 1 backups (numeric ids only) still import; their references resolve only among the importing user's rows.
+
+A link to a row another account owns is not kept, even in an instance backup. A task or note someone added to another account's shared project comes back outside that project, a subtask under another account's task comes back as a top-level task, and the import does not warn. See [Links Between Accounts](30-moving-to-postgres.md#links-between-accounts).
 
 Not exported: API tokens, two-factor sign-in, SSO links, CalDAV sync state, push subscriptions, sessions, and logs. [30-moving-to-postgres.md](30-moving-to-postgres.md) has the full list of what comes across.
 
