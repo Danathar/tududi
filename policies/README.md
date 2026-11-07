@@ -63,6 +63,26 @@ For every `.github/workflows/*.yml`:
   verbs of `gh run`, besides
   `create`, `comment`, `edit`, `close`, `reopen`, `merge`, `review`, `delete`, `run`.
 
+## check-policies-corpus.json
+
+Not a policy the checker reads: a regression table its tests replay. Several
+repositories carry their own copy of `scripts/check-policies.mjs`, and a fix
+to one copy did not reach the others
+([Danathar/akmods#245](https://github.com/Danathar/akmods/issues/245)). Each
+row is one workflow file (`workflow`, one string per line) and every
+run-expression violation the checker must report for it (`violations`, each a
+`line` and an `expression`; an empty list means the workflow must pass).
+`scripts/tests/check-policies.test.mjs` writes each row to a scratch
+`.github/workflows/` directory, runs `checkWorkflows` with this repository's
+`workflow-permissions.json`, and requires exactly those violations.
+
+The canonical copy lives in
+[Danathar/dns-failover](https://github.com/Danathar/dns-failover/blob/main/policies/check-policies-corpus.json).
+Never edit this copy: change the row there, then copy the file byte for byte
+and update `CORPUS_SHA256` in the test, which fails on any local edit.
+`nightly-compliance.yml` (step `Check-policies corpus`) compares this copy with dns-failover's `main` every night and fails
+when they differ, so a copy that is behind shows up without a pull request.
+
 ## Threat model
 
 The checker catches accidental omissions: an agent-direction file or workflow
