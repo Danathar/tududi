@@ -484,13 +484,9 @@ describe('Instance backup (admin)', () => {
 
         const pack = backup.data.tasks.find((t) => t.name === 'Pack the car');
         expect(pack.project_uid).toBeNull();
-        const seats = backup.data.tasks.find(
-            (t) => t.name === 'Choose seats'
-        );
+        const seats = backup.data.tasks.find((t) => t.name === 'Choose seats');
         expect(seats.parent_task_uid).toBeNull();
-        const note = backup.data.notes.find(
-            (n) => n.title === 'Packing list'
-        );
+        const note = backup.data.notes.find((n) => n.title === 'Packing list');
         expect(note.project_uid).toBeNull();
         const shed = backup.data.projects.find((p) => p.name === 'Shed');
         expect(shed.area_uid).toBeNull();
