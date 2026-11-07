@@ -82,19 +82,19 @@
 ## Pause and resume the repository in Hive
   prose: narrative: Hive's pause switch lives outside this repository
 ## What each workflow does, and how to turn it off
-  prose: unchecked: table of the workflows in .github/workflows/, their triggers and what they run
+  joined: scripts/tests/runbook-workflows.test.mjs
 ## A red `main`
   prose: narrative: incident steps
 ## A bad `:latest` image on ghcr
-  prose: unchecked: names the tags docker-publish.yml pushes
+  joined: scripts/tests/runbook-workflows.test.mjs
 ## A pull request or issue reached upstream
   prose: narrative: incident steps
 ## A leaked secret
-  prose: unchecked: names the secrets the workflows use
+  joined: scripts/tests/runbook-workflows.test.mjs
 ## A runaway agent
   prose: narrative: incident steps
 ## A scheduled run did not fire
-  prose: unchecked: names the scheduled workflows
+  joined: scripts/tests/runbook-workflows.test.mjs
 
 [docs/branch-protection.md]
 ## Status
