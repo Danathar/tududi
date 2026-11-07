@@ -64,30 +64,28 @@ gh workflow list --repo Danathar/tududi --all
 ```
 
 Disabling a required check leaves pull requests waiting for a status that never
-arrives. Disable `ci.yml` only if you also relax the "protect main" ruleset ([`branch-protection.md`](branch-protection.md)). To
+arrives. Disable `agent-tooling.yml` or `ci.yml` only if you also relax the "protect main" ruleset ([`branch-protection.md`](branch-protection.md)). To
 remove a workflow permanently, delete the file in a pull request.
 
 | file | what it does | trigger | turn off |
 |---|---|---|---|
-| `ci.yml` | `test-sqlite` (frontend build; the name is kept for the ruleset) and `test-postgres` (lint, migrations, backend tests on PostgreSQL); two of the three checks the "protect main" ruleset requires | PR to `main`, push to `main` | `gh workflow disable "CI" --repo Danathar/tududi` |
+| `ci.yml` | `test-sqlite` (frontend build; the name is kept for the ruleset), `test-postgres` (lint, migrations, backend tests on PostgreSQL) and `mutation` (advisory, pull requests only: mutates the lines a PR changes); `test-sqlite` and `test-postgres` are two of the three checks the "protect main" ruleset requires | PR to `main`, push to `main` | `gh workflow disable "CI" --repo Danathar/tududi` |
 | `docker-publish.yml` | builds per platform and pushes `ghcr.io/danathar/tududi` as `:latest`, `:sha-<short>`, `:v<version>-<short>`; refuses manual runs from any branch but `main` | push to `main`, manual | `gh workflow disable "Publish Docker image" --repo Danathar/tududi` |
-| `coverage-gate.yml` | fails a PR whose coverage falls below the floors in `.coverage-thresholds.json` | pull request | disable it by its `name:` |
-| `auto-qa.yml` | runs `scripts/auto-qa-tuner.mjs` against `.github/auto-qa-tuning.json` to report whether a floor should move | see the file header | disable it by its `name:` |
-| `nightly-compliance.yml` | scheduled compliance checks | nightly | disable it by its `name:` |
-| `pr-metrics.yml` | runs `scripts/pr-metrics.mjs` for [`metrics.md`](metrics.md) | see the file header | disable it by its `name:` |
+| `coverage-gate.yml` | fails a PR or a push to `main` whose coverage falls below the floors in `.coverage-thresholds.json` | PR to `main`, push to `main` | disable it by its `name:` |
+| `auto-qa.yml` | runs `scripts/auto-qa-tuner.mjs` against `.github/auto-qa-tuning.json` to report whether a floor should move | weekly, manual | disable it by its `name:` |
+| `nightly-compliance.yml` | scheduled compliance checks | nightly, manual | disable it by its `name:` |
+| `pr-metrics.yml` | runs `scripts/pr-metrics.mjs` for [`metrics.md`](metrics.md) | weekly, manual | disable it by its `name:` |
 | `agent-audit.yml` | reads back which agent PRs have `Closes #N`, a signature line and a human or Hive-lane merger, counting Hive-lane merges separately (`scripts/ai-audit-report.mjs`); a violation turns the run red | weekly, manual | `gh workflow disable "Agent audit trail" --repo Danathar/tududi` |
 | `auto-issues.yml` | when `CI` or `Publish Docker image` fails on a push to `main`, opens or comments on one tracking issue per workflow; never closes one | `workflow_run` | `gh workflow disable "Auto issues" --repo Danathar/tududi` |
 | `ai-fix.yml` | on label `ai-fix-requested` or comment `/ai-fix` from the owner, a member or a collaborator, asks Claude Code to verify review findings and apply those that hold; skips events sent by bots | label, comment | `gh workflow disable "AI fix requested" --repo Danathar/tududi`, or never apply the label |
 | `claude.yml` | answers an `@claude` mention from the owner, a member or a collaborator; refuses fork PRs; needs `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`, and without one writes a summary and skips | comment | remove both secrets, or disable it by its `name:` |
 | `labeler.yml` | labels PRs `area/*` from the paths they change, using [`.github/labeler.yml`](../.github/labeler.yml) | pull request | disable it by its `name:` |
-| `policy-check.yml` | runs `scripts/check-policies.mjs` over `policies/` and `risk-config.json` | pull request | disable it by its `name:` |
-| `agent-tooling.yml` | runs `node --test` over `scripts/tests/**/*.test.mjs` and `.claude/hooks/tests/**/*.test.mjs` | pull request | disable it by its `name:` |
+| `policy-check.yml` | runs `scripts/check-policies.mjs` over `policies/` and `risk-config.json` | PR to `main`, push to `main` | disable it by its `name:` |
+| `agent-tooling.yml` | runs `node --test` over `scripts/tests/**/*.test.mjs` and `.claude/hooks/tests/**/*.test.mjs`, then `scripts/check-fork-delta.mjs`; the third check the "protect main" ruleset requires | PR to `main`, push to `main` | disable it by its `name:` |
 
-The first three are on `main` at `a6225863`; the rest arrive with the ACMM pull
-requests listed in [`agent-tasks/2026-10-09.md`](agent-tasks/2026-10-09.md), and
-exist once those merge. A header comment at the top of each file explains its
-gating; that header, not this table, is the source of truth if they differ. Get
-the exact `name:` with `grep -m1 '^name:' .github/workflows/<file>`.
+A header comment at the top of each file explains its gating; that header, not
+this table, is the source of truth if they differ. Get the exact `name:` with
+`grep -m1 '^name:' .github/workflows/<file>`.
 
 The agent workflows hold a write token, so they never use `pull_request_target`
 and they skip bots and outsiders before doing anything. If you doubt one, disable
@@ -225,8 +223,8 @@ same files, or acting outside its issue.
 
 ## A scheduled run did not fire
 
-Scheduled workflows (`auto-qa.yml`, and others with a `schedule:`) run
-only from the default branch, can be delayed under load, and GitHub disables
+Scheduled workflows (`agent-audit.yml`, `auto-qa.yml`,
+`nightly-compliance.yml`, `pr-metrics.yml`) run only from the default branch, can be delayed under load, and GitHub disables
 schedules in a repository with no activity for 60 days. Check with
 `gh workflow list --repo Danathar/tududi --all`; re-enable a disabled one with
 `gh workflow enable "<name>" --repo Danathar/tududi`, and start one by hand with
