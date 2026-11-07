@@ -3,7 +3,7 @@
 [![Nightly compliance](https://github.com/Danathar/tududi/actions/workflows/nightly-compliance.yml/badge.svg?branch=main)](https://github.com/Danathar/tududi/actions/workflows/nightly-compliance.yml)
 [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-1f6feb)](https://deepwiki.com/Danathar/tududi)
 [![Maintenance assisted by Hivecommons Hive](https://img.shields.io/badge/maintenance%20assisted%20by-Hivecommons%20Hive-1f6feb)](https://github.com/hivecommons/hive)
-[![ACMM L6 Fully Autonomous](https://img.shields.io/badge/ACMM-L6%20Fully%20Autonomous-2da44e)](#maintained-with-hive-acmm-l6)
+[![ACMM L6 Autonomous](https://img.shields.io/badge/ACMM-L6%20Autonomous-2da44e)](#maintained-with-hive-acmm-l6)
 [![AI assisted](https://img.shields.io/badge/AI-assisted-d29922)](#about-this-project)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
@@ -336,7 +336,7 @@ Contributions to tududi are welcome! Whether it's bug fixes, new features, docum
 
 ## Maintained with Hive (ACMM L6)
 
-Maintenance is assisted by Hive, which runs a fleet of AI agents against this repo at ACMM level 6 (Fully Autonomous).
+Maintenance is assisted by Hive, which runs a fleet of AI agents against this repo at ACMM level 6 (Autonomous).
 
 **What L6 permits:** Agents file issues and open pull requests. Pull requests that are not outreach auto-merge once the required checks pass. Outreach pull requests stay held for a human. The reviewer agent comments with file and line references but never approves, merges or closes anything.
 
