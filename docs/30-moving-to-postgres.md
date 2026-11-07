@@ -19,7 +19,6 @@ If your 1.x install already ran on PostgreSQL (`DATABASE_URL` set), none of this
 - Upgrade the 1.x install to the **final 1.x release** first. Its export covers the most data (comments, task relations, daily plans and the rest listed below).
 - Sign in as an **admin**. An admin's export holds every account on the instance; a regular user's export holds only their own data.
 - Keep the old volume (`tududi_db`) until you have checked the new install. The move does not touch it.
-- If people added work to projects or areas that someone else shared with them, read [Links Between Accounts](#links-between-accounts) first. Those links do not come across.
 
 ---
 
@@ -66,9 +65,9 @@ The database starts empty and tududi creates the schema. Wait for `Server runnin
 
 **7. Import.** Sign in as the admin, open Backup & Restore (`/backup`), choose **Import from File**, and select the file from step 1. The import merges the backup into the new instance: accounts, their data and the sharing between them come back.
 
-**8. Check.** Sign in as another user, open a shared project, look at a few tasks with attachments and a recurring task. Have each person who added work to someone else's shared project look for it too: it will be missing from that project (see [Links Between Accounts](#links-between-accounts)). Then take a first database backup (see [backups.md](backups.md)).
+**8. Check.** Sign in as another user, open a shared project, look at a few tasks with attachments and a recurring task. Then take a first database backup (see [backups.md](backups.md)).
 
-When everything looks right, and those items are back where they belong, you can delete the old `tududi_db` folder and drop `TUDUDI_ALLOW_DIALECT_SWITCH` from `.env`.
+When everything looks right you can delete the old `tududi_db` folder and drop `TUDUDI_ALLOW_DIALECT_SWITCH` from `.env`.
 
 ---
 
@@ -87,20 +86,9 @@ When everything looks right, and those items are back where they belong, you can
 - Webhooks (their configuration, not past deliveries)
 - Custom ordering of tasks, projects, areas and goals
 
-Every row gets a new numeric id; references between rows of the same account are kept through uids.
+Every row gets a new numeric id; references between rows are kept through uids. A 1.x export has no uid for a link from one account's item to another account's item, such as a task someone added to a project shared with them. The import rebuilds that link from the backup when the backup's shares give that person access to the item, or to the project or area that holds it. Otherwise the item comes across outside it.
 
 Rows keep their original created and updated dates, finished projects keep their completion date, and tasks keep their due time. A subtask whose parent was deleted before the backup comes across as a top-level task.
-
-### Links Between Accounts
-
-A link from one account's item to an item another account owns does not come across, even in an admin's export. The item itself does, under the same owner, and the import reports success without a warning:
-
-- A task or note someone added to a project another account owns is no longer in that project. The other people on the project stop seeing it.
-- A subtask someone added under another account's task becomes a top-level task, outside the project.
-- A project someone created in another account's area is no longer in that area.
-- A link to another account's goal, or a task's link to another account's area, is dropped the same way.
-
-Nothing is deleted, but the old install is the last place that shows these links. Before you delete `tududi_db`, have each person find these items among their own and put them back by hand.
 
 ## What You Set Up Again
 
@@ -124,8 +112,6 @@ Nothing is deleted, but the old install is the last place that shows these links
 **The import says the file is not a valid backup.** The file was not made by tududi, or it is from a newer release than the one you import into.
 
 **Shares or other accounts are missing after import.** The export was taken by a user who is not an admin, so it held only their own data. Take the export again as an admin.
-
-**Someone's tasks or notes are missing from a shared project.** They are still in that person's own account, outside the project. See [Links Between Accounts](#links-between-accounts).
 
 ---
 

@@ -3,6 +3,8 @@ const fs = require('fs').promises;
 const request = require('supertest');
 const app = require('../../app');
 const {
+    Area,
+    Note,
     Project,
     Task,
     Person,
@@ -139,6 +141,135 @@ async function seedInstance() {
         memberProject,
         imageName,
     };
+}
+
+// Work the member added to things the admin shared with them: a task, a
+// subtask under the admin's task and a note in the group-shared project, and
+// a project in an area the admin shared directly. Also a member task outside
+// any project, and an admin project nobody else can see.
+async function seedSharedWork(seeded) {
+    const { admin, member, groupProject } = seeded;
+    const sharedArea = await Area.create({ name: 'Home', user_id: admin.id });
+    await Permission.create({
+        user_id: member.id,
+        resource_type: 'area',
+        resource_uid: sharedArea.uid,
+        access_level: 'rw',
+        granted_by_user_id: admin.id,
+        status: 'accepted',
+    });
+    const privateProject = await Project.create({
+        name: 'Taxes',
+        user_id: admin.id,
+    });
+    const flights = await Task.create({
+        name: 'Book flights',
+        user_id: admin.id,
+        project_id: groupProject.id,
+    });
+    await Task.create({
+        name: 'Pack the car',
+        user_id: member.id,
+        project_id: groupProject.id,
+    });
+    await Task.create({
+        name: 'Choose seats',
+        user_id: member.id,
+        project_id: groupProject.id,
+        parent_task_id: flights.id,
+    });
+    await Note.create({
+        title: 'Packing list',
+        content: 'Sun cream',
+        user_id: member.id,
+        project_id: groupProject.id,
+    });
+    await Project.create({
+        name: 'Shed',
+        user_id: member.id,
+        area_id: sharedArea.id,
+    });
+    await Task.create({ name: 'Water the plants', user_id: member.id });
+    return { flights, privateProject };
+}
+
+// Links a row can hold to another account's row, as the backup names them.
+const CROSS_ACCOUNT_UID_FIELDS = {
+    goals: [['area_uid', 'areas']],
+    projects: [
+        ['area_uid', 'areas'],
+        ['goal_uid', 'goals'],
+    ],
+    tasks: [
+        ['project_uid', 'projects'],
+        ['area_uid', 'areas'],
+        ['goal_uid', 'goals'],
+        ['parent_task_uid', 'tasks'],
+        ['recurring_parent_uid', 'tasks'],
+    ],
+    notes: [['project_uid', 'projects']],
+};
+
+// The same backup as an instance export made before links between accounts
+// carried a uid: each such link is null, and only the numeric ids remain.
+function asOlderInstanceBackup(backup) {
+    const older = JSON.parse(JSON.stringify(backup));
+    delete older.instance.cross_account_uids;
+    const datas = [
+        older.data,
+        ...older.instance.accounts.map((entry) => entry.backup.data),
+    ];
+    for (const data of datas) {
+        const own = (key) => new Set((data[key] || []).map((r) => r.uid));
+        for (const [key, fields] of Object.entries(CROSS_ACCOUNT_UID_FIELDS)) {
+            for (const row of data[key] || []) {
+                for (const [field, target] of fields) {
+                    if (row[field] && !own(target).has(row[field])) {
+                        row[field] = null;
+                    }
+                }
+            }
+        }
+    }
+    return older;
+}
+
+const memberDataIn = (backup, memberUid) =>
+    backup.instance.accounts.find((entry) => entry.account.uid === memberUid)
+        .backup.data;
+
+// The member's work is back inside the restored admin's project and area.
+async function expectSharedWorkLinked(adminId, memberUid) {
+    const member = await User.findOne({ where: { uid: memberUid } });
+    const holidays = await Project.findOne({
+        where: { user_id: adminId, name: 'Holidays' },
+    });
+    const flights = await Task.findOne({
+        where: { user_id: adminId, name: 'Book flights' },
+    });
+    const home = await Area.findOne({
+        where: { user_id: adminId, name: 'Home' },
+    });
+    expect(flights.project_id).toBe(holidays.id);
+
+    const pack = await Task.findOne({
+        where: { user_id: member.id, name: 'Pack the car' },
+    });
+    expect(pack.project_id).toBe(holidays.id);
+    const seats = await Task.findOne({
+        where: { user_id: member.id, name: 'Choose seats' },
+    });
+    expect(seats.parent_task_id).toBe(flights.id);
+    expect(seats.project_id).toBe(holidays.id);
+    const note = await Note.findOne({
+        where: { user_id: member.id, title: 'Packing list' },
+    });
+    expect(note.project_id).toBe(holidays.id);
+    const shed = await Project.findOne({
+        where: { user_id: member.id, name: 'Shed' },
+    });
+    expect(shed.area_id).toBe(home.id);
+    return member;
 }
 
 // A new install: a fresh admin, and none of the old accounts left.
@@ -281,6 +412,84 @@ describe('Instance backup (admin)', () => {
             where: { user_id: freshAdmin.id, name: 'Kid card' },
         });
         expect(kidCard.linked_user_id).toBe(kid.id);
+    });
+
+    it("keeps a member's work in a project or area another account shared (#573)", async () => {
+        const { flights } = await seedSharedWork(seeded);
+        const backup = await exportUserData(seeded.admin.id);
+        expect(backup.instance.cross_account_uids).toBe(true);
+        const memberData = memberDataIn(backup, seeded.member.uid);
+        const exported = Object.fromEntries(
+            memberData.tasks.map((t) => [t.name, t])
+        );
+        expect(exported['Pack the car'].project_uid).toBe(
+            seeded.groupProject.uid
+        );
+        expect(exported['Choose seats'].parent_task_uid).toBe(flights.uid);
+
+        const freshAdmin = await freshInstall(seeded);
+        await importUserData(freshAdmin.id, backup);
+
+        const member = await expectSharedWorkLinked(
+            freshAdmin.id,
+            seeded.member.uid
+        );
+        const plants = await Task.findOne({
+            where: { user_id: member.id, name: 'Water the plants' },
+        });
+        expect(plants.project_id).toBeNull();
+    });
+
+    it('rebuilds those links in an older instance backup only where its shares reach (#573)', async () => {
+        const { privateProject } = await seedSharedWork(seeded);
+        const older = asOlderInstanceBackup(
+            await exportUserData(seeded.admin.id)
+        );
+        const memberData = memberDataIn(older, seeded.member.uid);
+        const pack = memberData.tasks.find((t) => t.name === 'Pack the car');
+        expect(pack.project_uid).toBeNull();
+        expect(pack.project_id).toBe(seeded.groupProject.id);
+        // A number that matches a row in the file the member was never
+        // given: the admin's private project.
+        const plants = memberData.tasks.find(
+            (t) => t.name === 'Water the plants'
+        );
+        plants.project_id = privateProject.id;
+        expect(older.data.projects.map((p) => p.id)).toContain(
+            privateProject.id
+        );
+
+        const freshAdmin = await freshInstall(seeded);
+        await importUserData(freshAdmin.id, older);
+
+        const member = await expectSharedWorkLinked(
+            freshAdmin.id,
+            seeded.member.uid
+        );
+        const restoredPlants = await Task.findOne({
+            where: { user_id: member.id, name: 'Water the plants' },
+        });
+        expect(restoredPlants.project_id).toBeNull();
+        expect(
+            await Project.count({
+                where: { user_id: freshAdmin.id, name: 'Taxes' },
+            })
+        ).toBe(1);
+    });
+
+    it("leaves links to another account's rows out of one account's own backup", async () => {
+        await seedSharedWork(seeded);
+        const backup = await exportUserData(seeded.member.id);
+        expect(backup.instance).toBeUndefined();
+
+        const pack = backup.data.tasks.find((t) => t.name === 'Pack the car');
+        expect(pack.project_uid).toBeNull();
+        const seats = backup.data.tasks.find((t) => t.name === 'Choose seats');
+        expect(seats.parent_task_uid).toBeNull();
+        const note = backup.data.notes.find((n) => n.title === 'Packing list');
+        expect(note.project_uid).toBeNull();
+        const shed = backup.data.projects.find((p) => p.name === 'Shed');
+        expect(shed.area_uid).toBeNull();
     });
 
     it('restoring twice creates no duplicates and never changes a password', async () => {

@@ -5,12 +5,19 @@
 // Format 2 references related records by uid (area_uid, project_uid,
 // parent_task_uid, ...), embeds attachment files as base64, and carries
 // goals and people. Numeric ids from the source database are still present
-// for information but are never used to link records on import, so a
+// for information but are never matched against rows on this instance, so a
 // backup taken on one instance restores cleanly on another and can never
-// point at rows belonging to a different user.
+// point at rows outside the backup.
 //
 // Format 1 backups (no uid references) still import; their numeric
 // references are resolved only among the importing user's own rows.
+//
+// An instance backup holds every account, so a link from one account's row to
+// another account's row (a task in a project someone shared) is carried by
+// uid as well and restored once every account's rows exist. Instance backups
+// made before that carry no uid for such a link; the restore rebuilds it from
+// the numeric ids inside the same file, only where the file's shares gave the
+// account access to the target.
 
 const path = require('path');
 const fs = require('fs').promises;
@@ -136,7 +143,10 @@ async function writeUploadedImage(image, subdir, prefix) {
     return storedFilename;
 }
 
-async function exportOwnData(userId) {
+// acrossAccounts is set for the accounts of an instance backup: their links to
+// other accounts' rows get a uid too, since those rows are in the same file. A
+// single account's backup leaves them out, as it cannot restore them.
+async function exportOwnData(userId, { acrossAccounts = false } = {}) {
     const user = await User.findByPk(userId, {
         attributes: {
             exclude: [
@@ -211,10 +221,31 @@ async function exportOwnData(userId) {
 
     const uidById = (rows) =>
         Object.fromEntries(rows.map((r) => [r.id, r.uid]));
-    const areaUid = uidById(areas);
-    const goalUid = uidById(goals);
-    const projectUid = uidById(projects);
-    const taskUid = uidById(tasks);
+    const withOtherAccounts = async (Model, own, ids) => {
+        if (!acrossAccounts) return own;
+        const missing = ids.filter((id) => id && !own[id]);
+        return { ...(await uidsOf(Model, missing)), ...own };
+    };
+    const [areaUid, goalUid, projectUid, taskUid] = await Promise.all([
+        withOtherAccounts(Area, uidById(areas), [
+            ...goals.map((g) => g.area_id),
+            ...projects.map((p) => p.area_id),
+            ...tasks.map((t) => t.area_id),
+        ]),
+        withOtherAccounts(Goal, uidById(goals), [
+            ...projects.map((p) => p.goal_id),
+            ...tasks.map((t) => t.goal_id),
+        ]),
+        withOtherAccounts(Project, uidById(projects), [
+            ...tasks.map((t) => t.project_id),
+            ...notes.map((n) => n.project_id),
+        ]),
+        withOtherAccounts(
+            Task,
+            uidById(tasks),
+            tasks.flatMap((t) => [t.parent_task_id, t.recurring_parent_id])
+        ),
+    ]);
 
     const exportedProjects = [];
     for (const project of projects) {
@@ -619,13 +650,16 @@ async function exportInstance(userId) {
                 created_by_uid: uidOf[u.created_by_user_id] || null,
                 role: roleData(roleOf[u.id]),
             },
-            backup: await exportOwnData(u.id),
+            backup: await exportOwnData(u.id, { acrossAccounts: true }),
         });
     }
 
     const groupUidOf = Object.fromEntries(groups.map((g) => [g.id, g.uid]));
     return {
         exporter_role: roleData(roleOf[userId]),
+        // Links between accounts carry uids; without this flag the restore
+        // rebuilds them from numeric ids where the shares allow.
+        cross_account_uids: true,
         accounts,
         groups: groups.map((g) => ({
             uid: g.uid,
@@ -665,8 +699,11 @@ async function exportInstance(userId) {
 }
 
 async function exportUserData(userId) {
-    const backup = await exportOwnData(userId);
-    if (!isHosted() && (await isAdmin(userId))) {
+    const wholeInstance = !isHosted() && (await isAdmin(userId));
+    const backup = await exportOwnData(userId, {
+        acrossAccounts: wholeInstance,
+    });
+    if (wholeInstance) {
         backup.instance = await exportInstance(userId);
     }
     return backup;
@@ -796,6 +833,14 @@ async function importOwnData(
     const noteRename = (key, from, to) => {
         if (uidRenames[key]) uidRenames[key][from] = to;
     };
+    // backup uids of the rows this import created, the only rows whose links
+    // to other accounts are filled in afterwards
+    const createdUids = {
+        goals: new Set(),
+        projects: new Set(),
+        tasks: new Set(),
+        notes: new Set(),
+    };
     const writtenFiles = [];
     const transaction = await sequelize.transaction();
     const resolve = makeResolver(
@@ -836,6 +881,7 @@ async function importOwnData(
         count(key, 'created');
         uidMaps[key][uid] = row.id;
         noteRename(key, uid, row.uid);
+        createdUids[key]?.add(uid);
         return { row, created: true };
     };
 
@@ -1351,7 +1397,12 @@ async function importOwnData(
         }
 
         await transaction.commit();
-        return { stats, uidRenames, personUids: uidMaps.people };
+        return {
+            stats,
+            uidRenames,
+            createdUids,
+            personUids: uidMaps.people,
+        };
     } catch (error) {
         await transaction.rollback();
         for (const { dir, name } of writtenFiles) {
@@ -1983,6 +2034,170 @@ async function restoreLinkedRecords(entries, renames, personUids, stats) {
     }
 }
 
+// Columns that can point at a row another account owns: a task or note in a
+// project someone shared, a subtask under their task, a project in their area.
+// Each account is imported on its own, so these stay null until every account
+// of an instance restore exists.
+const CROSS_ACCOUNT_LINKS = {
+    goals: [{ column: 'area_id', target: 'areas' }],
+    projects: [
+        { column: 'area_id', target: 'areas' },
+        { column: 'goal_id', target: 'goals' },
+    ],
+    tasks: [
+        { column: 'project_id', target: 'projects' },
+        { column: 'area_id', target: 'areas' },
+        { column: 'goal_id', target: 'goals' },
+        { column: 'parent_task_id', target: 'tasks' },
+        { column: 'recurring_parent_id', target: 'tasks' },
+    ],
+    notes: [{ column: 'project_id', target: 'projects' }],
+};
+const LINK_MODELS = {
+    areas: Area,
+    goals: Goal,
+    projects: Project,
+    tasks: Task,
+    notes: Note,
+};
+const SHARE_TYPES = {
+    areas: 'area',
+    goals: 'goal',
+    projects: 'project',
+    tasks: 'task',
+};
+
+// Links the rows an instance restore created to rows of another account in
+// the same backup. A link only reaches a row this restore brought back
+// (through renames), never some other row on this instance.
+//
+// Backups made before links between accounts carried a uid have null there.
+// For those the link is rebuilt from the numeric ids inside the same file,
+// and only when the file's shares gave the account access to the target, or
+// to the project or area that holds it. A numeric id is never looked up among
+// the rows of this instance.
+async function restoreCrossAccountLinks(entries, instance, renames) {
+    // The backup's rows by numeric id and by uid, with the owning account.
+    const byId = { areas: {}, goals: {}, projects: {}, tasks: {} };
+    const ownerOf = new Map();
+    for (const { accountUid, data } of entries) {
+        for (const collection of Object.keys(byId)) {
+            for (const row of data[collection] || []) {
+                if (!row?.uid) continue;
+                ownerOf.set(`${collection}:${row.uid}`, accountUid);
+                if (row.id != null) {
+                    byId[collection][row.id] = { row, owner: accountUid };
+                }
+            }
+        }
+    }
+
+    // Accepted shares in the file, direct and through a group.
+    const granted = new Set();
+    const grant = (userUid, type, uid, status) => {
+        if (!userUid || !type || !uid) return;
+        if (status && status !== 'accepted') return;
+        granted.add(`${userUid}|${type}|${uid}`);
+    };
+    for (const p of instance.shares || []) {
+        grant(p.user_uid, p.resource_type, p.resource_uid, p.status);
+    }
+    for (const gs of instance.group_shares || []) {
+        for (const gp of gs.permissions || []) {
+            grant(gp.user_uid, gs.resource_type, gs.resource_uid, gp.status);
+        }
+    }
+
+    // Whether a share in the file reaches the target row for this account:
+    // a share on the row itself, or on the project or area that holds it.
+    const reachable = (accountUid, collection, { row }) => {
+        const project =
+            collection === 'tasks' ? byId.projects[row.project_id] : null;
+        const holders = [
+            [SHARE_TYPES[collection], row.uid],
+            ['project', project?.row.uid],
+        ];
+        if (collection !== 'areas') {
+            for (const areaId of [row.area_id, project?.row.area_id]) {
+                holders.push(['area', byId.areas[areaId]?.row.uid]);
+            }
+        }
+        return holders.some(
+            ([type, uid]) => uid && granted.has(`${accountUid}|${type}|${uid}`)
+        );
+    };
+
+    const legacy = !instance.cross_account_uids;
+    const targetUid = (accountUid, row, column, target) => {
+        const uid = row[column.replace(/_id$/, '_uid')];
+        if (uid) {
+            const key = `${target}:${uid}`;
+            return ownerOf.has(key) && ownerOf.get(key) !== accountUid
+                ? uid
+                : null;
+        }
+        if (!legacy || row[column] == null) return null;
+        const found = byId[target][row[column]];
+        if (!found || found.owner === accountUid) return null;
+        return reachable(accountUid, target, found) ? found.row.uid : null;
+    };
+
+    const transaction = await sequelize.transaction();
+    try {
+        const idCache = {};
+        const localId = async (collection, uid) => {
+            const localUid = renames[collection]?.[uid];
+            if (!localUid) return null;
+            const cacheKey = `${collection}:${localUid}`;
+            if (!(cacheKey in idCache)) {
+                const row = await LINK_MODELS[collection].findOne({
+                    where: { uid: localUid },
+                    attributes: ['id'],
+                    transaction,
+                });
+                idCache[cacheKey] = row ? row.id : null;
+            }
+            return idCache[cacheKey];
+        };
+
+        for (const { userId, accountUid, data, createdUids } of entries) {
+            for (const [collection, links] of Object.entries(
+                CROSS_ACCOUNT_LINKS
+            )) {
+                for (const row of data[collection] || []) {
+                    if (!row?.uid || !createdUids?.[collection]?.has(row.uid))
+                        continue;
+                    const updates = {};
+                    for (const { column, target } of links) {
+                        const uid = targetUid(accountUid, row, column, target);
+                        const id = uid ? await localId(target, uid) : null;
+                        if (id) updates[column] = id;
+                    }
+                    if (!Object.keys(updates).length) continue;
+                    const local = await LINK_MODELS[collection].findOne({
+                        where: {
+                            uid: renames[collection][row.uid],
+                            user_id: userId,
+                        },
+                        transaction,
+                    });
+                    if (local) {
+                        await local.update(updates, {
+                            transaction,
+                            silent: true,
+                        });
+                    }
+                }
+            }
+        }
+
+        await transaction.commit();
+    } catch (error) {
+        await transaction.rollback();
+        throw error;
+    }
+}
+
 const addStats = (total, part) => {
     for (const [key, value] of Object.entries(part)) {
         total[key] = total[key] || { created: 0, skipped: 0 };
@@ -2041,6 +2256,14 @@ async function importUserData(userId, backupData, options = { merge: true }) {
     collect(own.uidRenames);
     const personUids = { ...ctx.personUids, ...own.personUids };
     const linked = [{ userId, data: backupData.data }];
+    const restored = [
+        {
+            userId,
+            accountUid: backupData.user?.uid,
+            data: backupData.data,
+            createdUids: own.createdUids,
+        },
+    ];
     for (const { account, backup } of instance.accounts || []) {
         const accountId = ctx.userIdByUid[account?.uid];
         // The importer's own entry is the top-level data, restored above.
@@ -2050,8 +2273,15 @@ async function importUserData(userId, backupData, options = { merge: true }) {
         collect(result.uidRenames);
         Object.assign(personUids, result.personUids);
         linked.push({ userId: accountId, data: backup.data });
+        restored.push({
+            userId: accountId,
+            accountUid: account.uid,
+            data: backup.data,
+            createdUids: result.createdUids,
+        });
     }
 
+    await restoreCrossAccountLinks(restored, instance, renames);
     await restoreLinkedRecords(linked, renames, personUids, stats);
     await restoreSharing(userId, instance, ctx, renames, extra);
     return { ...stats, ...extra };
