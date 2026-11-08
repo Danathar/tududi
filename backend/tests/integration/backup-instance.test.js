@@ -477,6 +477,73 @@ describe('Instance backup (admin)', () => {
         ).toBe(1);
     });
 
+    it('rebuilds a link in an older instance backup through a share on the area holding the target, or on the target task (#573)', async () => {
+        const { admin, member } = seeded;
+        const shareWithMember = (resource_type, resource_uid) =>
+            Permission.create({
+                user_id: member.id,
+                resource_type,
+                resource_uid,
+                access_level: 'rw',
+                granted_by_user_id: admin.id,
+                status: 'accepted',
+            });
+        // Only the area is shared, not the project inside it.
+        const garage = await Area.create({ name: 'Garage', user_id: admin.id });
+        await shareWithMember('area', garage.uid);
+        const workbench = await Project.create({
+            name: 'Workbench',
+            user_id: admin.id,
+            area_id: garage.id,
+        });
+        await Task.create({
+            name: 'Oil the hinges',
+            user_id: member.id,
+            project_id: workbench.id,
+        });
+        // Only the task is shared, outside any project or area.
+        const tyres = await Task.create({
+            name: 'Check the tyres',
+            user_id: admin.id,
+        });
+        await shareWithMember('task', tyres.uid);
+        await Task.create({
+            name: 'Buy a pump',
+            user_id: member.id,
+            parent_task_id: tyres.id,
+        });
+
+        const older = asOlderInstanceBackup(await exportUserData(admin.id));
+        const memberTasks = memberDataIn(older, member.uid).tasks;
+        const hinges = memberTasks.find((t) => t.name === 'Oil the hinges');
+        expect(hinges.project_uid).toBeNull();
+        expect(hinges.project_id).toBe(workbench.id);
+        const pump = memberTasks.find((t) => t.name === 'Buy a pump');
+        expect(pump.parent_task_uid).toBeNull();
+        expect(pump.parent_task_id).toBe(tyres.id);
+
+        const freshAdmin = await freshInstall(seeded);
+        await importUserData(freshAdmin.id, older);
+
+        const restoredMember = await User.findOne({
+            where: { uid: member.uid },
+        });
+        const restoredWorkbench = await Project.findOne({
+            where: { user_id: freshAdmin.id, name: 'Workbench' },
+        });
+        const restoredTyres = await Task.findOne({
+            where: { user_id: freshAdmin.id, name: 'Check the tyres' },
+        });
+        const restoredHinges = await Task.findOne({
+            where: { user_id: restoredMember.id, name: 'Oil the hinges' },
+        });
+        expect(restoredHinges.project_id).toBe(restoredWorkbench.id);
+        const restoredPump = await Task.findOne({
+            where: { user_id: restoredMember.id, name: 'Buy a pump' },
+        });
+        expect(restoredPump.parent_task_id).toBe(restoredTyres.id);
+    });
+
     it("leaves links to another account's rows out of one account's own backup", async () => {
         await seedSharedWork(seeded);
         const backup = await exportUserData(seeded.member.id);
