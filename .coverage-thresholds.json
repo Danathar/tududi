@@ -3,13 +3,13 @@
     "areas": {
         "backend": {
             "summary": "backend/coverage/coverage-summary.json",
-            "measured": { "lines": 91.97, "statements": 90.54, "functions": 92.39, "branches": 82.79 },
-            "floor": { "lines": 88, "statements": 87, "functions": 89, "branches": 79 }
+            "measured": { "lines": 94, "statements": 92.13, "functions": 94.54, "branches": 83.56 },
+            "floor": { "lines": 91, "statements": 89, "functions": 91, "branches": 79 }
         },
         "frontend": {
             "summary": "coverage-frontend/coverage-summary.json",
-            "measured": { "lines": 44.63, "statements": 44.28, "functions": 36.14, "branches": 34.54 },
-            "floor": { "lines": 41, "statements": 40, "functions": 33, "branches": 31 }
+            "measured": { "lines": 45.94, "statements": 45.57, "functions": 37.6, "branches": 35.62 },
+            "floor": { "lines": 41, "statements": 42, "functions": 33, "branches": 31 }
         }
     }
 }
