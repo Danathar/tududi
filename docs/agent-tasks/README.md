@@ -65,6 +65,8 @@ The marks a change carries, and where to read them:
 - **Merge commits.** `git log origin/main --first-parent --merges --grep='<branch>'`.
 - **Audit.** [`agent-audit.yml`](../../.github/workflows/agent-audit.yml) reports
   weekly which agent PRs lack a closing reference or a signature, or were merged by an account that is neither a human nor the Hive App (Hive-lane merges are counted separately).
+  [`agent-signature.yml`](../../.github/workflows/agent-signature.yml) checks the
+  signature earlier, on the open PR, as an advisory check.
 
 None of these is enforced for every change. A mark can be missing; the ledger is
 how the gap is closed by hand.

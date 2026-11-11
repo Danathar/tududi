@@ -1,0 +1,53 @@
+name: Agent PR signature
+
+# Checks, while an agent pull request is still open, that its body has the
+# `— hive: agent=<name> ...` signature line the weekly `agent-audit.yml` run
+# requires. The audit sees a missing line only after the merge, when the body
+# can no longer be fixed. Here it can still be added before the merge.
+#
+# It runs on agent pull requests only: those opened by the Hive app
+# (`danathar-atomic-hive[bot]`, the webhook spelling of
+# `app/danathar-atomic-hive`) and those on an `ai-fix/` branch. Any other pull
+# request skips the job.
+#
+# scripts/pr-signature-check.mjs (tests: scripts/tests/pr-signature-check.test.mjs)
+# calls findSignature from scripts/ai-audit-report.mjs, the function the audit
+# uses, so the two cannot drift apart.
+#
+# Advisory: the `signature` check is not in the "protect main" ruleset. It is
+# meant to become required once it has run clean for a month.
+#
+# Read-only: `pull_request` (never `pull_request_target`), so no secrets and a
+# token that can only read contents; the checkout keeps no credentials. The
+# body reaches the script through `env:` only, never through an expression in
+# the run script. This is a fork-only workflow; upstream has no copy of it.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-signature-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  signature:
+    if: >-
+      github.event.pull_request.user.login == 'danathar-atomic-hive[bot]'
+      || startsWith(github.event.pull_request.head.ref, 'ai-fix/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      # The runner's preinstalled Node; the script uses Node built-ins only.
+      - name: Check the pull request body for a signature line
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/pr-signature-check.mjs
