@@ -67,6 +67,8 @@
   prose: unchecked: names what .claude/hooks/guard-bash.mjs refuses and the auto-approved commands in .claude/settings.json
 ## Licensing
   prose: narrative: licence rules
+## Owner's standing decisions
+  prose: narrative: a standing ruling on which owner questions agents decide themselves
 
 [docs/agent-boundaries.md]
 ## By tier
