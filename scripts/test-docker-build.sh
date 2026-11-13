@@ -22,7 +22,7 @@ docker build -t "$IMAGE_NAME" .
 echo "🚀 Starting container..."
 docker run -d \
   --name "$CONTAINER_NAME" \
-  -p "$TEST_PORT:3002" \
+  -p "127.0.0.1:$TEST_PORT:3002" \
   -e TUDUDI_USER_EMAIL=test@example.com \
   -e TUDUDI_USER_PASSWORD=testpass123 \
   -e NODE_ENV=production \
