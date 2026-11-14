@@ -1,9 +1,11 @@
 name: Agent PR signature
 
-# Checks, while an agent pull request is still open, that its body has the
-# `— hive: agent=<name> ...` signature line the weekly `agent-audit.yml` run
-# requires. The audit sees a missing line only after the merge, when the body
-# can no longer be fixed. Here it can still be added before the merge.
+# Checks, while an agent pull request is still open, that its body has (1) the
+# `— hive: agent=<name> ...` signature line and (2) a closing keyword naming an
+# issue of this repository (`Closes #N`), both of which the weekly
+# `agent-audit.yml` run requires. The audit sees a missing line or link only
+# after the merge, when the body can no longer be fixed. Here it can still be
+# added before the merge. Both problems are reported when both are missing.
 #
 # It runs on agent pull requests only: those opened by the Hive app
 # (`danathar-atomic-hive[bot]`, the webhook spelling of
@@ -12,7 +14,8 @@ name: Agent PR signature
 #
 # scripts/pr-signature-check.mjs (tests: scripts/tests/pr-signature-check.test.mjs)
 # calls findSignature from scripts/ai-audit-report.mjs, the function the audit
-# uses, so the two cannot drift apart.
+# uses, so the two cannot drift apart, and reads the body text for the closing
+# keyword (the audit reads GitHub's resolved closing references instead).
 #
 # Advisory: the `signature` check is not in the "protect main" ruleset. It is
 # meant to become required once it has run clean for a month.
@@ -47,7 +50,7 @@ jobs:
           persist-credentials: false
 
       # The runner's preinstalled Node; the script uses Node built-ins only.
-      - name: Check the pull request body for a signature line
+      - name: Check the pull request body for a signature line and a closing issue
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: node scripts/pr-signature-check.mjs

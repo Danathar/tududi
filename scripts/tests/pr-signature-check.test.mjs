@@ -9,7 +9,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-import { MISSING, main } from '../pr-signature-check.mjs';
+import { MISSING, NO_CLOSING_ISSUE, main } from '../pr-signature-check.mjs';
 import { findSignature } from '../ai-audit-report.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -33,19 +33,20 @@ function run(env) {
 
 const PASSING = [
     `**Summary:** a change.\n\nCloses #1\n\n${SIG}\n`,
-    `Summary\r\n\r\n${SIG}\r\n`,
-    `  ${SIG}  `,
-    '— hive: agent=docs-writer',
+    `Summary\r\n\r\nCloses #1\r\n${SIG}\r\n`,
+    `Fixes: Danathar/tududi#12\n  ${SIG}  `,
+    `closes #3\n— hive: agent=docs-writer`,
 ];
 
+const CLOSES = 'Closes #1\n';
 const FAILING = [
     undefined,
     '',
-    'Summary\n\nFiled by quality agent\n',
-    '— hive:\n',
-    '— hive: backend=claude model=x\n',
-    `Quoted: ${SIG}\n`,
-    `Example:\n\`\`\`\n${SIG}\n\`\`\`\n`,
+    `Summary\n\nFiled by quality agent\n${CLOSES}`,
+    `— hive:\n${CLOSES}`,
+    `— hive: backend=claude model=x\n${CLOSES}`,
+    `Quoted: ${SIG}\n${CLOSES}`,
+    `Example:\n\`\`\`\n${SIG}\n\`\`\`\n${CLOSES}`,
 ];
 
 test('a body the audit accepts passes, with no error line', () => {
@@ -68,15 +69,37 @@ test('a body the audit rejects fails with one error line', () => {
     }
 });
 
+const LINK_FAILING = [
+    `Summary\n\n${SIG}\n`,
+    `Refs #12\n${SIG}\n`,
+    `Closes Danathar/akmods#12\n${SIG}\n`,
+    `Example:\n\`\`\`\nCloses #12\n\`\`\`\n${SIG}\n`,
+    `Use \`Closes #12\` here.\n${SIG}\n`,
+];
+
+test('a body without a closing keyword for this repository fails', () => {
+    for (const body of LINK_FAILING) {
+        const { code, written } = run({ PR_BODY: body });
+        assert.equal(code, 1, JSON.stringify(body));
+        assert.equal(written, `${NO_CLOSING_ISSUE}\n`);
+    }
+});
+
+test('a body missing both reports both problems', () => {
+    const { code, written } = run({ PR_BODY: 'nothing' });
+    assert.equal(code, 1);
+    assert.equal(written, `${MISSING}\n${NO_CLOSING_ISSUE}\n`);
+});
+
 test('the body is never printed back', () => {
-    const { written } = run({ PR_BODY: `::warning::injected\n${SIG}` });
+    const { written } = run({ PR_BODY: `::warning::injected\nCloses #1\n${SIG}` });
     assert.doesNotMatch(written, /injected/);
 });
 
 test('run as a command, it exits with the check result and reads PR_BODY', () => {
     const env = { PATH: process.env.PATH };
     const ok = spawnSync(process.execPath, [SCRIPT], {
-        env: { ...env, PR_BODY: SIG },
+        env: { ...env, PR_BODY: `Closes #1\n${SIG}` },
         encoding: 'utf8',
     });
     assert.equal(ok.status, 0, ok.stderr);
