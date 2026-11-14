@@ -40,8 +40,6 @@ const PASSING = [
 
 const CLOSES = 'Closes #1\n';
 const FAILING = [
-    undefined,
-    '',
     `Summary\n\nFiled by quality agent\n${CLOSES}`,
     `— hive:\n${CLOSES}`,
     `— hive: backend=claude model=x\n${CLOSES}`,
@@ -61,9 +59,7 @@ test('a body the audit accepts passes, with no error line', () => {
 test('a body the audit rejects fails with one error line', () => {
     for (const body of FAILING) {
         assert.equal(findSignature(body), null, JSON.stringify(body));
-        const { code, written } = run(
-            body === undefined ? {} : { PR_BODY: body }
-        );
+        const { code, written } = run({ PR_BODY: body });
         assert.equal(code, 1, JSON.stringify(body));
         assert.equal(written, `${MISSING}\n`);
     }
@@ -86,9 +82,11 @@ test('a body without a closing keyword for this repository fails', () => {
 });
 
 test('a body missing both reports both problems', () => {
-    const { code, written } = run({ PR_BODY: 'nothing' });
-    assert.equal(code, 1);
-    assert.equal(written, `${MISSING}\n${NO_CLOSING_ISSUE}\n`);
+    for (const env of [{}, { PR_BODY: '' }, { PR_BODY: 'nothing' }]) {
+        const { code, written } = run(env);
+        assert.equal(code, 1, JSON.stringify(env));
+        assert.equal(written, `${MISSING}\n${NO_CLOSING_ISSUE}\n`);
+    }
 });
 
 test('the body is never printed back', () => {
