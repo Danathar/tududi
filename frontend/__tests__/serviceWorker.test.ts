@@ -26,13 +26,17 @@ class FakeResponse {
     }
 }
 
-const fakeRequest = (url: string, method = 'GET') => ({
-    url,
-    method,
-    mode: 'cors',
-    headers: { get: () => null, entries: () => [] },
-    text: async () => '{}',
-});
+const fakeRequest = (url: string, method = 'GET', body = '{}') => {
+    const request: any = {
+        url,
+        method,
+        mode: 'cors',
+        headers: { get: () => null, entries: () => [] },
+        text: async () => body,
+        clone: () => request,
+    };
+    return request;
+};
 
 type Listener = (event: any) => void;
 
@@ -134,10 +138,10 @@ function loadWorker(fetchImpl: (url: string) => Promise<FakeResponse>) {
         FakeResponse
     );
 
-    const send = async (url: string, method = 'GET') => {
+    const send = async (url: string, method = 'GET', body?: string) => {
         let pending: Promise<FakeResponse> | undefined;
         listeners.fetch({
-            request: fakeRequest(url, method),
+            request: fakeRequest(url, method, body),
             respondWith: (p: Promise<FakeResponse>) => {
                 pending = p;
             },
@@ -158,7 +162,7 @@ function loadWorker(fetchImpl: (url: string) => Promise<FakeResponse>) {
     const get = (url: string) => send(url);
     const post = (url: string) => send(url, 'POST');
 
-    return { caches, idb, posted, get, post, sync };
+    return { caches, idb, posted, get, post, send, sync };
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 10));
@@ -255,6 +259,41 @@ describe('service worker offline sign-in', () => {
             expect(sw.idb.rows.size).toBe(0);
         }
     );
+
+    it.each([
+        ['POST', '/api/profile/change-password', '{"currentPassword":"a"}'],
+        ['DELETE', '/api/profile', '{"password":"a"}'],
+        ['DELETE', '/api/profile', '{}'],
+        ['PATCH', '/api/profile', '{"currentPassword":"a","newPassword":"b"}'],
+        ['PATCH', '/api/profile', '{"password":"a"}'],
+        ['PATCH', '/api/profile', '{"confirmPassword":"a"}'],
+        ['PATCH', '/api/profile', 'not json'],
+    ])(
+        'answers %s %s with a 503 and queues nothing',
+        async (method, path, body) => {
+            const sw = loadWorker(offline);
+
+            const response = await sw.send(`${ORIGIN}${path}`, method, body);
+            await flush();
+
+            expect(response.status).toBe(503);
+            expect(sw.idb.rows.size).toBe(0);
+        }
+    );
+
+    it('still queues a plain profile settings edit made offline', async () => {
+        const sw = loadWorker(offline);
+
+        const response = await sw.send(
+            `${ORIGIN}/api/profile`,
+            'PATCH',
+            '{"language":"en","appearance":"dark"}'
+        );
+        await flush();
+
+        expect(response.status).toBe(202);
+        expect(sw.idb.rows.size).toBe(1);
+    });
 
     it('still queues an ordinary edit made offline', async () => {
         const sw = loadWorker(offline);

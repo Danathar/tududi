@@ -13,6 +13,11 @@ const SYNC_QUEUE = 'tududi-sync-queue';
 // Signing in only means something right now, and its body carries a
 // password or a one-time code: it must not sit in IndexedDB, and a queued
 // "202" would look like a sign-in that worked.
+// The same goes for changing the password (its body holds the old and new
+// password) and deleting the account (irreversible, and it may carry the
+// password): replaying either later is wrong, and a "202" would look like it
+// took effect. Those two on /api/profile itself are matched in
+// the fetch handler below, because plain settings edits share that path.
 const NO_QUEUE_PATHS = [
     '/api/inbox/analyze-text',
     '/api/push/',
@@ -24,7 +29,16 @@ const NO_QUEUE_PATHS = [
     '/api/sign-in-link/',
     '/api/oidc/',
     '/api/profile/mfa',
+    '/api/profile/change-password',
     '/api/auth/reverify',
+];
+
+// Body fields of PATCH /api/profile that carry a password.
+const PASSWORD_FIELDS = [
+    'currentPassword',
+    'newPassword',
+    'confirmPassword',
+    'password',
 ];
 
 // The development build registers this worker as /sw.js?push-only so push
@@ -134,6 +148,10 @@ self.addEventListener('fetch', (event) => {
             event.respondWith(handleApiGet(request));
         } else if (NO_QUEUE_PATHS.some((p) => url.pathname.startsWith(p))) {
             event.respondWith(handleApiNoQueue(request));
+        } else if (isProfilePath(url.pathname) && request.method === 'DELETE') {
+            event.respondWith(handleApiNoQueue(request));
+        } else if (isProfilePath(url.pathname) && request.method === 'PATCH') {
+            event.respondWith(handleProfileUpdate(request));
         } else {
             event.respondWith(handleApiMutation(request));
         }
@@ -229,6 +247,42 @@ async function handleApiNoQueue(request) {
             }
         );
     }
+}
+
+// ─── Profile edits: settings may queue, password changes may not ─────────────
+
+function isProfilePath(pathname) {
+    return pathname === '/api/profile' || pathname === '/api/profile/';
+}
+
+// PATCH /api/profile carries both ordinary settings and password changes.
+// A body that cannot be read as JSON is treated as sensitive, since there is
+// no telling what it holds.
+async function bodyCarriesPassword(request) {
+    let text = '';
+    try {
+        text = await request.clone().text();
+    } catch {
+        return true;
+    }
+    if (!text) return false;
+    try {
+        const body = JSON.parse(text);
+        return (
+            body !== null &&
+            typeof body === 'object' &&
+            PASSWORD_FIELDS.some((f) => f in body)
+        );
+    } catch {
+        return true;
+    }
+}
+
+async function handleProfileUpdate(request) {
+    if (await bodyCarriesPassword(request)) {
+        return handleApiNoQueue(request);
+    }
+    return handleApiMutation(request);
 }
 
 // ─── API Mutations: queue when offline, replay on sync ───────────────────────
