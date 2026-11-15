@@ -112,6 +112,41 @@
             "original": "results.length >= MAX_RANGE_OCCURRENCES",
             "replacement": "results.length > MAX_RANGE_OCCURRENCES",
             "reason": "Harmless: the limit moves by one occurrence out of 20,000, and the limit is a cost bound rather than an exact count."
+        },
+        {
+            "file": "frontend/components/Login.tsx",
+            "mutator": "StringLiteral",
+            "original": "'loading'",
+            "replacement": "\"\"",
+            "reason": "Equivalent: the page only compares authMethods with 'ready' and 'unavailable', so any other value, '' included, draws the same nothing-yet state as 'loading' (both the initial state and the reset at the start of a retry)."
+        },
+        {
+            "file": "frontend/components/Login.tsx",
+            "mutator": "ConditionalExpression",
+            "original": "passwordAuth.status === 'fulfilled'",
+            "replacement": "true",
+            "reason": "Equivalent: a rejected Promise.allSettled result has no value, so passwordAuth.value?.enabled is undefined, the typeof check fails and passwordEnabled is null either way."
+        },
+        {
+            "file": "frontend/components/Login.tsx",
+            "mutator": "ConditionalExpression",
+            "original": "providers.status === 'fulfilled'",
+            "replacement": "true",
+            "reason": "Equivalent: a rejected Promise.allSettled result has no value, so Array.isArray(providers.value?.providers) is false and providerList is null either way."
+        },
+        {
+            "file": "frontend/components/Login.tsx",
+            "mutator": "ArrayDeclaration",
+            "original": "[loadAuthMethods]",
+            "replacement": "[]",
+            "reason": "Equivalent: loadAuthMethods is a useCallback with no dependencies, so it never changes and the effect runs once on mount with either dependency list."
+        },
+        {
+            "file": "frontend/components/Login.tsx",
+            "mutator": "ConditionalExpression",
+            "original": "authMethods === 'ready'",
+            "replacement": "true",
+            "reason": "Equivalent where it survives (the SSO buttons, the 'or continue with email' divider, the no-methods message): the provider list is only set, and password sign-in only turned off, when authMethods becomes 'ready', and a page that is ready never goes back, so the other conditions are already false before then. The same text in the password form and the sign-up link is killed by the Login tests."
         }
     ]
 }
