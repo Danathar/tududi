@@ -2,9 +2,11 @@ const {
     withJobLock,
     tryBecomeLeader,
     releaseLeadership,
+    confirmLeadership,
     isLeader,
     _lockKey,
 } = require('../../../services/jobLock');
+const { endLeaderSession } = require('../../helpers/leaderSession');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -69,6 +71,60 @@ describe('jobLock', () => {
 
         await releaseLeadership('unit:leader');
         expect(isLeader('unit:leader')).toBe(false);
+    });
+
+    describe('confirmLeadership', () => {
+        beforeEach(() => {
+            jest.spyOn(console, 'error').mockImplementation();
+        });
+
+        afterEach(async () => {
+            await releaseLeadership('unit:confirm');
+            jest.restoreAllMocks();
+        });
+
+        it('keeps a healthy leader', async () => {
+            await tryBecomeLeader('unit:confirm');
+
+            expect(await confirmLeadership('unit:confirm')).toBe(true);
+            expect(await confirmLeadership('unit:confirm')).toBe(true);
+            expect(isLeader('unit:confirm')).toBe(true);
+        });
+
+        it('reports false for a job this process does not lead', async () => {
+            expect(await confirmLeadership('unit:confirm')).toBe(false);
+            expect(isLeader('unit:confirm')).toBe(false);
+        });
+
+        it('notices when the database ends the session holding the lock', async () => {
+            await tryBecomeLeader('unit:confirm');
+
+            await endLeaderSession('unit:confirm');
+
+            // isLeader cannot see it until someone checks.
+            expect(isLeader('unit:confirm')).toBe(true);
+            expect(await confirmLeadership('unit:confirm')).toBe(false);
+            expect(isLeader('unit:confirm')).toBe(false);
+
+            // The database really let the lock go, so it can be won again.
+            expect(await tryBecomeLeader('unit:confirm')).toBe(true);
+            expect(await confirmLeadership('unit:confirm')).toBe(true);
+        });
+
+        it('does not touch other leaders', async () => {
+            await tryBecomeLeader('unit:confirm');
+            await tryBecomeLeader('unit:other');
+
+            try {
+                await endLeaderSession('unit:confirm');
+                expect(await confirmLeadership('unit:confirm')).toBe(false);
+
+                expect(await confirmLeadership('unit:other')).toBe(true);
+                expect(isLeader('unit:other')).toBe(true);
+            } finally {
+                await releaseLeadership('unit:other');
+            }
+        });
     });
 
     it('derives a stable 32-bit key from the job name', () => {

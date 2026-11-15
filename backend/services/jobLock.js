@@ -51,7 +51,11 @@ async function withJobLock(name, fn) {
 
 // Long-lived leadership for jobs that must not switch processes between
 // runs (the Telegram poller keeps per-bot update offsets in memory). The
-// lock is held by an open transaction for as long as the process lives.
+// lock is held by an open transaction until the process exits or the
+// database session behind it ends. PostgreSQL drops the lock when the
+// session ends (a server restart, a dropped connection, pg_terminate_backend,
+// idle_in_transaction_session_timeout) without telling this process, so
+// callers must check confirmLeadership() regularly.
 const leaderTransactions = new Map();
 
 async function tryBecomeLeader(name) {
@@ -87,6 +91,33 @@ async function releaseLeadership(name) {
     }
 }
 
+// Checks that the session holding the leader lock is still alive. If it is
+// not, forgets the leadership and returns false, so the caller can stop its
+// job and try to win the lock again.
+async function confirmLeadership(name) {
+    const tx = leaderTransactions.get(name);
+    if (!tx) {
+        return false;
+    }
+
+    try {
+        if (tx.finished) {
+            throw new Error('the leader transaction has already ended');
+        }
+        await sequelize.query('SELECT 1', { transaction: tx });
+        return true;
+    } catch (error) {
+        if (leaderTransactions.get(name) === tx) {
+            leaderTransactions.delete(name);
+        }
+        if (!tx.finished) {
+            await tx.rollback().catch(() => {});
+        }
+        logError(`Lost leadership for "${name}":`, error);
+        return false;
+    }
+}
+
 function isLeader(name) {
     return leaderTransactions.has(name);
 }
@@ -95,6 +126,7 @@ module.exports = {
     withJobLock,
     tryBecomeLeader,
     releaseLeadership,
+    confirmLeadership,
     isLeader,
     _lockKey: lockKey,
 };

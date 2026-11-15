@@ -64,6 +64,27 @@ async function rescanPolledUsers() {
     }
 }
 
+// Empties this process's poller, for when it has lost the leader lock and
+// another process may already be polling the same bots.
+function stopPollingHere() {
+    for (const userId of telegramPoller.getPolledUserIds()) {
+        telegramPoller.removeUser(userId);
+    }
+}
+
+// One run of the minute-by-minute rescan on the polling process. It first
+// checks that the leader lock is still held: the database lets the lock go
+// when the session behind it ends, and does not tell this process. Returns
+// false, with the poller emptied, when the lock is gone.
+async function rescanIfStillLeader() {
+    if (!(await jobLock.confirmLeadership(LEADER_JOB))) {
+        stopPollingHere();
+        return false;
+    }
+    await rescanPolledUsers();
+    return true;
+}
+
 async function initializeTelegramPolling() {
     if (
         config.environment === 'test' ||
@@ -78,15 +99,19 @@ async function initializeTelegramPolling() {
     const startupDelay = 10000; // 10 seconds
     const leaderRetryDelay = 60000; // 1 minute
 
+    // Whoever holds the leader lock polls; the others retry in case it goes
+    // away. A process that loses the lock goes back to retrying, so it can
+    // win it again or leave polling to the process that holds it now.
     const scheduleRescan = () => {
         setTimeout(async () => {
-            await rescanPolledUsers();
-            scheduleRescan();
+            if (await rescanIfStillLeader()) {
+                scheduleRescan();
+            } else {
+                await startWhenLeader();
+            }
         }, RESCAN_INTERVAL_MS);
     };
 
-    // Whoever holds the leader lock polls; the others retry in case it goes
-    // away.
     const startWhenLeader = async () => {
         if (!(await jobLock.tryBecomeLeader(LEADER_JOB))) {
             setTimeout(startWhenLeader, leaderRetryDelay);
@@ -103,5 +128,6 @@ module.exports = {
     initializeTelegramPolling,
     canPollHere,
     rescanPolledUsers,
+    rescanIfStillLeader,
     RESCAN_INTERVAL_MS,
 };

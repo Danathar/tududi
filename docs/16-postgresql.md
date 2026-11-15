@@ -133,7 +133,11 @@ through the database so that several containers can share it safely:
   it. Duplicate notifications cannot happen.
 - **Telegram polling.** Bot update offsets live in memory, so one process
   holds a long-lived leader lock and polls; the others retry every minute
-  and take over if it goes away. Bots are polled in parallel batches
+  and take over if it goes away. The lock lasts only as long as the polling
+  process's database session: if that session ends (a database restart, a
+  dropped connection, `idle_in_transaction_session_timeout`), the process
+  notices at its next once-a-minute check, stops polling, and goes back to
+  competing for the lock. Bots are polled in parallel batches
   (`TELEGRAM_POLL_CONCURRENCY`, default 10). Starting or stopping polling
   from any process records the wish in the database. The polling process
   reads it back about once a minute, so a new bot starts being polled within

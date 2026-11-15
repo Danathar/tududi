@@ -12,8 +12,10 @@ const telegramService = require('../../modules/telegram/service');
 const {
     initializeTelegramPolling,
     rescanPolledUsers,
+    rescanIfStillLeader,
     RESCAN_INTERVAL_MS,
 } = require('../../modules/telegram/telegramInitializer');
+const { endLeaderSession } = require('../helpers/leaderSession');
 const {
     exportUserData,
     importUserData,
@@ -371,6 +373,7 @@ describe('Only the polling process polls Telegram', () => {
             const savedEnvironment = config.environment;
             config.environment = 'production';
             jest.spyOn(jobLock, 'tryBecomeLeader').mockResolvedValue(true);
+            jest.spyOn(jobLock, 'confirmLeadership').mockResolvedValue(true);
             jest.spyOn(jobLock, 'isLeader').mockReturnValue(true);
             jest.spyOn(entitlements, 'hasFeature').mockResolvedValue(true);
             const findAll = jest.spyOn(User, 'findAll').mockResolvedValue([]);
@@ -415,6 +418,7 @@ describe('Only the polling process polls Telegram', () => {
             jest.spyOn(jobLock, 'tryBecomeLeader')
                 .mockResolvedValueOnce(false)
                 .mockResolvedValue(true);
+            jest.spyOn(jobLock, 'confirmLeadership').mockResolvedValue(true);
             jest.spyOn(jobLock, 'isLeader').mockReturnValue(true);
             const findAll = jest.spyOn(User, 'findAll').mockResolvedValue([]);
             jest.useFakeTimers({ doNotFake: ['nextTick'] });
@@ -432,6 +436,79 @@ describe('Only the polling process polls Telegram', () => {
                 jest.useRealTimers();
                 config.environment = savedEnvironment;
             }
+        });
+        it('stops polling when the lock is lost, then tries to win it back', async () => {
+            const config = getConfig();
+            const savedEnvironment = config.environment;
+            config.environment = 'production';
+            const tryBecomeLeader = jest
+                .spyOn(jobLock, 'tryBecomeLeader')
+                .mockResolvedValueOnce(true)
+                .mockResolvedValue(false);
+            const confirmLeadership = jest
+                .spyOn(jobLock, 'confirmLeadership')
+                .mockResolvedValue(false);
+            jest.spyOn(jobLock, 'isLeader').mockReturnValue(true);
+            jest.spyOn(entitlements, 'hasFeature').mockResolvedValue(true);
+            jest.spyOn(User, 'findAll').mockResolvedValue([
+                { id: user.id, telegram_bot_token: TOKEN },
+            ]);
+            jest.useFakeTimers({ doNotFake: ['nextTick'] });
+
+            try {
+                await initializeTelegramPolling();
+                await jest.advanceTimersByTimeAsync(10000);
+                expect(isPolled(user)).toBe(true);
+                expect(tryBecomeLeader).toHaveBeenCalledTimes(1);
+
+                await jest.advanceTimersByTimeAsync(RESCAN_INTERVAL_MS);
+
+                expect(confirmLeadership).toHaveBeenCalledWith(LEADER_JOB);
+                expect(isPolled(user)).toBe(false);
+                expect(tryBecomeLeader).toHaveBeenCalledTimes(2);
+
+                // Another process holds the lock now, so keep asking.
+                await jest.advanceTimersByTimeAsync(60000);
+                expect(tryBecomeLeader).toHaveBeenCalledTimes(3);
+                expect(isPolled(user)).toBe(false);
+            } finally {
+                telegramPoller.removeUser(user.id);
+                jest.clearAllTimers();
+                jest.useRealTimers();
+                config.environment = savedEnvironment;
+            }
+        });
+    });
+
+    describe('losing the lock', () => {
+        beforeEach(async () => {
+            await jobLock.tryBecomeLeader(LEADER_JOB);
+            await rescanPolledUsers();
+        });
+
+        it('keeps polling while the lock is held', async () => {
+            expect(isPolled(user)).toBe(true);
+            expect(await rescanIfStillLeader()).toBe(true);
+
+            expect(isPolled(user)).toBe(true);
+            expect(jobLock.isLeader(LEADER_JOB)).toBe(true);
+        });
+
+        it('stops polling when the database ends the session holding the lock', async () => {
+            expect(isPolled(user)).toBe(true);
+            await endLeaderSession(LEADER_JOB);
+
+            expect(await rescanIfStillLeader()).toBe(false);
+
+            expect(jobLock.isLeader(LEADER_JOB)).toBe(false);
+            expect(isPolled(user)).toBe(false);
+            expect(telegramPoller.getStatus().running).toBe(false);
+
+            // Another process can take over, and this one no longer polls.
+            expect(await jobLock.tryBecomeLeader(LEADER_JOB)).toBe(true);
+            await jobLock.releaseLeadership(LEADER_JOB);
+            await telegramPoller._pollUpdates();
+            expect(getSpy).not.toHaveBeenCalled();
         });
     });
 
