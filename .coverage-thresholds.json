@@ -1,10 +1,17 @@
 {
-    "$comment": "Coverage floors enforced by scripts/coverage-gate.mjs (.github/workflows/coverage-gate.yml). 'measured' is the Jest reading on main 565da3d1 (CI, Node 22: the coverage-gate.yml and auto-qa.yml runs of 2026-10-19 agree; backend: npm run backend:test:coverage, frontend: npm run frontend:test:coverage, both with --coverageReporters=json-summary). 'floor' sits about 3 points below measured so ordinary churn passes but a real drop fails. Floors only go up: .github/workflows/auto-qa.yml proposes raises via a tracking issue (rules in .github/auto-qa-tuning.json). Raising a floor makes the check catch more, so it is the 'Adding or widening a check' case in AGENTS.md's owner's standing decisions: an agent may raise one without asking. Lowering a floor, or exempting anything from it, needs the owner. Scope is whatever each Jest config's collectCoverageFrom selects: backend covers routes, models, middleware and services only (not backend/modules); frontend covers frontend/**/*.{ts,tsx}. Frontend has known failing suites on main (MermaidDiagram, MarkdownRenderer.publicLinks, roleLabels, Layout, markdownTaskList); Jest still writes coverage for the rest, so the number is slightly understated.",
+    "$comment": "Coverage floors enforced by scripts/coverage-gate.mjs (.github/workflows/coverage-gate.yml). 'measured' is the Jest reading on main 565da3d1 (CI, Node 22: the coverage-gate.yml and auto-qa.yml runs of 2026-10-19 agree; backend: npm run backend:test:coverage, frontend: npm run frontend:test:coverage, both with --coverageReporters=json-summary), except backend-modules, measured on main 81e28a43 with backend/jest.config.js widened to modules, utils and shared (local run, PostgreSQL 16; the backend area's figures from that run equal the CI coverage-gate run of the same commit). 'floor' sits about 3 points below measured so ordinary churn passes but a real drop fails. Floors only go up: .github/workflows/auto-qa.yml proposes raises via a tracking issue (rules in .github/auto-qa-tuning.json). Raising a floor makes the check catch more, so it is the 'Adding or widening a check' case in AGENTS.md's owner's standing decisions: an agent may raise one without asking. Lowering a floor, or exempting anything from it, needs the owner. Scope is whatever each Jest config's collectCoverageFrom selects, narrowed by an area's 'include' folders when it has one: the backend run covers models, middleware, services, modules, utils and shared; the backend area counts models, middleware and services, and backend-modules counts modules, utils and shared, so both read the one backend summary. Frontend covers frontend/**/*.{ts,tsx}. Frontend has known failing suites on main (MermaidDiagram, MarkdownRenderer.publicLinks, roleLabels, Layout, markdownTaskList); Jest still writes coverage for the rest, so the number is slightly understated.",
     "areas": {
         "backend": {
             "summary": "backend/coverage/coverage-summary.json",
+            "include": ["backend/models", "backend/middleware", "backend/services"],
             "measured": { "lines": 94, "statements": 92.13, "functions": 94.54, "branches": 83.56 },
             "floor": { "lines": 91, "statements": 89, "functions": 91, "branches": 79 }
+        },
+        "backend-modules": {
+            "summary": "backend/coverage/coverage-summary.json",
+            "include": ["backend/modules", "backend/utils", "backend/shared"],
+            "measured": { "lines": 84.98, "statements": 84.13, "functions": 87.4, "branches": 74.52 },
+            "floor": { "lines": 81, "statements": 81, "functions": 84, "branches": 71 }
         },
         "frontend": {
             "summary": "coverage-frontend/coverage-summary.json",
