@@ -128,6 +128,8 @@ const allowed = [
     'npm run test:ui',
     'npm run frontend:lint',
     'git log --oneline -20',
+    // a --bare after the subcommand is not git's global option
+    'git log --oneline -- --bare',
     'git log -p -- .claude/hooks',
     'git log -S"Order" --oneline',
     'git diff --stat HEAD~1',
@@ -514,6 +516,23 @@ const blockedLocal = [
     ['git config core.fsmonitor ./evil.sh', 'core.fsmonitor'],
     ['git config alias.st "!sh evil"', 'alias.st'],
     ['git --exec-path=/tmp/evil log', 'exec-path'],
+    // the option spellings of GIT_DIR / GIT_WORK_TREE: a named bare repository
+    // gets past safe.bareRepository=explicit, so its textconv program would run
+    ['git --git-dir=evil log -p -1', '--git-dir'],
+    ['git --git-dir evil show', '--git-dir'],
+    ['git --bare show', '--bare'],
+    ['git --bare log -p -1', '--bare'],
+    ['git --work-tree=/etc diff', '--work-tree'],
+    ['git --work-tree /etc status', '--work-tree'],
+    ['git --no-pager --git-dir=evil show', '--git-dir'],
+    ['git -c user.name=x --git-dir=evil log -p', '--git-dir'],
+    ['cd tests && git --git-dir=../evil show', '--git-dir'],
+    // a value-taking global option in front: its value must be skipped, not read
+    // as the subcommand, or the walk stops before reaching --git-dir
+    ['git -C . --git-dir=evil show', '--git-dir'],
+    ['git --namespace x --git-dir=evil show', '--git-dir'],
+    ['git --config-env user.name=V --git-dir=evil show', '--git-dir'],
+    ['git --work-tree=/etc diff --stat', 'Run git from the project without it'],
     // xargs appends run-time words no argument check sees.
     ["printf '%s\\n' --output=/home/u/.bashrc | xargs git log -1 --format=format:x", 'xargs git'],
     ["printf '%s\\n' /dev/null .env | xargs git diff", 'xargs git'],
