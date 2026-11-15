@@ -55,6 +55,9 @@
 //     GIT_* environment other than identity/locking variables, pagers and
 //     editors other than cat/true, and `-c`/config writes of keys that run
 //     programs (core.pager, core.fsmonitor, diff.*, alias.*, include.*, ...).
+//   - git --git-dir, --bare and --work-tree before the subcommand: they name a
+//     repository, which safe.bareRepository=explicit lets git load, so a bare
+//     folder a branch committed could run its diff.*.textconv program.
 //   - git, node, npm or a shell run through xargs: xargs appends words read at
 //     run time (`printf '%s\n' --output=FILE | xargs git log`), so none of the
 //     argument checks here could see them.
@@ -555,7 +558,18 @@ function checkGit(args, inlineEnv = {}, exported = {}) {
         if (a.startsWith('--exec-path=')) {
             return blockLocal('Blocked: `git --exec-path=...` makes git run programs from a chosen directory.');
         }
-        i += ['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env'].includes(a) ? 2 : 1;
+        // safe.bareRepository=explicit (.claude/settings.json) refuses a bare
+        // repository git finds by itself, but allows one that is named, and
+        // these options name it: a bare repository committed in a branch could
+        // then run its diff.*.textconv program. --work-tree reads outside the
+        // project. git matches these global options exactly, not by prefix.
+        if (['--git-dir', '--bare', '--work-tree'].includes(a) || /^--(?:git-dir|work-tree)=/.test(a)) {
+            return blockLocal(
+                `Blocked: \`git ${a.split('=')[0]}\` points git at another repository or work tree, ` +
+                    'whose config can make git run a program. Run git from the project without it.'
+            );
+        }
+        i += ['-C', '-c', '--namespace', '--config-env'].includes(a) ? 2 : 1;
     }
     const sub = args[i];
     const rest = args.slice(i + 1);
