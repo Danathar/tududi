@@ -213,3 +213,108 @@ test('loadSummaries returns null for a missing file and the parsed summary other
         }
     );
 });
+
+// One Jest run writes one summary; an area with "include" counts only the
+// files under its folders. Jest keys per-file entries by absolute path.
+function perFile(root, files) {
+    const out = { total: summary({ lines: 99 }).total };
+    for (const [rel, [covered, total]] of Object.entries(files)) {
+        out[path.join(root, rel)] = Object.fromEntries(
+            ['lines', 'statements', 'functions', 'branches'].map((m) => [
+                m,
+                { total, covered, skipped: 0, pct: 0 },
+            ])
+        );
+    }
+    return out;
+}
+
+function splitThresholds(floor) {
+    const summaryPath = 'backend/coverage/coverage-summary.json';
+    return {
+        areas: {
+            backend: {
+                summary: summaryPath,
+                include: ['backend/services'],
+                floor: FLOOR,
+            },
+            'backend-modules': {
+                summary: summaryPath,
+                include: ['backend/modules', 'backend/utils'],
+                floor,
+            },
+        },
+    };
+}
+
+function withSplitRoot(floor, files, fn) {
+    const dir = mkdtempSync(path.join(tmpdir(), 'coverage-gate-split-'));
+    try {
+        const write = (rel, body) => {
+            const p = path.join(dir, rel);
+            mkdirSync(path.dirname(p), { recursive: true });
+            writeFileSync(p, JSON.stringify(body));
+        };
+        write('.coverage-thresholds.json', splitThresholds(floor));
+        write('backend/coverage/coverage-summary.json', perFile(dir, files));
+        return fn(dir);
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+}
+
+test('an area with include is gated on its own files, not the summary total', () => {
+    withSplitRoot(
+        { lines: 60, statements: 60, functions: 60, branches: 60 },
+        {
+            'backend/services/a.js': [9, 10],
+            // 6 + 0 of 10 + 10 = 30%: below the 60% floor although the
+            // summary total says 99% and services alone are at 90%.
+            'backend/modules/b.js': [6, 10],
+            'backend/utils/c.js': [0, 10],
+            // A sibling folder whose name starts with an included one.
+            'backend/modules-old/d.js': [10, 10],
+        },
+        (root) => {
+            const r = run([], root);
+            assert.equal(r.status, 1);
+            assert.match(
+                r.stdout,
+                /\| backend \| lines \| 90\.00% \| 88% \| ok \|/
+            );
+            assert.match(
+                r.stderr,
+                /- backend-modules\.lines: 30% is below the 60% floor/
+            );
+            assert.doesNotMatch(r.stderr, /- backend\./);
+        }
+    );
+});
+
+test('an include that matches no file fails instead of passing', () => {
+    withSplitRoot(
+        { lines: 0, statements: 0, functions: 0, branches: 0 },
+        { 'backend/services/a.js': [9, 10] },
+        (root) => {
+            const r = run([], root);
+            assert.equal(r.status, 1);
+            assert.match(
+                r.stderr,
+                /- backend-modules: no coverage summary at backend\/coverage\/coverage-summary\.json for files under backend\/modules, backend\/utils/
+            );
+        }
+    );
+});
+
+test('totalUnder rounds like Istanbul so it matches the total Jest writes', async () => {
+    const { totalUnder } = await import(SCRIPT);
+    const root = path.join(tmpdir(), 'root');
+    const total = totalUnder(
+        perFile(root, { 'x/a.js': [2, 3], 'x/b.js': [0, 0] }),
+        ['x'],
+        root
+    );
+    // 2/3 = 66.666...: Istanbul truncates to 66.66, it does not round up.
+    assert.deepEqual(total.lines, { total: 3, covered: 2, pct: 66.66 });
+    assert.equal(totalUnder(perFile(root, { 'x/b.js': [0, 0] }), ['x'], root).lines.pct, 100);
+});
