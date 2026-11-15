@@ -6,9 +6,9 @@
         "note": "Headroom is measured minus floor, per area and metric, in percentage points. When it exceeds raise_floor_when_headroom_exceeds the proposed floor is floor(measured - buffer_below_measured); it is never above that and never below the current floor."
     },
     "nightly": {
-        "audit_blocking": false,
+        "audit_blocking": true,
         "audit_level": "high",
-        "note": "npm audit --omit=dev --audit-level=<audit_level> is report-only while audit_blocking is false: main carries known high and critical advisories in production dependencies (proxy-addr and others) that need dependency upgrades, and a nightly that is always red gets ignored. Set audit_blocking to true once npm audit is clean."
+        "note": "npm audit --omit=dev --audit-level=<audit_level> fails the nightly and opens or updates its tracking issue while audit_blocking is true. It was report-only until production dependencies had no high or critical advisory left; Dependabot alerts are off here, so this is the only notice of one."
     },
     "licence": {
         "license_mit_sha256": "c3fb4015040aa6322748ff8c39d2263bc0cc6230d6c43b19bfb3dd370f16d937",
