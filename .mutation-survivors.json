@@ -112,6 +112,69 @@
             "original": "results.length >= MAX_RANGE_OCCURRENCES",
             "replacement": "results.length > MAX_RANGE_OCCURRENCES",
             "reason": "Harmless: the limit moves by one occurrence out of 20,000, and the limit is a cost bound rather than an exact count."
+        },
+        {
+            "file": "backend/modules/inbox/nlpLocales.js",
+            "mutator": "ConditionalExpression",
+            "original": "day < 1 || day > 31 || month < 1 || month > 12",
+            "replacement": "false",
+            "reason": "Equivalent: chrono drops a day or month outside the calendar itself, so the dotted short-date guard changes no result (the ignores cases 'Steuer 32.1.', 'Steuer 0.5.', 'Steuer 5.0.' and 'Steuer 15.13.' return null with the guard removed too)."
+        },
+        {
+            "file": "backend/modules/inbox/nlpLocales.js",
+            "mutator": "LogicalOperator",
+            "original": "day < 1 || day > 31",
+            "replacement": "day < 1 && day > 31",
+            "reason": "Equivalent: chrono drops a day or month outside the calendar itself, so the dotted short-date guard changes no result (the ignores cases 'Steuer 32.1.', 'Steuer 0.5.', 'Steuer 5.0.' and 'Steuer 15.13.' return null with the guard removed too)."
+        },
+        {
+            "file": "backend/modules/inbox/nlpLocales.js",
+            "mutator": "ConditionalExpression",
+            "original": "day > 31",
+            "replacement": "false",
+            "reason": "Equivalent: chrono drops a day or month outside the calendar itself, so the dotted short-date guard changes no result (the ignores cases 'Steuer 32.1.', 'Steuer 0.5.', 'Steuer 5.0.' and 'Steuer 15.13.' return null with the guard removed too)."
+        },
+        {
+            "file": "backend/modules/inbox/nlpLocales.js",
+            "mutator": "ConditionalExpression",
+            "original": "month < 1",
+            "replacement": "false",
+            "reason": "Equivalent: chrono drops a day or month outside the calendar itself, so the dotted short-date guard changes no result (the ignores cases 'Steuer 32.1.', 'Steuer 0.5.', 'Steuer 5.0.' and 'Steuer 15.13.' return null with the guard removed too)."
+        },
+        {
+            "file": "backend/modules/inbox/nlpLocales.js",
+            "mutator": "BlockStatement",
+            "original": "{\n        return true;\n    }",
+            "replacement": "{}",
+            "reason": "Defensive: chrono's locale parsers already require a word boundary around a phrase longer than three letters, and shorter ones return at the SHORT_WORD check above, so no input found in a sweep of date words in 11 languages reaches this check."
+        },
+        {
+            "file": "backend/modules/inbox/nlpLocales.js",
+            "mutator": "BooleanLiteral",
+            "original": "true",
+            "replacement": "false",
+            "reason": "Defensive: chrono's locale parsers already require a word boundary around a phrase longer than three letters, and shorter ones return at the SHORT_WORD check above, so no input found in a sweep of date words in 11 languages reaches this check."
+        },
+        {
+            "file": "backend/modules/inbox/nlpLocales.js",
+            "mutator": "MethodExpression",
+            "original": "m[1].slice(0, -1)",
+            "replacement": "m[1]",
+            "reason": "Equivalent: m[1] is a single digit plus a dot ('2.'), and Number('2.') is 2, so dropping the dot or keeping only the first character gives the same interval."
+        },
+        {
+            "file": "backend/modules/inbox/nlpLocales.js",
+            "mutator": "UnaryOperator",
+            "original": "-1",
+            "replacement": "+1",
+            "reason": "Equivalent: m[1] is a single digit plus a dot ('2.'), and Number('2.') is 2, so dropping the dot or keeping only the first character gives the same interval."
+        },
+        {
+            "file": "backend/modules/inbox/nlpParsers.js",
+            "mutator": "StringLiteral",
+            "original": "'UTC'",
+            "replacement": "\"\"",
+            "reason": "Equivalent: moment.tz reads an empty zone name as UTC, so the default zone and \"\" give the same dates."
         }
     ]
 }

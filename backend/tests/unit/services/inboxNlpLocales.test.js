@@ -5,6 +5,7 @@ const {
 const {
     processInboxItem,
 } = require('../../../modules/inbox/inboxProcessingService');
+const inboxService = require('../../../modules/inbox/service');
 
 // Tuesday 2026-11-10, 11:00 in Berlin
 const NOW = new Date('2026-11-10T10:00:00Z');
@@ -63,6 +64,10 @@ describe('inbox natural-language parsing in the user language', () => {
             'Version 1.2.3 testen',
             'Im Mai verreisen',
             '#morgen ist ein Tag',
+            'Steuer 32.1.',
+            'Steuer 0.5.',
+            'Steuer 5.0.',
+            'Steuer 15.13.',
         ])('ignores "%s"', (text) => {
             expect(parseDueDate(text, german)).toBeNull();
         });
@@ -314,6 +319,26 @@ describe('inbox natural-language parsing in the user language', () => {
                 recurrence_weekdays: [1],
             });
             expect(result.cleaned_content).toBe('Yoga');
+        });
+    });
+
+    describe('analyzeText', () => {
+        // Neither text names a person or an area, so no database is read.
+        it('reads dates unless the caller turns that off', async () => {
+            const parsed = await inboxService.analyzeText(
+                1,
+                'Arzt anrufen morgen',
+                german
+            );
+            expect(parsed.parsed_due_date).toBe('2026-11-11');
+
+            const skipped = await inboxService.analyzeText(
+                1,
+                'Arzt anrufen morgen',
+                { ...german, parseDates: false }
+            );
+            expect(skipped.parsed_due_date).toBeNull();
+            expect(skipped.cleaned_content).toBe('Arzt anrufen morgen');
         });
     });
 });
