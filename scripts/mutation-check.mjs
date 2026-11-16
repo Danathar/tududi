@@ -58,8 +58,13 @@ export const HOOK_TESTS = [
     '.claude/hooks/tests/guard-bash.test.mjs',
     '.claude/hooks/tests/gate-refusal-corpus.test.mjs',
 ];
+// The offline service worker. It is outside frontend/, and its Jest test
+// reads the file rather than importing it, so Jest's related-test lookup
+// cannot find the test: the `service-worker` suite names it instead.
+const SERVICE_WORKER = 'public/sw.js';
+export const SERVICE_WORKER_TESTS = ['frontend/__tests__/serviceWorker.test.ts'];
 // The suites Stryker runs with Jest. The backend ones run with NODE_ENV=test.
-const JEST_SUITES = new Set(['backend', 'backend-unit', 'backend-changed', 'frontend']);
+const JEST_SUITES = new Set(['backend', 'backend-unit', 'backend-changed', 'frontend', 'service-worker']);
 const NOT_SOURCE = [
     /(?:^|\/)__tests__\//,
     /(?:^|\/)__mocks__\//,
@@ -77,11 +82,12 @@ const NOT_SOURCE = [
  * Which suite mutates this file, or null when it is not source Stryker
  * should touch.
  * @param {string} file repository-relative path
- * @returns {string|null} `backend` or `frontend` (Jest), `hooks`, or
- *   `scripts-<name>` for scripts/<name>.mjs
+ * @returns {string|null} `backend`, `frontend` or `service-worker` (Jest),
+ *   `hooks`, or `scripts-<name>` for scripts/<name>.mjs
  */
 export function projectFor(file) {
     if (NOT_SOURCE.some((re) => re.test(file))) return null;
+    if (file === SERVICE_WORKER) return 'service-worker';
     if (BACKEND_SOURCE.test(file)) return 'backend';
     if (FRONTEND_SOURCE.test(file)) return 'frontend';
     if (HOOK_SOURCE.test(file)) return 'hooks';
@@ -103,12 +109,14 @@ export function unitTestFor(file) {
 
 /**
  * The unit tests the `backend-unit` suite runs: the own unit test of every
- * file it mutates, once each and in order. Null for every other suite.
+ * file it mutates, once each and in order; the service worker's test for
+ * `service-worker`. Null for every other suite.
  * @param {string} project from mutateRanges
  * @param {string[]} mutate that suite's `file:start-end` entries
  * @returns {string[]|null}
  */
 export function jestTestsFor(project, mutate) {
+    if (project === 'service-worker') return [...SERVICE_WORKER_TESTS];
     if (project !== 'backend-unit') return null;
     return [...new Set(mutate.map((m) => unitTestFor(m.slice(0, m.lastIndexOf(':')))))];
 }
@@ -466,7 +474,7 @@ async function runStryker(root, project, mutate, limitMs = null, jestTests = jes
     console.log(`\n== ${project}: mutating ${mutate.length} range(s)`);
     for (const m of mutate) console.log(`   ${m}`);
     const env = { ...process.env, MUTATION_PROJECT: project };
-    if (JEST_SUITES.has(project) && project !== 'frontend') env.NODE_ENV = 'test';
+    if (JEST_SUITES.has(project) && project.startsWith('backend')) env.NODE_ENV = 'test';
     const scriptTests = existsSync(resolve(root, 'scripts/tests'))
         ? readdirSync(resolve(root, 'scripts/tests'))
               .filter((f) => f.endsWith('.test.mjs'))

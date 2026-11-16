@@ -46,8 +46,11 @@ the lines each pull request adds or changes:
    turns the added and changed lines into StrykerJS `--mutate file:start-end`
    ranges. Only source a test suite covers is mutated:
    `backend/{modules,services,middleware,models,utils,shared}/**/*.js` for the
-   backend suite, `frontend/**/*.{js,jsx,ts,tsx}` for the frontend suite, and
-   the fork's own tooling (#437): `scripts/<name>.mjs` or `.js` for a
+   backend suite, `frontend/**/*.{js,jsx,ts,tsx}` for the frontend suite,
+   `public/sw.js` (the offline service worker) for a `service-worker` suite
+   that runs `frontend/__tests__/serviceWorker.test.ts` under the frontend
+   Jest config (that test reads the file instead of importing it, so Jest
+   cannot find it as a related test), and the fork's own tooling (#437): `scripts/<name>.mjs` or `.js` for a
    `scripts-<name>` suite and `.claude/hooks/*.mjs` (the Bash guard and its
    shell reader) for a `hooks` suite. Tests, migrations, seeders,
    `backend/scripts/`, shell scripts, configs, `backend/models/index.js`,

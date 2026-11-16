@@ -162,7 +162,9 @@ function loadWorker(fetchImpl: (url: string) => Promise<FakeResponse>) {
     const get = (url: string) => send(url);
     const post = (url: string) => send(url, 'POST');
 
-    return { caches, idb, posted, get, post, send, sync };
+    const dispatch = (event: any) => listeners.fetch(event);
+
+    return { caches, idb, posted, get, post, send, dispatch, sync };
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 10));
@@ -294,6 +296,74 @@ describe('service worker offline sign-in', () => {
         expect(response.status).toBe(202);
         expect(sw.idb.rows.size).toBe(1);
     });
+
+    it('answers DELETE /api/profile/ (trailing slash) with a 503 and queues nothing', async () => {
+        const sw = loadWorker(offline);
+
+        const response = await sw.send(`${ORIGIN}/api/profile/`, 'DELETE');
+        await flush();
+
+        expect(response.status).toBe(503);
+        expect(sw.idb.rows.size).toBe(0);
+    });
+
+    it('answers a profile edit whose body cannot be read with a 503', async () => {
+        const sw = loadWorker(offline);
+        const request = fakeRequest(`${ORIGIN}/api/profile`, 'PATCH');
+        request.clone = () => ({
+            text: async () => {
+                throw new Error('body already used');
+            },
+        });
+        let pending: Promise<FakeResponse> | undefined;
+
+        sw.dispatch({
+            request,
+            respondWith: (p: Promise<FakeResponse>) => {
+                pending = p;
+            },
+        });
+        const response = await pending!;
+        await flush();
+
+        expect(response.status).toBe(503);
+        expect(sw.idb.rows.size).toBe(0);
+    });
+
+    it.each([
+        ['an empty body', ''],
+        ['a null body', 'null'],
+        ['a JSON string body', '"password"'],
+        ['a JSON number body', '1'],
+    ])(
+        'still queues a profile edit with %s, which carries no password',
+        async (_label, body) => {
+            const sw = loadWorker(offline);
+
+            const response = await sw.send(
+                `${ORIGIN}/api/profile`,
+                'PATCH',
+                body
+            );
+            await flush();
+
+            expect(response.status).toBe(202);
+            expect(sw.idb.rows.size).toBe(1);
+        }
+    );
+
+    it.each(['DELETE', 'PATCH'])(
+        'still queues an offline %s of an ordinary item',
+        async (method) => {
+            const sw = loadWorker(offline);
+
+            const response = await sw.send(`${ORIGIN}/api/task/1`, method);
+            await flush();
+
+            expect(response.status).toBe(202);
+            expect(sw.idb.rows.size).toBe(1);
+        }
+    );
 
     it('still queues an ordinary edit made offline', async () => {
         const sw = loadWorker(offline);

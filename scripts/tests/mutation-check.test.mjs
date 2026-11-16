@@ -124,6 +124,24 @@ test('projectFor picks the Jest suite for source files', () => {
     assert.equal(projectFor('frontend/a.jsx'), 'frontend');
 });
 
+test('projectFor sends the offline service worker to its own Jest suite', () => {
+    assert.equal(projectFor('public/sw.js'), 'service-worker');
+    assert.equal(projectFor('public/other.js'), null);
+    assert.equal(projectFor('frontend/public/sw.js'), 'frontend');
+});
+
+test('jestTestsFor runs the service worker test for the service-worker suite', () => {
+    assert.deepEqual(jestTestsFor('service-worker', ['public/sw.js:1-3']), [
+        'frontend/__tests__/serviceWorker.test.ts',
+    ]);
+    assert.equal(testsFor('service-worker', ['scripts/tests/x.test.mjs']), null);
+    assert.deepEqual(mutateRanges(parseDiff('+++ b/public/sw.js\n@@ -1,0 +5,2 @@\n+a\n+b\n')), {
+        backend: [],
+        frontend: [],
+        'service-worker': ['public/sw.js:5-6'],
+    });
+});
+
 test('projectFor picks a tooling suite for the scripts and the guard hook', () => {
     assert.equal(projectFor('scripts/mutation-check.mjs'), 'scripts-mutation-check');
     assert.equal(projectFor('scripts/version-plan.js'), 'scripts-version-plan');
