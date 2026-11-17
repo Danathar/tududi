@@ -827,7 +827,6 @@ If conflict strategy is set to `manual`:
 - [Recurring Tasks Behavior](01-recurring-tasks-behavior.md)
 - [User Management](08-user-management.md)
 - [Architecture Overview](architecture.md)
-- [Developer Guide: CalDAV Implementation](dev/caldav-implementation.md)
 
 **Protocol References:**
 - [RFC 4791 - CalDAV](https://datatracker.ietf.org/doc/html/rfc4791)
