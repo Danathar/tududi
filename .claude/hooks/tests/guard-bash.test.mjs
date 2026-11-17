@@ -130,6 +130,8 @@ const allowed = [
     'git log --oneline -20',
     // a --bare after the subcommand is not git's global option
     'git log --oneline -- --bare',
+    // only a key in the safe.* section is refused, not one that merely contains it
+    'git -c branch.unsafe.merge=x status',
     'git log -p -- .claude/hooks',
     'git log -S"Order" --oneline',
     'git diff --stat HEAD~1',
@@ -533,6 +535,17 @@ const blockedLocal = [
     ['git --namespace x --git-dir=evil show', '--git-dir'],
     ['git --config-env user.name=V --git-dir=evil show', '--git-dir'],
     ['git --work-tree=/etc diff --stat', 'Run git from the project without it'],
+    // `-c` / `--config-env` would override the safe.bareRepository=explicit
+    // settings env, so a discovered bare repository's textconv would run again
+    ['git -c safe.bareRepository=all log -p', 'safe.bareRepository'],
+    ['git -c safe.bareRepository=all -C evil show', 'safe.bareRepository'],
+    ['git -c SAFE.BAREREPOSITORY=all show', 'SAFE.BAREREPOSITORY'],
+    ['git -c safe.directory=* -C evil show', 'safe.directory'],
+    ['git -c user.name=x -c safe.bareRepository=all show', 'safe.bareRepository'],
+    ['git --config-env=safe.bareRepository=V log -p', 'safe.bareRepository'],
+    ['git --config-env safe.bareRepository=V show', 'safe.bareRepository'],
+    ['cd evil && git -c safe.bareRepository=all show', 'safe.bareRepository'],
+    ['git -c safe.bareRepository=all diff HEAD~1', 'overrides the safe.* setting'],
     // xargs appends run-time words no argument check sees.
     ["printf '%s\\n' --output=/home/u/.bashrc | xargs git log -1 --format=format:x", 'xargs git'],
     ["printf '%s\\n' /dev/null .env | xargs git diff", 'xargs git'],
