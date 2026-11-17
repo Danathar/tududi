@@ -58,6 +58,8 @@
 //   - git --git-dir, --bare and --work-tree before the subcommand: they name a
 //     repository, which safe.bareRepository=explicit lets git load, so a bare
 //     folder a branch committed could run its diff.*.textconv program.
+//   - git -c / --config-env with a safe.* key: it overrides the
+//     safe.bareRepository=explicit setting in .claude/settings.json.
 //   - git, node, npm or a shell run through xargs: xargs appends words read at
 //     run time (`printf '%s\n' --output=FILE | xargs git log`), so none of the
 //     argument checks here could see them.
@@ -554,6 +556,17 @@ function checkGit(args, inlineEnv = {}, exported = {}) {
         }
         if (configKey !== null && runsProgram(configKey)) {
             return blockLocal(`Blocked: \`git ${a} ${configKey}=...\` can make git run a program or read other files.`);
+        }
+        // `-c` is read at the same scope as the GIT_CONFIG_* env in
+        // .claude/settings.json and wins over it, so `-c safe.bareRepository=all`
+        // would switch that protection off: git would load a bare repository a
+        // branch committed and run its diff.*.textconv program. git reads the
+        // section name in any case.
+        if (configKey !== null && /^safe\./i.test(configKey)) {
+            return blockLocal(
+                `Blocked: \`git ${a} ${configKey}=...\` overrides the safe.* setting in .claude/settings.json ` +
+                    'that stops a committed repository folder from running a program. Run git without it.'
+            );
         }
         if (a.startsWith('--exec-path=')) {
             return blockLocal('Blocked: `git --exec-path=...` makes git run programs from a chosen directory.');

@@ -175,6 +175,13 @@
             "original": "'UTC'",
             "replacement": "\"\"",
             "reason": "Equivalent: moment.tz reads an empty zone name as UTC, so the default zone and \"\" give the same dates."
+        },
+        {
+            "file": ".claude/hooks/guard-bash.mjs",
+            "mutator": "ConditionalExpression",
+            "original": "configKey !== null",
+            "replacement": "true",
+            "reason": "Equivalent in the safe.* refusal: configKey is null only when the option is neither `-c` nor `--config-env`, and then `/^safe\\./i.test(null)` tests the text \"null\", which never starts with `safe.`, so the refusal is the same either way."
         }
     ]
 }

@@ -55,7 +55,8 @@ getting around those rules: it blocks code-loading flags and variables
 `npm_config_*`), test-runner options that load modules or write files, git
 options that read or write arbitrary files (`--output`, `--no-index`, `-O`,
 `format-patch -o`) or run a program (`--ext-diff`, `fetch --upload-pack`), and
-git pagers, external diffs and config keys that run programs. It checks a
+git pagers, external diffs, config keys that run programs, and `-c` keys
+that switch off the `safe.*` setting in `.claude/settings.json`. It checks a
 script handed to a shell (`bash -c`, fish's `--command`, or a heredoc or
 `echo` text fed to it on stdin) as a command of its own. It also refuses git,
 node, npm or a shell run through `xargs`, which appends arguments read at run
