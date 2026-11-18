@@ -142,35 +142,21 @@ const calculateWeeklyRecurrence = (
             // No weekday found (shouldn't happen), fallback
             daysToNext = interval * 7;
         } else if (daysToNext < 7) {
-            // Next weekday is within current 7-day period
-            // Determine if we should skip weeks based on interval
-            const isAdjacentDay = daysToNext === 1;
-
-            // Determine if current day is the last weekday in the pattern
-            // (considering calendar order, where the highest day number is last,
-            // except Sunday(0) which wraps around)
-            const maxWeekday = Math.max(...sorted);
-            const isOnLastWeekday = currentDay === maxWeekday;
-
-            // Special case: if pattern includes Sunday(0), check if we're on it
-            // and all other weekdays are higher (meaning we're at the end of the pattern)
-            const hasSunday = sorted.includes(0);
-            const isOnSundayWithHigherDays =
-                currentDay === 0 && sorted.every((d) => d === 0 || d > 0);
+            // Next weekday is within the next 6 days. The interval only
+            // applies when the step crosses into a new week, so the weeks
+            // between picked days are skipped once per cycle.
+            //
+            // Weeks start on Monday (matches CalDAV WKST=MO and the
+            // Saturday+Sunday pattern), so Sunday is the last day of a week.
+            const pos = (d) => (d + 6) % 7;
+            const wraps = pos(nextWeekday) <= pos(currentDay);
 
             // Counting from a day outside the pattern (completed on another
             // weekday, or no due date) starts a fresh cycle, so the interval
             // applies in full.
             const isOffPattern = !sorted.includes(currentDay);
 
-            if (
-                interval > 1 &&
-                (isOffPattern ||
-                    (!isAdjacentDay &&
-                        (isOnLastWeekday || isOnSundayWithHigherDays)))
-            ) {
-                // Off the pattern, or on the last weekday of the pattern
-                // cycle: add interval skip
+            if (interval > 1 && (isOffPattern || wraps)) {
                 daysToNext += (interval - 1) * 7;
             }
         } else {

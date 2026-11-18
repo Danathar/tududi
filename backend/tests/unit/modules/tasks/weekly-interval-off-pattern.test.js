@@ -59,3 +59,37 @@ describe('Weekly interval when the start day is not a picked weekday', () => {
         expect(day(next)).toBe('2026-11-19');
     });
 });
+
+describe('Weekly interval with Sunday and another weekday picked', () => {
+    // Weeks start on Monday, so Sunday closes a week. Dates are in
+    // November 2026: Sun 15, Mon 16, Wed 18, Fri 20, Sat 21, Sun 22.
+    const at = (date) => new Date(Date.UTC(2026, 10, date, 15, 0, 0, 0));
+
+    const cases = [
+        // [label, weekdays, interval, from, expected next]
+        ['Sun+Wed from Sun', [0, 3], 2, 15, '2026-11-25'],
+        ['Sun+Wed from Wed', [0, 3], 2, 18, '2026-11-22'],
+        ['Sun+Mon from Sun', [0, 1], 2, 15, '2026-11-23'],
+        ['Sun+Mon from Mon', [0, 1], 2, 16, '2026-11-22'],
+        ['Sun+Fri from Sun', [0, 5], 2, 15, '2026-11-27'],
+        ['Sun+Fri from Fri', [0, 5], 2, 20, '2026-11-22'],
+        ['Sat+Sun from Sat', [0, 6], 2, 21, '2026-11-22'],
+        ['Sat+Sun from Sun', [0, 6], 2, 22, '2026-12-05'],
+        ['Mon+Wed from Mon', [1, 3], 2, 16, '2026-11-18'],
+        ['Mon+Wed from Wed', [1, 3], 2, 18, '2026-11-30'],
+    ];
+
+    it.each(cases)(
+        '%s every 2 weeks',
+        (_label, weekdays, interval, from, expected) => {
+            const next = calculateWeeklyRecurrence(
+                at(from),
+                interval,
+                null,
+                weekdays
+            );
+
+            expect(day(next)).toBe(expected);
+        }
+    );
+});

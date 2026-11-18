@@ -7,6 +7,10 @@ Notable changes to tududi. Versions match the git tags and the
 
 ### Fixed
 
+- Tasks that repeat every few weeks on Sunday plus another weekday (for
+  example Sunday and Wednesday every 2 weeks) now land on the right dates.
+  Weeks start on Monday, so Sunday closes a week. Previously the next date
+  could come a week early or late.
 - Editing, completing or reopening an example task over MCP (`update_task`,
   `complete_task`), or adding a subtask to one (`add_subtask`), now makes it
   the user's own task, the same as editing it in the web UI. Previously the
