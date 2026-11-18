@@ -483,14 +483,14 @@ test('runs a changed script and the guard hook against their own node --test fil
     }
 });
 
-test('runs a backend file with its own unit test against that test alone', linuxOnly, () => {
+test('runs a backend file with its own unit test against that test and the changed test files', linuxOnly, () => {
     const dir = repo();
     try {
         const files = {
             'backend/services/a.js': 'const a = 1;\nconst b = 3;\n',
             'backend/tests/unit/services/a.test.js': '',
             'backend/services/b.js': 'const c = 1;\n',
-            'backend/tests/unit/services/c.test.js': '',
+            'backend/tests/unit/services/c.test.js': "test('c', () => {});\n",
         };
         for (const [rel, body] of Object.entries(files)) {
             mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
@@ -507,7 +507,12 @@ test('runs a backend file with its own unit test against that test alone', linux
             ['backend-unit', ownGroup(), 'test'],
         ]);
         const lists = readFileSync(path.join(dir, 'stryker-jest-tests.log'), 'utf8').trim().split('\n');
-        assert.deepEqual(lists, ['backend: -', 'backend-unit: ["backend/tests/unit/services/a.test.js"]']);
+        // c.test.js is a test file the branch adds: its tests may be the ones
+        // that cover a.js, so backend-unit runs it too (#624).
+        assert.deepEqual(lists, [
+            'backend: -',
+            'backend-unit: ["backend/tests/unit/services/a.test.js","backend/tests/unit/services/c.test.js"]',
+        ]);
         assert.match(r.stdout, /== backend: mutating 1 range\(s\)\n {3}backend\/services\/b\.js:1-1\n/);
         assert.match(r.stdout, /== backend-unit: mutating 1 range\(s\)\n {3}backend\/services\/a\.js:2-2\n/);
         assert.ok(r.stdout.includes('backend/services/a.js:2:12 EqualityOperator (Survived)'));
