@@ -7,8 +7,9 @@
 // (status Survived or NoCoverage) that is not an accepted survivor in
 // .mutation-survivors.json. A backend file with a unit test of its own at the
 // mirrored path (backend/services/x.js -> backend/tests/unit/services/x.test.js)
-// goes to a `backend-unit` suite that runs only those unit tests; the rest
-// of the backend runs every Jest test related to the file. When that run
+// goes to a `backend-unit` suite that runs those unit tests and the backend
+// test files the branch changes; the rest of the backend runs every Jest test
+// related to the file. When that run
 // runs out of memory and the branch changes backend test files, the same
 // lines are checked again in a `backend-changed` suite that runs only those
 // test files.
@@ -108,17 +109,21 @@ export function unitTestFor(file) {
 }
 
 /**
- * The unit tests the `backend-unit` suite runs: the own unit test of every
- * file it mutates, once each and in order; the service worker's test for
- * `service-worker`. Null for every other suite.
+ * The tests the `backend-unit` suite runs: the own unit test of every file it
+ * mutates, then the backend test files the branch changes, once each and in
+ * that order; the service worker's test for `service-worker`. Null for every
+ * other suite. A change often adds its tests in a new file next to the own
+ * unit test, and without it those tests would not run (#624).
  * @param {string} project from mutateRanges
  * @param {string[]} mutate that suite's `file:start-end` entries
+ * @param {string[]} [changedTests] from changedBackendTests
  * @returns {string[]|null}
  */
-export function jestTestsFor(project, mutate) {
+export function jestTestsFor(project, mutate, changedTests = []) {
     if (project === 'service-worker') return [...SERVICE_WORKER_TESTS];
     if (project !== 'backend-unit') return null;
-    return [...new Set(mutate.map((m) => unitTestFor(m.slice(0, m.lastIndexOf(':')))))];
+    const own = mutate.map((m) => unitTestFor(m.slice(0, m.lastIndexOf(':'))));
+    return [...new Set([...own, ...changedTests])];
 }
 
 // The backend Jest test files (backend/jest.config.js testMatch).
@@ -637,7 +642,8 @@ async function main(argv) {
                 stopped = { minutes: opts.budgetMinutes, cut: null, skipped: [project, ...queue] };
                 break;
             }
-            const jestTests = project === 'backend-changed' ? backendTests : undefined;
+            const jestTests =
+                project === 'backend-changed' ? backendTests : jestTestsFor(project, ranges[project], backendTests);
             const result = await runStryker(opts.root, project, ranges[project], left, jestTests);
             reports.push(result.report);
             // Every backend test related to a file most of the backend loads

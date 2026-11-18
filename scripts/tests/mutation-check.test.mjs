@@ -316,8 +316,17 @@ test('jestTestsFor lists the own unit test of each backend-unit file once, null 
         ]),
         ['backend/tests/unit/models/user.test.js', 'backend/tests/unit/services/a.test.js']
     );
+    // The backend test files the branch changes follow, without repeats.
+    assert.deepEqual(
+        jestTestsFor(
+            'backend-unit',
+            ['backend/services/a.js:1-3'],
+            ['backend/tests/integration/a.test.js', 'backend/tests/unit/services/a.test.js']
+        ),
+        ['backend/tests/unit/services/a.test.js', 'backend/tests/integration/a.test.js']
+    );
     for (const project of ['backend', 'backend-changed', 'frontend', 'hooks', 'scripts-tool']) {
-        assert.equal(jestTestsFor(project, ['backend/services/a.js:1-3']), null, project);
+        assert.equal(jestTestsFor(project, ['backend/services/a.js:1-3'], ['backend/tests/x.test.js']), null, project);
     }
     assert.equal(testsFor('backend-unit', ['scripts/tests/x.test.mjs']), null);
     assert.equal(testsFor('backend-changed', ['scripts/tests/x.test.mjs']), null);
