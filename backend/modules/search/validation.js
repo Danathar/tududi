@@ -8,6 +8,15 @@ const MAX_LIMIT = 100;
 
 const VALID_TASK_STATUS_FILTERS = ['active', 'completed', 'all'];
 
+// Accepted by SearchService.buildDateCondition. this_week matches next_week.
+const DATE_FILTERS = [
+    'today',
+    'tomorrow',
+    'this_week',
+    'next_week',
+    'next_month',
+];
+
 // Specific task statuses a search or view can be narrowed to, mapped to the
 // Task.STATUS integers.
 const TASK_STATUS_FILTERS = {
@@ -149,6 +158,7 @@ module.exports = {
     MAX_LIMIT,
     LIKE_ESCAPE_CHAR,
     escapeLike,
+    DATE_FILTERS,
     TASK_STATUS_FILTERS,
     parseSearchParams,
     priorityToInt,
