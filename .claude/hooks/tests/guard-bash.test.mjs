@@ -199,6 +199,8 @@ const allowed = [
     'declare +x FOO',
     'env -i ls',
     'exec -a name ls',
+    // --attr-source takes the next word as its value and names no repository.
+    'git --attr-source HEAD log -p -1',
     'git grep "env -i"',
     'export GIT_CONFIG_COUNT',
     // Only the shapes that touch GIT_CONFIG_* are refused; the same builtins
@@ -574,6 +576,9 @@ const blockedLocal = [
     ['git --config-env safe.bareRepository=V show', 'safe.bareRepository'],
     ['cd evil && git -c safe.bareRepository=all show', 'safe.bareRepository'],
     ['git -c safe.bareRepository=all diff HEAD~1', 'overrides the safe.* setting'],
+    // A separated --attr-source value is not the subcommand; what follows is still read.
+    ['git --attr-source HEAD -c safe.bareRepository=all log -p', 'overrides the safe.* setting'],
+    ['git --attr-source HEAD --git-dir=evil log -p', 'another repository'],
     // Removing, un-exporting or overwriting the GIT_CONFIG_* settings env, or
     // emptying git's environment, switches the same protection off.
     ['unset GIT_CONFIG_COUNT; git log -p', 'unset GIT_CONFIG_COUNT'],

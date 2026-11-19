@@ -144,6 +144,7 @@ test('a command-line safe.bareRepository override still runs the program, so the
         [victim, ['-c', 'safe.bareRepository=all', '-C', 'evil', 'show']],
         [join(victim, 'evil'), ['-c', 'safe.bareRepository=all', 'show']],
         [victim, ['--config-env=safe.bareRepository=SBR', '-C', 'evil', 'show']],
+        [victim, ['--attr-source', 'HEAD', '-c', 'safe.bareRepository=all', '-C', 'evil', 'log', '-p', '-1']],
     ]) {
         const command = `git ${args.join(' ')}`;
         git(cwd, agentEnv, undefined, ...args);
