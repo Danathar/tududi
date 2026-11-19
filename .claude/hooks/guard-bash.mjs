@@ -617,7 +617,10 @@ function checkGit(args, inlineEnv = {}, exported = {}) {
                     'whose config can make git run a program. Run git from the project without it.'
             );
         }
-        i += ['-C', '-c', '--namespace', '--config-env'].includes(a) ? 2 : 1;
+        // Options whose value is the next word. Without --attr-source here,
+        // `git --attr-source HEAD -c safe.bareRepository=all log -p` stopped at
+        // HEAD and never checked the -c after it.
+        i += ['-C', '-c', '--namespace', '--config-env', '--attr-source'].includes(a) ? 2 : 1;
     }
     const sub = args[i];
     const rest = args.slice(i + 1);
