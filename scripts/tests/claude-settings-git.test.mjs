@@ -158,3 +158,40 @@ test('a command-line safe.bareRepository override still runs the program, so the
         assert.match(r.stderr, /safe\.bareRepository/);
     }
 });
+
+// Removing the GIT_CONFIG_* settings env, or setting its count to 0, puts git
+// back on its default safe.bareRepository=all, so the planted program runs
+// again. The guard hook refuses each way of doing that.
+test('removing the settings env still runs the program, so the guard hook refuses it', (t) => {
+    const dir = mkdtempSync(join(tmpdir(), 'bare-repo-'));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const marker = join(dir, 'ran');
+    const victim = plantedClone(dir, marker);
+    const agentEnv = { ...baseEnv(dir), ...settingsEnv };
+    const hook = fileURLToPath(new URL('../../.claude/hooks/guard-bash.mjs', import.meta.url));
+
+    for (const command of [
+        'unset GIT_CONFIG_COUNT; git -C evil log -p -1',
+        'export -n GIT_CONFIG_COUNT; git -C evil log -p -1',
+        'declare +x GIT_CONFIG_COUNT; git -C evil log -p -1',
+        'GIT_CONFIG_COUNT=0; git -C evil log -p -1',
+        'env -u GIT_CONFIG_COUNT git -C evil log -p -1',
+        'env -i git -C evil log -p -1',
+        'exec -c git -C evil log -p -1',
+    ]) {
+        // Without the settings env removed, git refuses the planted repository.
+        spawnSync('bash', ['-c', 'git -C evil log -p -1'], { cwd: victim, env: agentEnv, encoding: 'utf8' });
+        assert.ok(!existsSync(marker), 'the settings env no longer stops the planted repository');
+
+        spawnSync('bash', ['-c', command], { cwd: victim, env: agentEnv, encoding: 'utf8' });
+        assert.ok(existsSync(marker), `${command} no longer runs the program; this test needs a new route`);
+        rmSync(marker);
+
+        const r = spawnSync(process.execPath, [hook], {
+            input: JSON.stringify({ tool_name: 'Bash', tool_input: { command } }),
+            encoding: 'utf8',
+        });
+        assert.equal(r.status, 2, `the guard hook should refuse ${command}: ${r.stderr}`);
+        assert.match(r.stderr, /GIT_CONFIG_\* settings env/);
+    }
+});
