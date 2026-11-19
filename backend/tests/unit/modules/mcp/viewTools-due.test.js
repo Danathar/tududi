@@ -1,5 +1,10 @@
 'use strict';
 
+jest.mock('../../../../modules/views/repository', () => ({
+    findByUidAndUser: jest.fn(),
+}));
+
+const viewsRepository = require('../../../../modules/views/repository');
 const {
     registerViewTools,
 } = require('../../../../modules/mcp/tools/viewTools');
@@ -12,11 +17,14 @@ const DATE_FILTERS = [
     'next_month',
 ];
 
-function dueProperty(toolName) {
+function findTool(toolName) {
     const tools = [];
     registerViewTools(null, { userId: 1 }, tools);
-    const tool = tools.find((entry) => entry.name === toolName);
-    return tool.inputSchema.properties.due;
+    return tools.find((entry) => entry.name === toolName);
+}
+
+function dueProperty(toolName) {
+    return findTool(toolName).inputSchema.properties.due;
 }
 
 describe('view tool due filter schema', () => {
@@ -28,5 +36,42 @@ describe('view tool due filter schema', () => {
                 expect(due.description).toContain(value);
             }
         }
+    });
+});
+
+describe('update_view due filter handling', () => {
+    let view;
+
+    beforeEach(() => {
+        view = {
+            uid: 'view-1',
+            name: 'Old',
+            update: jest.fn().mockResolvedValue(undefined),
+            toJSON: () => ({}),
+        };
+        viewsRepository.findByUidAndUser.mockResolvedValue(view);
+    });
+
+    it('saves a valid due filter', async () => {
+        await findTool('update_view').handler({
+            uid: 'view-1',
+            due: 'this_week',
+        });
+        expect(view.update).toHaveBeenCalledWith({ due: 'this_week' });
+    });
+
+    it('rejects an unknown due filter without saving', async () => {
+        await expect(
+            findTool('update_view').handler({ uid: 'view-1', due: 'someday' })
+        ).rejects.toThrow();
+        expect(view.update).not.toHaveBeenCalled();
+    });
+
+    it('leaves due out of the update when it is not given', async () => {
+        await findTool('update_view').handler({
+            uid: 'view-1',
+            name: 'New',
+        });
+        expect(view.update).toHaveBeenCalledWith({ name: 'New' });
     });
 });
