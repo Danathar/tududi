@@ -201,6 +201,22 @@ const allowed = [
     'exec -a name ls',
     'git grep "env -i"',
     'export GIT_CONFIG_COUNT',
+    // Only the shapes that touch GIT_CONFIG_* are refused; the same builtins
+    // and wrappers used the ordinary way still run (#631 survivors).
+    'env -u',
+    "env -S '' true",
+    "env -S '-v' ls",
+    'ionice -c 2 git log -1',
+    'exec -l',
+    'exec -l git log -1',
+    'exec -a -c git log -1',
+    'exec git log -1 -c',
+    'exec -- -c git log -1',
+    'chmod +x scripts/foo.sh',
+    'typeset -n GIT_CONFIG_KEY_0',
+    'declare FOO=GIT_CONFIG_COUNT',
+    'declare FOO=1',
+    'declare +x FOO=1',
 ];
 
 const blocked = [
@@ -584,6 +600,26 @@ const blockedLocal = [
     ['GIT_CONFIG_VALUE_0=all', 'overwrites the GIT_CONFIG_* settings env'],
     ['declare GIT_CONFIG_COUNT=0', 'overwrites the GIT_CONFIG_* settings env'],
     ['readonly GIT_CONFIG_COUNT=0', 'overwrites the GIT_CONFIG_* settings env'],
+    ['local GIT_CONFIG_COUNT=0', '`local GIT_CONFIG_COUNT=0` overwrites'],
+    ['declare FOO=a-x GIT_CONFIG_COUNT=0', '`declare GIT_CONFIG_COUNT=0` overwrites'],
+    ['export -fn GIT_CONFIG_COUNT', '`export -fn GIT_CONFIG_COUNT` can remove'],
+    ['declare +ix GIT_CONFIG_COUNT', '`declare +ix GIT_CONFIG_COUNT` can remove'],
+    ['declare +x GIT_CONFIG', '`declare +x GIT_CONFIG` can remove'],
+    ['export -n FOO GIT_CONFIG_COUNT', '`export -n GIT_CONFIG_COUNT` can remove'],
+    ['declare +x FOO GIT_CONFIG_COUNT', '`declare +x GIT_CONFIG_COUNT` can remove'],
+    // An export (even beside a `-n`/`+x` inside a value) is refused at the git
+    // that follows, not as a removal.
+    ['export FOO=a-n GIT_CONFIG_COUNT=1; git log -p', 'with GIT_CONFIG_COUNT= in its environment'],
+    ['export FOO=a+x GIT_CONFIG_COUNT=1; git log -p', 'with GIT_CONFIG_COUNT= in its environment'],
+    ['declare -gx GIT_CONFIG_COUNT=0; git log -p', 'with GIT_CONFIG_COUNT= in its environment'],
+    // The whole of each refusal message, not only its opening words.
+    ['GIT_CONFIG_COUNT=0; git log -p', '`GIT_CONFIG_COUNT=0` overwrites'],
+    [
+        'GIT_CONFIG_COUNT=0',
+        'committed repository folder from running a program; the variable stays exported, so git reads the new value. Leave it set.',
+    ],
+    ['unset GIT_CONFIG_COUNT', 'committed repository folder from running a program. Leave it set.'],
+    ['env -i git log -p', 'program. Run git without clearing the environment.'],
     // xargs appends run-time words no argument check sees.
     ["printf '%s\\n' --output=/home/u/.bashrc | xargs git log -1 --format=format:x", 'xargs git'],
     ["printf '%s\\n' /dev/null .env | xargs git diff", 'xargs git'],
