@@ -60,6 +60,11 @@ const allowed = [
     'cd "$HOME" && git status',
     'TZ=UTC; git log -1',
     'git log --author="$HOME" -1',
+    // Only the exact names are refused: a longer name that starts or ends
+    // with HOME, or a declaration that assigns nothing, is ordinary work.
+    'HOMEBREW_NO_AUTO_UPDATE=1 git status',
+    'JAVA_HOME=/usr/lib/jvm git status',
+    'declare -a HOMES; git status',
     'gh api graphql -f query=\'query($o:String!){ repository(owner:$o,name:"tududi"){ id } }\' -f o=Danathar',
     'gh discussion list --repo chrisvel/tududi',
     'gh auth status',
@@ -561,6 +566,8 @@ const blockedLocal = [
     ['env HOME=planted git log -p', 'HOME'],
     ['XDG_CONFIG_HOME=planted git diff HEAD~1 HEAD', 'XDG_CONFIG_HOME'],
     ['XDG_CONFIG_HOME=planted; git log -p', 'XDG_CONFIG_HOME'],
+    // `+=` appends to HOME, so it changes where git looks just as `=` does.
+    ['declare HOME+=/planted; git diff HEAD~1 HEAD', 'HOME'],
     // --shallow-file reads a chosen file and quotes it; its value is the next word.
     ['git --shallow-file .env log -1', '--shallow-file'],
     ['git --shallow-file=.env log -1', '--shallow-file'],
