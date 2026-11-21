@@ -52,9 +52,10 @@ before writing the files that bound agents. The Bash guard
 `npm test` and the other test scripts, `git status|diff|log|show|branch`) from
 getting around those rules: it blocks code-loading flags and variables
 (`node -e`/`--import`/`--require`, `npm --node-options`, `NODE_OPTIONS`,
-`npm_config_*`), test-runner options that load modules or write files, git
-options that read or write arbitrary files (`--output`, `--no-index`, `-O`,
-`format-patch -o`) or run a program (`--ext-diff`, `fetch --upload-pack`), and
+`npm_config_*`, and `HOME` or `XDG_CONFIG_HOME`, which pick the folder git
+reads its global config from), test-runner options that load modules or write
+files, git options that read or write arbitrary files (`--output`,
+`--no-index`, `-O`, `--shallow-file`, `format-patch -o`) or run a program (`--ext-diff`, `fetch --upload-pack`), and
 git pagers, external diffs, config keys that run programs, and `-c` keys
 that switch off the `safe.*` setting in `.claude/settings.json`. It checks a
 script handed to a shell (`bash -c`, fish's `--command`, or a heredoc or

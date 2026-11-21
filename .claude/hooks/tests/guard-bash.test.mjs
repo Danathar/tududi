@@ -56,6 +56,10 @@ const allowed = [
     "gh pr view 3 --jq 'chrisvel/tududi'",
     'gh issue list --search "chrisvel/tududi"',
     'git remote set-url origin https://github.com/Danathar/tududi',
+    // Reading HOME, or setting a name git takes no config from, reaches nothing (#640).
+    'cd "$HOME" && git status',
+    'TZ=UTC; git log -1',
+    'git log --author="$HOME" -1',
     'gh api graphql -f query=\'query($o:String!){ repository(owner:$o,name:"tududi"){ id } }\' -f o=Danathar',
     'gh discussion list --repo chrisvel/tududi',
     'gh auth status',
@@ -548,6 +552,19 @@ const blockedLocal = [
     ['git config core.fsmonitor ./evil.sh', 'core.fsmonitor'],
     ['git config alias.st "!sh evil"', 'alias.st'],
     ['git --exec-path=/tmp/evil log', 'exec-path'],
+    // HOME / XDG_CONFIG_HOME pick git's global config, which a branch can plant (#640).
+    ['HOME=planted git diff HEAD~1 HEAD', 'HOME'],
+    ['HOME=planted; git diff HEAD~1 HEAD', 'HOME'],
+    ['HOME=planted; git log -p', 'HOME'],
+    ['export HOME=planted; git diff HEAD~1 HEAD', 'HOME'],
+    ['declare HOME=planted; git diff HEAD~1 HEAD', 'HOME'],
+    ['env HOME=planted git log -p', 'HOME'],
+    ['XDG_CONFIG_HOME=planted git diff HEAD~1 HEAD', 'XDG_CONFIG_HOME'],
+    ['XDG_CONFIG_HOME=planted; git log -p', 'XDG_CONFIG_HOME'],
+    // --shallow-file reads a chosen file and quotes it; its value is the next word.
+    ['git --shallow-file .env log -1', '--shallow-file'],
+    ['git --shallow-file=.env log -1', '--shallow-file'],
+    ['git --shallow-file HEAD --git-dir=evil log -p', '--shallow-file'],
     // the option spellings of GIT_DIR / GIT_WORK_TREE: a named bare repository
     // gets past safe.bareRepository=explicit, so its textconv program would run
     ['git --git-dir=evil log -p -1', '--git-dir'],
@@ -595,6 +612,9 @@ const blockedLocal = [
     ['env -i git log -p', 'without the GIT_CONFIG_* settings env'],
     ['env - git log -p', 'without the GIT_CONFIG_* settings env'],
     ['env --ignore-environment git log -p', 'without the GIT_CONFIG_* settings env'],
+    // env -S / --split-string splits its value into words, `-i` included (#640).
+    ["env --split-string '-i git log -p'", 'without the GIT_CONFIG_* settings env'],
+    ["env -S '-i git log -p'", 'without the GIT_CONFIG_* settings env'],
     ['env -iv git log -p', 'without the GIT_CONFIG_* settings env'],
     ['timeout 5 env -i git log -p', 'without the GIT_CONFIG_* settings env'],
     ["env -i bash -c 'git log -p'", 'without the GIT_CONFIG_* settings env'],

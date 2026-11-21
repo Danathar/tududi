@@ -40,8 +40,9 @@
 // writes, which would walk past the `Read(.env*)` deny rules and the `ask`/`deny`
 // rules on the files that bound agents (#65, #69). Blocked:
 //   - NODE_OPTIONS, npm_config_*, LD_PRELOAD, BASH_ENV and similar code-loading
-//     variables, set inline (also as NAME+=value), through `env`, or with
-//     export/declare -x.
+//     variables, and HOME / XDG_CONFIG_HOME (git's global config folder), set
+//     inline or stand-alone (also as NAME+=value), through `env`, or with
+//     export/declare.
 //   - node code-loading flags (-e/-p/-r, --eval, --print, --require, --import,
 //     --loader, --env-file, ...); under `node --test` only an allowlist of
 //     test-runner flags and in-repo relative file patterns.
@@ -55,6 +56,8 @@
 //     GIT_* environment other than identity/locking variables, pagers and
 //     editors other than cat/true, and `-c`/config writes of keys that run
 //     programs (core.pager, core.fsmonitor, diff.*, alias.*, include.*, ...).
+//   - git --shallow-file before the subcommand: it reads a chosen file (.env)
+//     and quotes it in its error.
 //   - git --git-dir, --bare and --work-tree before the subcommand: they name a
 //     repository, which safe.bareRepository=explicit lets git load, so a bare
 //     folder a branch committed could run its diff.*.textconv program.
@@ -301,10 +304,17 @@ const blockLocal = (reason) => ({ blocked: true, reason: `${reason}\n${LOCAL_GUI
 // Environment
 // ---------------------------------------------------------------------------
 
-/** Variables that make any process (node, npm, bash, the loader) run extra code. */
+/**
+ * Variables that make any process (node, npm, bash, the loader) run extra code.
+ * HOME and XDG_CONFIG_HOME pick the folder git reads its global config from
+ * (`$HOME/.gitconfig`, `$XDG_CONFIG_HOME/git/config`), and the settings env in
+ * .claude/settings.json does not replace it: `HOME=planted; git diff` runs a
+ * diff.external a branch committed in planted/.gitconfig. HOME is always
+ * exported, so the stand-alone assignment reaches the next command too (#640).
+ */
 function isCodeEnv(name) {
     return (
-        /^(NODE_OPTIONS|NODE_PATH|NODE_REPL_EXTERNAL_MODULE|LD_PRELOAD|LD_AUDIT|LD_LIBRARY_PATH|BASH_ENV|LESSOPEN|LESSCLOSE)$/.test(name) ||
+        /^(NODE_OPTIONS|NODE_PATH|NODE_REPL_EXTERNAL_MODULE|LD_PRELOAD|LD_AUDIT|LD_LIBRARY_PATH|BASH_ENV|LESSOPEN|LESSCLOSE|HOME|XDG_CONFIG_HOME)$/.test(name) ||
         /^DYLD_/.test(name) ||
         /^npm_config_/i.test(name)
     );
@@ -605,6 +615,12 @@ function checkGit(args, inlineEnv = {}, exported = {}) {
         }
         if (a.startsWith('--exec-path=')) {
             return blockLocal('Blocked: `git --exec-path=...` makes git run programs from a chosen directory.');
+        }
+        // `--shallow-file PATH` reads PATH as the shallow list, and git's error
+        // quotes the first line it cannot parse, so `--shallow-file .env` prints
+        // a line of .env (#640). Nothing ordinary passes this internal option.
+        if (a === '--shallow-file' || a.startsWith('--shallow-file=')) {
+            return blockLocal('Blocked: `git --shallow-file` reads a chosen file (e.g. .env) and quotes it in its error.');
         }
         // safe.bareRepository=explicit (.claude/settings.json) refuses a bare
         // repository git finds by itself, but allows one that is named, and
@@ -1258,6 +1274,11 @@ function checkSegment(words, state) {
             if (a.startsWith('-') || a.startsWith('+')) continue;
             const eq = a.indexOf('=');
             if (!exports && eq !== -1 && a.slice(0, eq).includes('GIT_CONFIG')) return blockSettingsEnvOverwrite(`${cmd} ${a}`);
+            // `declare HOME=planted` keeps HOME's export, so git reads the new value.
+            if (eq !== -1) {
+                const envBlock = checkCodeEnv([a.slice(0, eq).replace(/\+$/, '')]);
+                if (envBlock) return envBlock;
+            }
             if (unexports && removesSettingsEnv(eq === -1 ? a : a.slice(0, eq))) {
                 const flags = args.filter((o) => o.startsWith('-') || o.startsWith('+'));
                 return blockSettingsEnvRemoval([cmd, ...flags, a].join(' '));
