@@ -143,7 +143,7 @@ is [docs/database.md](database.md), "Writing migrations".
 
 - The agent's own report is a claim, not evidence. Check the commands it says
   it ran against the CI result and the diff.
-- Hive PRs end with a signature line (`- hive: agent=<name>`); the author is
+- Hive PRs end with a signature line (`-- hive: agent=<name>`; older PRs carry `— hive:`); the author is
   `app/danathar-atomic-hive`. They get the same rubric as a human PR, and
   their outcomes are the "Hive app" row of [metrics.md](metrics.md).
 - A PR that widens what an agent may do (workflows, `.claude/settings.json`,

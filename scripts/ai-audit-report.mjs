@@ -12,7 +12,7 @@
  *
  * A PR is agent-authored when its author is the Hive GitHub App
  * (`app/danathar-atomic-hive` in `gh` output, `danathar-atomic-hive[bot]` in
- * REST/webhook output) or its body has a `— hive: agent=<name> ...` signature
+ * REST/webhook output) or its body has a `-- hive: agent=<name> ...` signature
  * line. Everything else is counted as non-agent and listed only as a number,
  * so a window with zero agent PRs reads as "nothing was audited", not as a pass.
  *
@@ -20,7 +20,7 @@
  *   linked-issue   GitHub's resolved closingIssuesReferences name an issue of
  *                  Danathar/tududi (body text is not consulted; a missing
  *                  field counts as no link)
- *   signature      body has a `— hive: agent=...` line
+ *   signature      body has a `-- hive: agent=...` line (the older `— hive:` spelling also counts)
  *   merger         merged by a human account, or by the Hive App itself (the
  *                  `hive-serialized` merge lane: the App merges after the
  *                  ruleset's required checks pass, docs/branch-protection.md).
@@ -52,14 +52,15 @@ export const AGENT_LOGINS = [
     'danathar-atomic-hive[bot]',
 ];
 
-const SIGNATURE_LINE = /^— hive:.*(^|\s)agent=\S+/;
+// The hive writes `-- hive:` (two ASCII hyphens) since v5.322.0; earlier PRs carry `— hive:`.
+const SIGNATURE_LINE = /^(?:--|\u2014) hive:.*(^|\s)agent=\S+/;
 
 function lines(body) {
     return String(body ?? '').split(/\r?\n/);
 }
 
 /**
- * First `— hive: agent=...` line of the body, or null. Lines inside fenced
+ * First `-- hive: agent=...` (or older `— hive: agent=...`) line of the body, or null. Lines inside fenced
  * code blocks are examples, not a signature, and are skipped.
  */
 export function findSignature(body) {
@@ -205,7 +206,7 @@ export function renderMarkdown(report) {
     );
     if (report.agent === 0) {
         out.push(
-            '**No agent-authored PRs were found, so nothing was audited.** This is not a pass of the audit-trail rules; check the window and the classification (author `app/danathar-atomic-hive` or a `— hive: agent=...` body line).',
+            '**No agent-authored PRs were found, so nothing was audited.** This is not a pass of the audit-trail rules; check the window and the classification (author `app/danathar-atomic-hive` or a `-- hive: agent=...` body line).',
             ''
         );
         return out.join('\n');

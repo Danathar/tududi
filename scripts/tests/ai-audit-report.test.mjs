@@ -63,6 +63,30 @@ test('signature must be its own line and name an agent', () => {
     assert.equal(findSignature(`a\r\n${SIG}\r\n`), SIG);
 });
 
+test('both the -- and the older em dash spelling count as a signature', () => {
+    const ascii = '-- hive: agent=scanner backend=claude model=claude-sonnet-5-5 effort=high';
+    const legacy = '\u2014 hive: agent=scanner backend=claude model=claude-sonnet-5-5';
+    assert.equal(findSignature(`x\n\n${ascii}\n`), ascii);
+    assert.equal(findSignature(`x\r\n${ascii}\r\n`), ascii);
+    assert.equal(findSignature(`  ${ascii}  `), ascii);
+    assert.equal(findSignature(`x\n${legacy}`), legacy);
+});
+
+test('near misses of the -- signature do not count', () => {
+    for (const line of [
+        '- hive: agent=x',
+        '--- hive: agent=x',
+        '--hive: agent=x',
+        '\u2013 hive: agent=x',
+        '-- hive: backend=claude',
+        '-- hive:',
+        'text -- hive: agent=x',
+    ]) {
+        assert.equal(findSignature(line), null, line);
+    }
+    assert.equal(findSignature('```\n-- hive: agent=x\n```'), null);
+});
+
 test('a signature inside a fenced code block is an example, not a signature', () => {
     assert.equal(findSignature(`Example:\n\`\`\`\n${SIG}\n\`\`\`\n`), null);
     assert.equal(findSignature(`~~~\n${SIG}\n~~~\n${SIG}`), SIG);
