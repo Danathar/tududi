@@ -189,6 +189,20 @@
             "original": "head.length && head[0].startsWith('-')",
             "replacement": "true",
             "reason": "Equivalent: for an `env -S` string that does not start with an option, checking `env` followed by its words reads the same command as checking the words alone, because checkSegment looks through env to the program it runs; an empty string gives `env` plus the rest of the line, which is the rest of the line. Every allowed and blocked `env -S` row decides the same either way."
+        },
+        {
+            "file": ".claude/hooks/guard-bash.mjs",
+            "mutator": "Regex",
+            "original": "/\\+$/",
+            "replacement": "/\\+/",
+            "reason": "Equivalent: the text before `=` is a shell variable name, which can hold a `+` only as its last character (the `NAME+=` append form; bash rejects any other `+` as an invalid identifier), so removing the first `+` and removing a trailing one give the same name."
+        },
+        {
+            "file": ".claude/hooks/shell-reader.mjs",
+            "mutator": "StringLiteral",
+            "original": "'-S'",
+            "replacement": "\"\"",
+            "reason": "Equivalent for this repository: the guard reads `env -S`/`--split-string` itself (guard-bash.mjs, the env split-string branch) before the reader's wrapper walk sees it, so every allowed and blocked env -S row decides the same either way. This file is a pinned copy of the canonical reader (shell-reader.test.mjs checks its sha256, and is left out of the mutation run for that reason), so a real change to its reading lands and is tested in the canonical copy."
         }
     ]
 }
