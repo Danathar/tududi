@@ -44,7 +44,7 @@ schedule an agent on their own. What each one does is in
 | who | how to recognise it | what it does |
 |---|---|---|
 | The owner (`Danathar`) | commits and PRs under that login | decides scope, merges, can still sync upstream by hand |
-| Hive agents | PRs and issues from the GitHub App `danathar-atomic-hive` (`gh` prints the author as `app/danathar-atomic-hive`, the REST API as `danathar-atomic-hive[bot]`); the body ends with a line like `— hive: agent=<name>` | pick up issues, open PRs, reply to review |
+| Hive agents | PRs and issues from the GitHub App `danathar-atomic-hive` (`gh` prints the author as `app/danathar-atomic-hive`, the REST API as `danathar-atomic-hive[bot]`); the body ends with a line like `-- hive: agent=<name>` (older PRs carry `— hive:`) | pick up issues, open PRs, reply to review |
 | Codex connector | review comments from `chatgpt-codex-connector[bot]` | reviews pull requests and grades findings P0 to P3 |
 | Local agents | Claude Code or omp sessions in a clone on the owner's machine; commits carry the owner's git identity | work one issue on one branch, as the owner directs |
 
@@ -57,7 +57,7 @@ gh pr list --repo Danathar/tududi --state all --author app/danathar-atomic-hive 
 
 # the signature line on one PR
 gh pr view <N> --repo Danathar/tududi --json author,body \
-  --jq '.author.login, (.body | split("\n") | map(select(startswith("— hive: "))))'
+  --jq '.author.login, (.body | split("\n") | map(select(test("^(--|—) hive: "))))'
 
 # reviews left by the Codex connector on one PR
 gh api repos/Danathar/tududi/pulls/<N>/reviews \

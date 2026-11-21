@@ -3,7 +3,7 @@
  * Pull-request-time half of the agent audit trail.
  *
  * scripts/ai-audit-report.mjs reports, after the merge, an agent PR whose
- * body has no `— hive: agent=...` signature line, or that closes no issue of
+ * body has no `-- hive: agent=...` signature line (the older `— hive:` spelling also counts), or that closes no issue of
  * this repository; by then the body cannot be fixed. This runs while the PR
  * is open (.github/workflows/agent-signature.yml) and checks both:
  *   signature      uses the audit's own findSignature, so the two cannot
@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { findSignature } from './ai-audit-report.mjs';
 
 export const MISSING =
-    "::error::The pull request body has no signature line. Add a line of its own, outside any code block, that starts with '— hive:' and names agent=, e.g. '— hive: agent=<role> backend=<backend> model=<model>'. The weekly agent audit (agent-audit.yml) reads it.";
+    "::error::The pull request body has no signature line. Add a line of its own, outside any code block, that starts with '-- hive:' and names agent=, e.g. '-- hive: agent=<role> backend=<backend> model=<model>' (the older '— hive:' spelling also counts). The weekly agent audit (agent-audit.yml) reads it.";
 
 export const NO_CLOSING_ISSUE =
     "::error::The pull request body names no issue it closes. Add a line of its own, outside any code block, such as 'Closes #N', where N is an issue in this repository (Danathar/tududi). 'Refs #N' and an issue of another repository do not count. The weekly agent audit (agent-audit.yml) requires the link.";

@@ -36,6 +36,9 @@ const PASSING = [
     `Summary\r\n\r\nCloses #1\r\n${SIG}\r\n`,
     `Fixes: Danathar/tududi#12\n  ${SIG}  `,
     `closes #3\n— hive: agent=docs-writer`,
+    `Closes #1\n-- hive: agent=scanner backend=claude model=claude-sonnet-5-5 effort=high`,
+    `Summary\r\n\r\nCloses #1\r\n-- hive: agent=scanner\r\n`,
+    `Closes #1\n  -- hive: agent=docs-writer  `,
 ];
 
 const CLOSES = 'Closes #1\n';
@@ -43,6 +46,13 @@ const FAILING = [
     `Summary\n\nFiled by quality agent\n${CLOSES}`,
     `— hive:\n${CLOSES}`,
     `— hive: backend=claude model=x\n${CLOSES}`,
+    `-- hive: backend=claude model=x\n${CLOSES}`,
+    `-- hive:\n${CLOSES}`,
+    `- hive: agent=x\n${CLOSES}`,
+    `--- hive: agent=x\n${CLOSES}`,
+    `--hive: agent=x\n${CLOSES}`,
+    `\u2013 hive: agent=x\n${CLOSES}`,
+    `see -- hive: agent=x\n${CLOSES}`,
     `Quoted: ${SIG}\n${CLOSES}`,
     `Example:\n\`\`\`\n${SIG}\n\`\`\`\n${CLOSES}`,
 ];
