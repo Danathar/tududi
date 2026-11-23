@@ -326,6 +326,29 @@ function checkCodeEnv(names) {
     return null;
 }
 
+/**
+ * A name a builtin assigns without an `NAME=value` word: `read -r HOME`,
+ * `printf -v PATH ...`, `mapfile -t PATH < list`, `for HOME in planted`. HOME,
+ * XDG_CONFIG_HOME and the other code variables are exported, so the git after
+ * it reads the planted value just as it would after `HOME=planted;`. PATH is
+ * already exported, so assigning it picks which git the next command runs. A
+ * GIT_CONFIG_* name overwrites the settings env in .claude/settings.json.
+ * `NAME[0]` assigns an element of NAME, which for an exported name is its value.
+ */
+function checkAssignedName(word, what) {
+    const name = word.replace(/\[.*$/, '');
+    if (name.includes('GIT_CONFIG')) return blockSettingsEnvOverwrite(what);
+    if (name === 'PATH') return blockPathAssignment(what);
+    return checkCodeEnv([name]);
+}
+
+function blockPathAssignment(what) {
+    return blockLocal(
+        `Blocked: \`${what}\` sets PATH, which is already exported, so the next command is looked up in the ` +
+            'folders it names and can run a program a branch committed there.'
+    );
+}
+
 // ---------------------------------------------------------------------------
 // gh
 // ---------------------------------------------------------------------------
@@ -1128,6 +1151,8 @@ function checkSegment(words, state) {
             // Only assignments: they set shell variables, and an exported one keeps its export.
             const name = Object.keys(inlineEnv).find((k) => k.includes('GIT_CONFIG'));
             if (name !== undefined) return blockSettingsEnvOverwrite(`${name}=${inlineEnv[name]}`);
+            // PATH is always exported, so `PATH=planted:$PATH; git log` reaches the git after it.
+            if ('PATH' in inlineEnv) return blockPathAssignment(`PATH=${inlineEnv.PATH}`);
             return null;
         }
         // A name made only of `*` and `?` (`*`, `./???`) runs whichever file
@@ -1249,6 +1274,32 @@ function checkSegment(words, state) {
             `Blocked: \`xargs ${cmd}\`; xargs adds arguments read at run time, so this hook cannot check the ` +
                 `${cmd} command line the allow rules pre-approve. Write the ${cmd} command out in full instead.`
         );
+    }
+
+    // Builtins that assign a variable named by an operand rather than by a
+    // `NAME=value` word. Every operand of read, mapfile, readarray and getopts is
+    // checked, option values included (`read -p HOME x` is refused too): only
+    // over-refusing is guessed at.
+    if (['read', 'mapfile', 'readarray', 'getopts'].includes(cmd)) {
+        for (const a of args) {
+            const refusal = checkAssignedName(a, `${cmd} ${a}`);
+            if (refusal) return refusal;
+        }
+    }
+    // `printf -v NAME` (or `-vNAME`) assigns NAME the formatted text.
+    if (cmd === 'printf') {
+        for (let k = 0; k < args.length; k++) {
+            if (args[k] === '--' || !args[k].startsWith('-')) break;
+            const named = args[k] === '-v' ? args[k + 1] : args[k].startsWith('-v') ? args[k].slice(2) : undefined;
+            if (named === undefined) continue;
+            const refusal = checkAssignedName(named, `printf -v ${named}`);
+            if (refusal) return refusal;
+        }
+    }
+    // `for NAME in ...` and `select NAME in ...` assign NAME before the body runs.
+    if ((cmd === 'for' || cmd === 'select') && args.length) {
+        const refusal = checkAssignedName(args[0], `${cmd} ${args[0]}`);
+        if (refusal) return refusal;
     }
 
     if (OPAQUE_WRAPPERS.has(cmd)) {
