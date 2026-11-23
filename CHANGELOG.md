@@ -5,6 +5,19 @@ Notable changes to tududi. Versions match the git tags and the
 
 ## Unreleased
 
+### Added
+
+- Notes opens on a table of every note instead of jumping into the latest
+  one. Sort by title, project, tags, updated or created; move, resize and
+  hide columns; search titles and content; and filter by several tags and
+  projects at once. Search and filters stay in the address, so Back returns
+  to the same view.
+
+### Changed
+
+- The sidebar's notes panel now shows the three most recent notes and the tag
+  chips. The project folders and the search box moved to the notes table.
+
 ### Fixed
 
 - Tasks that repeat every few weeks on Sunday plus another weekday (for

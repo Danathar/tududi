@@ -1735,12 +1735,24 @@
     "deleteNoteConfirm": "Are you sure you want to delete the note \"{{title}}\"?",
     "untitled": "Untitled Note",
     "openInNotes": "Open in Notes",
+    "overview": {
+      "search": "Search titles and content...",
+      "allTags": "All tags",
+      "allProjects": "All projects",
+      "noProject": "No project",
+      "columnTitle": "Title",
+      "columnPreview": "Preview",
+      "columnProject": "Project",
+      "columnTags": "Tags",
+      "columnUpdated": "Updated",
+      "columnCreated": "Created",
+      "columns": "Columns",
+      "showMore": "Show more",
+      "resizeColumn": "Resize the {{column}} column. Alt and an arrow key moves it."
+    },
     "sidebar": {
       "recent": "Recent",
-      "projects": "Projects",
-      "tags": "Tags",
-      "noProject": "No project",
-      "more": "{{count}} more"
+      "tags": "Tags"
     }
   },
   "tags": {
