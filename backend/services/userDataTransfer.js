@@ -411,6 +411,15 @@ const jsonColumn = (value, fallback) => {
     }
 };
 
+// 1.x SQLite backups can carry a settings object as JSON text (old migrations
+// wrote it that way). Store an object, and leave the setting alone when the
+// text is not one.
+const settingsObject = (value) => {
+    if (typeof value !== 'string') return value;
+    const parsed = jsonColumn(value, undefined);
+    return parsed && typeof parsed === 'object' ? parsed : undefined;
+};
+
 // Records that point at tasks, projects, areas and goals which can belong to
 // another account (a comment on a shared task, a plan item for a task shared
 // with this user). They reference those by uid and are restored once every
@@ -505,6 +514,7 @@ async function exportLinkedRecords(userId) {
                 mentioned_person_uids: jsonColumn(c.mentioned_person_uids, []),
                 deleted_at: c.deleted_at,
                 created_at: c.created_at,
+                updated_at: c.updated_at,
             })),
         comment_reactions: reactions
             .filter((r) => commentUid[r.comment_id])
@@ -521,6 +531,8 @@ async function exportLinkedRecords(userId) {
                 source_task_uid: taskUid[r.source_task_id],
                 target_task_uid: taskUid[r.target_task_id],
                 relation_type: r.relation_type,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
             })),
         daily_plans: plans.map((p) => ({
             uid: p.uid,
@@ -545,6 +557,8 @@ async function exportLinkedRecords(userId) {
             url_host: f.url_host,
             color: f.color,
             show_on_calendar: f.show_on_calendar,
+            created_at: f.created_at,
+            updated_at: f.updated_at,
         })),
         webhooks: webhooks.map((w) => ({
             uid: w.uid,
@@ -945,13 +959,15 @@ async function importOwnData(
                 telegram_polling_enabled: bu.telegram_polling_enabled,
                 task_summary_enabled: bu.task_summary_enabled,
                 task_summary_frequency: bu.task_summary_frequency,
-                features: bu.features,
-                today_settings: bu.today_settings,
-                sidebar_settings: bu.sidebar_settings,
-                ui_settings: bu.ui_settings,
-                notification_preferences: bu.notification_preferences,
+                features: settingsObject(bu.features),
+                today_settings: settingsObject(bu.today_settings),
+                sidebar_settings: settingsObject(bu.sidebar_settings),
+                ui_settings: settingsObject(bu.ui_settings),
+                notification_preferences: settingsObject(
+                    bu.notification_preferences
+                ),
                 ai_profile: bu.ai_profile,
-                keyboard_shortcuts: bu.keyboard_shortcuts,
+                keyboard_shortcuts: settingsObject(bu.keyboard_shortcuts),
                 // A restored account is one already in use, so it skips the welcome
                 // page. Backups made before these were exported carry neither.
                 onboarding_starter:
@@ -1765,9 +1781,9 @@ async function restoreLinkedRecords(entries, renames, personUids, stats) {
                             .map((uid) => personUids[uid])
                             .filter(Boolean),
                         deleted_at: c.deleted_at || null,
-                        created_at: c.created_at || undefined,
+                        ...keptDates(c),
                     },
-                    { transaction }
+                    { transaction, silent: !!c.updated_at }
                 );
                 commentIds[c.uid] = row.id;
                 createdComments.push({ row, parentUid: c.parent_comment_uid });
@@ -1858,8 +1874,10 @@ async function restoreLinkedRecords(entries, renames, personUids, stats) {
                     defaults: {
                         uid: taken || !r.uid ? generateUid() : r.uid,
                         created_by_user_id: userId,
+                        ...keptDates(r),
                     },
                     transaction,
+                    silent: !!r.updated_at,
                 });
                 count('task_relations', created);
             }
@@ -1925,8 +1943,9 @@ async function restoreLinkedRecords(entries, renames, personUids, stats) {
                         url_host: f.url_host,
                         color: f.color ?? null,
                         show_on_calendar: f.show_on_calendar !== false,
+                        ...keptDates(f),
                     },
-                    { transaction }
+                    { transaction, silent: !!f.updated_at }
                 );
                 feedCount += 1;
                 count('calendar_feeds', true);
