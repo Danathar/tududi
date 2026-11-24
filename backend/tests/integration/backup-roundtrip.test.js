@@ -484,6 +484,27 @@ describe('Backup export and import round trip (format 2)', () => {
         );
     });
 
+    it('stores settings that a 1.x backup carries as JSON text as objects', async () => {
+        const backup = await exportUserData(source.id);
+        backup.user.features = JSON.stringify({
+            kanban_enabled: true,
+            habits_enabled: false,
+        });
+        backup.user.ui_settings = 'not json';
+        await target.update({ ui_settings: { project: { compact: true } } });
+        await peopleService.createSelfPerson(target);
+
+        await importUserData(target.id, backup);
+
+        const restored = await User.findByPk(target.id);
+        expect(typeof restored.features).toBe('object');
+        expect(restored.features).toMatchObject({
+            kanban_enabled: true,
+            habits_enabled: false,
+        });
+        expect(restored.ui_settings).toEqual({ project: { compact: true } });
+    });
+
     it('leaves a task whose parent was deleted without a parent', async () => {
         const backup = await exportUserData(source.id);
         // The target's own task takes the numeric id the backup still holds

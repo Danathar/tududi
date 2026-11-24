@@ -19,6 +19,7 @@ const {
     UserGoalOrder,
     UserProjectArea,
     TaskEvent,
+    sequelize,
 } = require('../../models');
 const secretCipher = require('../../shared/crypto/secretCipher');
 const {
@@ -210,6 +211,19 @@ describe('Backup of comments, plans, feeds, webhooks and orders', () => {
         expect(JSON.stringify(d)).not.toContain('whsec_test');
     });
 
+    it('exports the dates of comments, relations, plans and feeds', async () => {
+        const d = (await exportUserData(seeded.user.id)).data;
+        for (const row of [
+            ...d.comments,
+            ...d.task_relations,
+            ...d.daily_plans,
+            ...d.calendar_feeds,
+        ]) {
+            expect(row.created_at).toBeTruthy();
+            expect(row.updated_at).toBeTruthy();
+        }
+    });
+
     it('imports them into another account linked to the new rows', async () => {
         const backup = await exportUserData(seeded.user.id);
         const stats = await importUserData(target.id, backup);
@@ -317,6 +331,37 @@ describe('Backup of comments, plans, feeds, webhooks and orders', () => {
             project.id,
             area.id,
         ]);
+    });
+
+    it('keeps the dates of comments, relations and calendar feeds', async () => {
+        const old = new Date('2025-03-04T05:06:07.000Z');
+        const changed = new Date('2025-04-05T06:07:08.000Z');
+        for (const table of ['comments', 'task_relations', 'calendar_feeds']) {
+            await sequelize.query(
+                `UPDATE ${table} SET created_at = :old, updated_at = :changed`,
+                { replacements: { old, changed } }
+            );
+        }
+        const backup = await exportUserData(seeded.user.id);
+        await importUserData(target.id, backup);
+
+        const paint = await Task.findOne({
+            where: { user_id: target.id, name: 'Paint walls' },
+        });
+        const rows = [
+            ...(await Comment.findAll({ where: { user_id: target.id } })),
+            await TaskRelation.findOne({ where: { source_task_id: paint.id } }),
+            await CalendarFeed.findOne({ where: { user_id: target.id } }),
+        ];
+        expect(rows).toHaveLength(4);
+        for (const row of rows) {
+            expect(new Date(row.created_at).toISOString()).toBe(
+                old.toISOString()
+            );
+            expect(new Date(row.updated_at).toISOString()).toBe(
+                changed.toISOString()
+            );
+        }
     });
 
     it('imports task history with its dates and values', async () => {
