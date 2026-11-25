@@ -69,6 +69,27 @@ import {
 import { saveProjectAsTemplate } from '../../utils/templatesService';
 import TaskModal from '../Task/TaskModal';
 
+// A response that leaves the area fields out (undefined) says nothing about
+// them, so the page keeps the area it already shows. A null in either field
+// means the project's area was cleared, and the old one must go.
+const keepAreaUnlessCleared = (
+    saved: Project,
+    prev: Project | null | undefined
+) => {
+    const savedArea = saved.area as Project['area'] | null | undefined;
+    const savedAreaRecord = (saved as any).Area as unknown;
+    if (savedArea === null || savedAreaRecord === null) {
+        return { area: undefined, Area: null };
+    }
+    return {
+        area: savedArea === undefined ? prev?.area : savedArea,
+        Area:
+            savedAreaRecord === undefined
+                ? (prev as any)?.Area
+                : savedAreaRecord,
+    };
+};
+
 const ProjectDetails: React.FC = () => {
     const { uidSlug } = useParams<{ uidSlug: string }>();
     const navigate = useNavigate();
@@ -341,8 +362,7 @@ const ProjectDetails: React.FC = () => {
             setProject((prev) => ({
                 ...prev,
                 ...savedProject,
-                area: savedProject.area || prev?.area,
-                Area: (savedProject as any).Area || (prev as any)?.Area,
+                ...keepAreaUnlessCleared(savedProject, prev),
             }));
             projectsStore.setProjects(
                 projectsStore.projects.map((p) =>
@@ -422,8 +442,7 @@ const ProjectDetails: React.FC = () => {
 
         setProject((prev) => ({
             ...updatedProject,
-            area: updatedProject.area || prev?.area,
-            Area: (updatedProject as any).Area || (prev as any)?.Area,
+            ...keepAreaUnlessCleared(updatedProject, prev),
         }));
 
         // Update the global projects store

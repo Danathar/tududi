@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProjectDetails from '../ProjectDetails';
-import { fetchProjectBySlug } from '../../../utils/projectsService';
+import { fetchProjectBySlug, updateProject } from '../../../utils/projectsService';
 
 jest.mock('react-router-dom', () => ({
     useParams: () => ({ uidSlug: 'project-slug-123' }),
@@ -146,6 +146,25 @@ jest.mock('../ProjectInsightsPanel', () => ({
     default: () => null,
 }));
 
+jest.mock('../ProjectOverviewRail', () => ({
+    __esModule: true,
+    default: ({
+        project,
+        onUpdate,
+    }: {
+        project: { area?: { name: string } | null };
+        onUpdate: (patch: { area_id: number | null }) => Promise<void>;
+    }) => (
+        <div>
+            <span data-testid="rail-area">{project.area?.name ?? 'none'}</span>
+            <button onClick={() => onUpdate({ area_id: null })}>
+                Clear area
+            </button>
+            <button onClick={() => onUpdate({ area_id: 7 })}>Keep area</button>
+        </div>
+    ),
+}));
+
 jest.mock('../ProjectTasksSection', () => ({
     __esModule: true,
     default: () => null,
@@ -263,5 +282,80 @@ describe('ProjectDetails when the project cannot be loaded (#2022)', () => {
             screen.queryByText("You don't have access to this project")
         ).not.toBeInTheDocument();
         expect(fetchProjectBySlug).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('ProjectDetails area after a save', () => {
+    const projectInArea = {
+        id: 101,
+        uid: 'proj-101',
+        name: 'Garden shed',
+        description: '',
+        status: 'in_progress',
+        tasks: [],
+        notes: [],
+        area_id: 7,
+        area: { id: 7, name: 'Home' },
+        Area: { id: 7, name: 'Home' },
+    };
+
+    const renderWithArea = async () => {
+        (fetchProjectBySlug as jest.Mock).mockResolvedValue(projectInArea);
+        render(<ProjectDetails />);
+        await waitFor(() => {
+            expect(screen.getByTestId('rail-area')).toHaveTextContent('Home');
+        });
+    };
+
+    it('shows no area once the response says it was cleared', async () => {
+        await renderWithArea();
+        (updateProject as jest.Mock).mockResolvedValue({
+            ...projectInArea,
+            area_id: null,
+            area: undefined,
+            Area: null,
+        });
+
+        fireEvent.click(screen.getByText('Clear area'));
+
+        await waitFor(() => {
+            expect(screen.getByTestId('rail-area')).toHaveTextContent('none');
+        });
+    });
+
+    it('shows no area when the cleared response carries both fields as null', async () => {
+        await renderWithArea();
+        (updateProject as jest.Mock).mockResolvedValue({
+            id: projectInArea.id,
+            uid: projectInArea.uid,
+            name: projectInArea.name,
+            area_id: null,
+            area: null,
+            Area: null,
+        });
+
+        fireEvent.click(screen.getByText('Clear area'));
+
+        await waitFor(() => {
+            expect(screen.getByTestId('rail-area')).toHaveTextContent('none');
+        });
+    });
+
+    it('keeps the area when the response does not carry it at all', async () => {
+        await renderWithArea();
+        (updateProject as jest.Mock).mockResolvedValue({
+            id: projectInArea.id,
+            uid: projectInArea.uid,
+            name: projectInArea.name,
+        });
+
+        fireEvent.click(screen.getByText('Keep area'));
+
+        await waitFor(() => {
+            expect(updateProject).toHaveBeenCalledWith('proj-101', {
+                area_id: 7,
+            });
+        });
+        expect(screen.getByTestId('rail-area')).toHaveTextContent('Home');
     });
 });
