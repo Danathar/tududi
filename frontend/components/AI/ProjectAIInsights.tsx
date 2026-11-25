@@ -76,8 +76,8 @@ const ProjectAIInsights = forwardRef<
                       ? 2
                       : null,
         projectDueDate: project.due_date_at || undefined,
-        projectGoal: project.Goal?.title || project.goal?.title || undefined,
-        projectArea: (project.area as any)?.name || undefined,
+        projectGoal: project.Goal?.title ?? project.goal?.title ?? undefined,
+        projectArea: project.Area?.name ?? project.area?.name ?? undefined,
         totalTasks: taskStats?.total,
         openTasks: taskStats ? taskStats.total - taskStats.completed : undefined,
         completedTasks: taskStats?.completed,
