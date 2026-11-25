@@ -23,6 +23,9 @@ Notable changes to tududi. Versions match the git tags and the
 - A complimentary Pro plan that has an end date now shows the subscribe
   option on the billing page, so you can subscribe before it ends.
   Previously the option was hidden while the free access lasted.
+- Updated dependencies to fix nine open security alerts: hono, i18next (to
+  version 26), fast-xml-parser, and the glob and minimatch copies used by
+  the API docs and editor tooling.
 - Clearing a project's area on its page now removes the old area from the
   page straight away. Previously the old area stayed in view until you
   reloaded.
