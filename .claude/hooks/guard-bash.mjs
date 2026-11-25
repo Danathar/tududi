@@ -69,6 +69,11 @@
 //     of export/declare/typeset/local/readonly; and git run behind `env -i`,
 //     `--ignore-environment`, a lone `-`, or `exec -c`, which empty its
 //     environment.
+//   - PATH, HOME or a GIT_CONFIG_* name assigned with no NAME=value word: `let`,
+//     `(( ))` and `$(( ))` arithmetic, and declare/typeset/readonly/local PATH=.
+//   - git, node or npm run after a `cd`, `pushd` or `popd` that may leave the
+//     checkout (the shell's spelling of `git -C DIR`); a cd to the project root
+//     or into a literal relative path inside the checkout is fine.
 //   - git, node, npm or a shell run through xargs: xargs appends words read at
 //     run time (`printf '%s\n' --output=FILE | xargs git log`), so none of the
 //     argument checks here could see them.
@@ -115,13 +120,13 @@
 // and the refusal of any git option that starts with `--out`, `--no-ind` or
 // `--orde` (see checkGitFileOptions()).
 
-import { basename } from 'node:path';
+import { basename, join, sep } from 'node:path';
 import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 // Reading the command line as the shell would is shared with the other
 // repositories that carry this guard; see shell-reader.mjs.
 import {
-    ARGUMENT_ONLY_PROGRAMS, BUDGET_MS, commandNameReader, commandStrings, COMMAND_STRING_SEPARATORS,
+    ARGUMENT_ONLY_PROGRAMS, BUDGET_MS, CHDIR, commandNameReader, commandStrings, COMMAND_STRING_SEPARATORS,
     EXEC_GIT_CONFIG, expandWrapperOptions, extractSubstitutions, fishScripts, GIT_EXEC_OPTION,
     EXTGLOB_OPEN, GIT_SHORT_UPLOAD_PACK, GIT_UPLOAD_PACK_OPTION, GIT_UPLOAD_PACK_SUBCOMMANDS, isAssignment,
     KEYWORDS, MAX_UNLISTED_INNER, NOOP_PROGRAMS, OverBudget, PROGRAM_ENV, REFUSED_GIT_OPTION, RISKY_GIT_CONFIG, SHELLS,
@@ -342,11 +347,95 @@ function checkAssignedName(word, what) {
     return checkCodeEnv([name]);
 }
 
+/**
+ * The names an arithmetic text assigns: `NAME = 1`, `NAME += 1`, `NAME[0] = 1`,
+ * `NAME++`, `--NAME`. `let` and `(( ))` assign the name on the left of the
+ * expression with no NAME=value word, so bash does it to an exported HOME, to
+ * PATH or to a GIT_CONFIG_* name just as `HOME=planted;` would. A comparison
+ * (`==`, `<=`, `>=`, `!=`) assigns nothing. Reading more names than bash
+ * assigns can only over-refuse.
+ */
+function arithmeticAssignedNames(text) {
+    const names = new Set();
+    const name = '[A-Za-z_][A-Za-z0-9_]*';
+    const index = '(?:\\[[^\\]]*\\]\\s*)?';
+    for (const m of text.matchAll(new RegExp(`(${name})\\s*${index}(?:[-+*/%&^|]|<<|>>)?=(?!=)`, 'g'))) names.add(m[1]);
+    for (const m of text.matchAll(new RegExp(`(?:\\+\\+|--)\\s*(${name})|(${name})\\s*${index}(?:\\+\\+|--)`, 'g'))) {
+        names.add(m[1] ?? m[2]);
+    }
+    return [...names];
+}
+
+/** The refusal for the first gated name an arithmetic text assigns, or null. */
+function checkArithmeticNames(text, what) {
+    for (const name of arithmeticAssignedNames(text)) {
+        const refusal = checkAssignedName(name, what(name));
+        if (refusal) return refusal;
+    }
+    return null;
+}
+
+/**
+ * Every `(( ... ))` command and `$(( ... ))` expansion in a command line is
+ * read for the names it assigns. The tokenizer reads them as nested subshells
+ * and sees no NAME=value word in `(( PATH = 1 ))`, so this reads the text.
+ */
+function checkArithmeticAssignments(command) {
+    let i = command.indexOf('((');
+    while (i !== -1) {
+        spend();
+        let depth = 0;
+        let j = i;
+        do {
+            if (command[j] === '(') depth++;
+            else if (command[j] === ')') depth--;
+            j++;
+        } while (depth > 0 && j < command.length);
+        const refusal = checkArithmeticNames(command.slice(i + 2, j), (name) => `(( ${name} = ... ))`);
+        if (refusal) return refusal;
+        i = command.indexOf('((', j);
+    }
+    return null;
+}
+
 function blockPathAssignment(what) {
     return blockLocal(
         `Blocked: \`${what}\` sets PATH, which is already exported, so the next command is looked up in the ` +
             'folders it names and can run a program a branch committed there.'
     );
+}
+
+// ---------------------------------------------------------------------------
+// Directory changes
+// ---------------------------------------------------------------------------
+
+/**
+ * Every operand check here resolves paths against the checkout, so a `cd` that
+ * leaves it makes them meaningless: `cd /tmp && git diff -- x .env` runs git
+ * outside any repository, where it falls back to --no-index and prints both
+ * files, while both operands looked like in-tree paths. It is the shell's
+ * spelling of `git -C DIR`. A change stays allowed only when its one operand is
+ * the project root or a literal relative path with no `..` whose real path is
+ * inside the checkout. Anything that cannot be read as a literal path leaves:
+ * no operand (HOME), `-`, `~`, a `$` or backtick, a glob, a nonexistent path,
+ * and every `popd`. With CDPATH set, bash searches it for a relative name that
+ * does not start with `./`, so those leave too. Returns the change as typed
+ * when it may leave the checkout, else null.
+ */
+function directoryChangeLeaves(cmd, args, cdpath) {
+    const shown = [cmd, ...args].join(' ');
+    if (cmd === 'popd' || args.length !== 1) return shown;
+    const target = args[0];
+    if (target === '$CLAUDE_PROJECT_DIR' || target === '${CLAUDE_PROJECT_DIR}') return null;
+    if (target === '' || /^[-+~]|[$`*?[{]/.test(target)) return shown;
+    if (!target.startsWith('/') && (target.split('/').includes('..') || (cdpath && !target.startsWith('./')))) return shown;
+    try {
+        const root = realpathSync(process.env.CLAUDE_PROJECT_DIR || process.cwd());
+        const resolved = realpathSync(target.startsWith('/') ? target : join(root, target));
+        return resolved === root || resolved.startsWith(root + sep) ? null : shown;
+    } catch {
+        return shown;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1125,6 +1214,19 @@ function checkUnlistedProgram(w, inlineEnv, state) {
 // Segment / command analysis
 // ---------------------------------------------------------------------------
 
+/** The refusal for a checked command that runs after a `cd` that may have left the checkout, or null. */
+function blockAfterDirectoryChange(cmd, state) {
+    if (state.leftCheckout === undefined) return null;
+    return blockLocal(
+        `Blocked: \`${state.leftCheckout}\` may move the shell out of this checkout before \`${cmd}\` runs, and every ` +
+            'operand check here resolves paths against the checkout: `cd /some/dir && git diff -- a.env b` passed ' +
+            'as two in-tree operands, then git ran outside any repository, fell back to --no-index on its own ' +
+            'and printed both files. It is the shell\'s spelling of `git -C DIR`. A cd to the project root ' +
+            '(`cd "$CLAUDE_PROJECT_DIR"`) or into a literal relative path inside the checkout (`cd tests`) is ' +
+            'not refused; otherwise run the command from the checkout and name the paths.'
+    );
+}
+
 function checkSegment(words, state) {
     spend();
     // What the tokenizer found feeding this segment's stdin: a heredoc body, a
@@ -1153,6 +1255,7 @@ function checkSegment(words, state) {
             if (name !== undefined) return blockSettingsEnvOverwrite(`${name}=${inlineEnv[name]}`);
             // PATH is always exported, so `PATH=planted:$PATH; git log` reaches the git after it.
             if ('PATH' in inlineEnv) return blockPathAssignment(`PATH=${inlineEnv.PATH}`);
+            if ('CDPATH' in inlineEnv) state.cdpath = true;
             return null;
         }
         // A name made only of `*` and `?` (`*`, `./???`) runs whichever file
@@ -1276,6 +1379,18 @@ function checkSegment(words, state) {
         );
     }
 
+    // A directory change that may leave the checkout; the git, node or npm
+    // after it is refused below (see directoryChangeLeaves()).
+    if (CHDIR.has(cmd) && state.leftCheckout === undefined) {
+        const left = directoryChangeLeaves(cmd, args, state.cdpath || 'CDPATH' in inlineEnv || 'CDPATH' in process.env);
+        if (left !== null) state.leftCheckout = left;
+    }
+    // `let NAME=1` assigns NAME, with no NAME=value word.
+    if (cmd === 'let') {
+        const refusal = checkArithmeticNames(args.join(' '), (name) => `let ${name}=...`);
+        if (refusal) return refusal;
+    }
+
     // Builtins that assign a variable named by an operand rather than by a
     // `NAME=value` word. Every operand of read, mapfile, readarray and getopts is
     // checked, option values included (`read -p HOME x` is refused too): only
@@ -1326,6 +1441,11 @@ function checkSegment(words, state) {
             const eq = a.indexOf('=');
             if (!exports && eq !== -1 && a.slice(0, eq).includes('GIT_CONFIG')) return blockSettingsEnvOverwrite(`${cmd} ${a}`);
             // `declare HOME=planted` keeps HOME's export, so git reads the new value.
+            // PATH is always exported, so declare, typeset, readonly and local
+            // assign the one git is looked up in just as `PATH=planted;` does.
+            if (eq !== -1 && a.slice(0, eq).replace(/\+$/, '').replace(/\[.*$/, '') === 'PATH') {
+                return blockPathAssignment(`${cmd} ${a}`);
+            }
             if (eq !== -1) {
                 const envBlock = checkCodeEnv([a.slice(0, eq).replace(/\+$/, '')]);
                 if (envBlock) return envBlock;
@@ -1360,15 +1480,15 @@ function checkSegment(words, state) {
         if ('PATH' in inlineEnv || 'PATH' in (state.exportedEnv ?? {})) {
             return blockLocal(`Blocked: \`${cmd}\` with PATH= set in the same command can run a different program.`);
         }
-        if (cmd === 'npm') return checkNpm(args);
-        return checkNode(args);
+        const refusal = cmd === 'npm' ? checkNpm(args) : checkNode(args);
+        return refusal ?? blockAfterDirectoryChange(cmd, state);
     }
     if (cmd === 'gh') {
         const envRepo = inlineEnv.GH_REPO ?? state.exportedGhRepo ?? null;
         return checkGh(args, envRepo);
     }
     if (cmd === 'git') {
-        const refusal = checkGit(args, inlineEnv, state.exportedEnv ?? {});
+        const refusal = checkGit(args, inlineEnv, state.exportedEnv ?? {}) ?? blockAfterDirectoryChange(cmd, state);
         if (refusal || !state.envCleared) return refusal;
         return blockLocal(
             'Blocked: `env -i` (`--ignore-environment`, a lone `-`) and `exec -c` run git without the GIT_CONFIG_* ' +
@@ -1423,6 +1543,8 @@ function checkSegment(words, state) {
 
 /** Analyse a command line. Returns null if allowed, else { blocked, reason }. */
 export function checkCommand(command, state = {}) {
+    const arithmetic = checkArithmeticAssignments(command);
+    if (arithmetic) return arithmetic;
     for (const sub of extractSubstitutions(command)) {
         const r = checkCommand(sub, state);
         if (r) return r;
