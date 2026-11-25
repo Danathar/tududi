@@ -20,6 +20,9 @@ Notable changes to tududi. Versions match the git tags and the
 
 ### Fixed
 
+- A complimentary Pro plan that has an end date now shows the subscribe
+  option on the billing page, so you can subscribe before it ends.
+  Previously the option was hidden while the free access lasted.
 - Clearing a project's area on its page now removes the old area from the
   page straight away. Previously the old area stayed in view until you
   reloaded.
