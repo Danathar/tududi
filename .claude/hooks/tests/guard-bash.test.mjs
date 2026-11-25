@@ -71,6 +71,14 @@ const allowed = [
     'for f in a b; do git log -1; done',
     'while read -r line; do git log -1; done < README.md',
     'PAGER_LINES=5; git log -1',
+    // Only printf's own leading -v assigns: not another command's -v, and not
+    // one printf takes as its format or its data.
+    'grep -v PATH README.md; git log -1',
+    'printf %s -v HOME; git log -1',
+    'printf -- -v HOME; git log -1',
+    'printf --help; git log -1',
+    'printf --PATH; git log -1',
+    'printf -vout; git log -1',
     'gh api graphql -f query=\'query($o:String!){ repository(owner:$o,name:"tududi"){ id } }\' -f o=Danathar',
     'gh discussion list --repo chrisvel/tududi',
     'gh auth status',
@@ -587,6 +595,16 @@ const blockedLocal = [
     ['printf -v HOME %s planted; git diff HEAD~1 HEAD', 'HOME'],
     ['printf -vHOME %s planted; git diff HEAD~1 HEAD', 'HOME'],
     ['printf -v PATH %s planted; git log -1', 'PATH'],
+    // A harmless -v before it does not hide the -v bash acts on.
+    ['printf -vout -vHOME %s planted; git log -1', 'HOME'],
+    // The refusal names the assignment it saw and says why PATH matters.
+    ['PATH=planted; git log -1', '`PATH=planted` sets PATH'],
+    ['PATH=planted; git log -1', 'run a program a branch committed there'],
+    ['mapfile PATH < list; git log -1', '`mapfile PATH` sets PATH'],
+    ['printf -v PATH %s planted; git log -1', '`printf -v PATH` sets PATH'],
+    ['for PATH in planted; do git log -1; done', '`for PATH` sets PATH'],
+    // A loop over a harmless name still has its list checked.
+    ['for f in git diff --no-index a b; do echo x; done', '`for` runs a command that is refused'],
     ['for HOME in planted; do git diff HEAD~1 HEAD; done', 'HOME'],
     ['for PATH in planted; do git log -1; done', 'PATH'],
     ['select HOME in planted; do git log -1; done', 'HOME'],

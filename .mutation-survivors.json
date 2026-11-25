@@ -198,6 +198,13 @@
             "reason": "Equivalent: the text before `=` is a shell variable name, which can hold a `+` only as its last character (the `NAME+=` append form; bash rejects any other `+` as an invalid identifier), so removing the first `+` and removing a trailing one give the same name."
         },
         {
+            "file": ".claude/hooks/guard-bash.mjs",
+            "mutator": "Regex",
+            "original": "/\\[.*$/",
+            "replacement": "/\\[.*/",
+            "reason": "Equivalent for a variable name: `.*` is greedy, so without `$` it still removes everything from the first `[` to the end of the word. The two differ only for a word holding a line break, which bash does not accept in a name."
+        },
+        {
             "file": ".claude/hooks/shell-reader.mjs",
             "mutator": "StringLiteral",
             "original": "'-S'",
