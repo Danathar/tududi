@@ -23,6 +23,9 @@ Notable changes to tududi. Versions match the git tags and the
 - Clearing a project's area on its page now removes the old area from the
   page straight away. Previously the old area stayed in view until you
   reloaded.
+- A project shared with you now shows the area you placed it in on its own
+  page, and after you edit or complete it, instead of the owner's area. The
+  owner still sees their own area.
 - Tasks that repeat every few weeks on Sunday plus another weekday (for
   example Sunday and Wednesday every 2 weeks) now land on the right dates.
   Weeks start on Monday, so Sunday closes a week. Previously the next date
