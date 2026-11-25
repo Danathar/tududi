@@ -20,7 +20,10 @@ const permissionsService = require('../../services/permissionsService');
 const permissionSources = require('../../services/permissionSources');
 const { isAdmin } = require('../../services/rolesService');
 const scopeService = require('../../services/scopeService');
-const { isAreaOverridden } = require('../../services/projectAreaOverrides');
+const {
+    isAreaOverridden,
+    applyViewerAreasToProjects,
+} = require('../../services/projectAreaOverrides');
 const { sortTags } = require('../tasks/core/serializers');
 const {
     getBlockedCountMap,
@@ -523,7 +526,7 @@ class ProjectsService {
             ? await projectsRepository.getSharedProjectUids([project.uid])
             : new Set();
 
-        return {
+        const result = {
             ...projectJson,
             tags: sortTags(projectJson.Tags),
             Tasks: normalizedTasks,
@@ -549,6 +552,11 @@ class ProjectsService {
                       ).has(project.uid)
                     : false,
         };
+
+        // Someone the project is shared with sees their own placement, not
+        // the owner's area.
+        if (viewerId) await applyViewerAreasToProjects([result], viewerId);
+        return result;
     }
 
     /**
@@ -768,12 +776,16 @@ class ProjectsService {
             await projectsRepository.findByUidWithTagsAndArea(validatedUid);
         const projectJson = projectWithAssociations.toJSON();
 
-        return {
+        const updated = {
             ...projectJson,
             tags: sortTags(projectJson.Tags),
             due_date_at: formatDate(projectWithAssociations.due_date_at),
             ...startFields(projectWithAssociations, userTimezone),
         };
+        // A collaborator sees their own placement in the response, which is
+        // also what complete() hands back.
+        await applyViewerAreasToProjects([updated], userId);
+        return updated;
     }
 
     // Marks a project done, optionally finishing its open tasks too.
