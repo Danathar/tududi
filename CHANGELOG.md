@@ -23,6 +23,9 @@ Notable changes to tududi. Versions match the git tags and the
 - A complimentary Pro plan that has an end date now shows the subscribe
   option on the billing page, so you can subscribe before it ends.
   Previously the option was hidden while the free access lasted.
+- Importing a backup now keeps the original dates of comments, task
+  relations and feeds instead of stamping them with the import time.
+- Picking an area in the focus popover now lists the projects of that area.
 - Updated dependencies to fix nine open security alerts: hono, i18next (to
   version 26), fast-xml-parser, and the glob and minimatch copies used by
   the API docs and editor tooling.
