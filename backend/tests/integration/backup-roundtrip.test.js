@@ -496,8 +496,12 @@ describe('Backup export and import round trip (format 2)', () => {
 
         await importUserData(target.id, backup);
 
+        const [[row]] = await sequelize.query(
+            'SELECT json_typeof(features::json) AS kind FROM users WHERE id = :id',
+            { replacements: { id: target.id } }
+        );
+        expect(row.kind).toBe('object');
         const restored = await User.findByPk(target.id);
-        expect(typeof restored.features).toBe('object');
         expect(restored.features).toMatchObject({
             kanban_enabled: true,
             habits_enabled: false,
