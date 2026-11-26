@@ -187,8 +187,8 @@ const TaskAIInsights = forwardRef<TaskAIInsightsHandle, TaskAIInsightsProps>(
             projectName: project?.name || undefined,
             projectDescription: project?.description || undefined,
             projectStatus: project?.status || undefined,
-            projectGoal: (project?.goal as any)?.title || undefined,
-            projectArea: (project?.area as any)?.name || undefined,
+            projectGoal: project?.Goal?.title ?? project?.goal?.title ?? undefined,
+            projectArea: project?.Area?.name ?? project?.area?.name ?? undefined,
         });
 
         const dismiss = () => {

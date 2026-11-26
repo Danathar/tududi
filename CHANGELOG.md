@@ -32,6 +32,10 @@ Notable changes to tududi. Versions match the git tags and the
 - A project shared with you now shows the area you placed it in on its own
   page, and after you edit or complete it, instead of the owner's area. The
   owner still sees their own area.
+- AI suggestions for a project now receive the project's area, and AI
+  suggestions for a task now receive its project's goal and area. The web app
+  read them from a field the API does not send, so the assistant never saw
+  them.
 - Tasks that repeat every few weeks on Sunday plus another weekday (for
   example Sunday and Wednesday every 2 weeks) now land on the right dates.
   Weeks start on Monday, so Sunday closes a week. Previously the next date
