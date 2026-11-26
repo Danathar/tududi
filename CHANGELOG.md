@@ -20,6 +20,9 @@ Notable changes to tududi. Versions match the git tags and the
 
 ### Fixed
 
+- Typing a very long run of punctuation after an @name in the inbox no longer
+  freezes parsing. Trimming the punctuation at the end of the name now stays
+  fast.
 - A complimentary Pro plan that has an end date now shows the subscribe
   option on the billing page, so you can subscribe before it ends.
   Previously the option was hidden while the free access lasted.

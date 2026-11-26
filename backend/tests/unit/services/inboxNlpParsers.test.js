@@ -200,6 +200,14 @@ describe('inbox natural-language parsing', () => {
             expect(parsePersonRef('Ask @Maria, then leave').name).toBe('Maria');
         });
 
+        it('stays fast on a long run of punctuation inside the name', () => {
+            const text = `@a${'!'.repeat(200000)}b`;
+            const started = Date.now();
+            const ref = parsePersonRef(text);
+            expect(Date.now() - started).toBeLessThan(1000);
+            expect(ref.name).toBe(text.slice(1));
+        });
+
         it('ignores email addresses', () => {
             expect(parsePersonRef('Email bob@example.com')).toBeNull();
         });
@@ -224,6 +232,13 @@ describe('inbox natural-language parsing', () => {
                     text: '~"Mom\'s \\"big\\" move"',
                     index: 5,
                 },
+            ]);
+        });
+
+        it('trims sentence punctuation from an unquoted area only', () => {
+            expect(parseAreaRefs('Plan ~Home. Then ~"Work."')).toMatchObject([
+                { name: 'Home', text: '~Home' },
+                { name: 'Work.', text: '~"Work."' },
             ]);
         });
     });
