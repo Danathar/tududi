@@ -210,6 +210,13 @@
             "original": "'-S'",
             "replacement": "\"\"",
             "reason": "Equivalent for this repository: the guard reads `env -S`/`--split-string` itself (guard-bash.mjs, the env split-string branch) before the reader's wrapper walk sees it, so every allowed and blocked env -S row decides the same either way. This file is a pinned copy of the canonical reader (shell-reader.test.mjs checks its sha256, and is left out of the mutation run for that reason), so a real change to its reading lands and is tested in the canonical copy."
+        },
+        {
+            "file": "backend/modules/inbox/nlpParsers.js",
+            "mutator": "StringLiteral",
+            "original": "''",
+            "replacement": "\"Stryker was here!\"",
+            "reason": "Unreachable fallback: when the quoted group (match[2]) did not match, the alternation's other branch `[^\\s\"@]+` matched, so match[3] is always a non-empty string and the `|| ''` is never taken. It is kept so a future pattern change cannot make trimTrailingPunctuation receive undefined."
         }
     ]
 }

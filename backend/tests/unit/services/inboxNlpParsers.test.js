@@ -234,6 +234,13 @@ describe('inbox natural-language parsing', () => {
                 },
             ]);
         });
+
+        it('trims sentence punctuation from an unquoted area only', () => {
+            expect(parseAreaRefs('Plan ~Home. Then ~"Work."')).toMatchObject([
+                { name: 'Home', text: '~Home' },
+                { name: 'Work.', text: '~"Work."' },
+            ]);
+        });
     });
 
     describe('processInboxItem', () => {
