@@ -208,6 +208,10 @@ describe('inbox natural-language parsing', () => {
             expect(ref.name).toBe(text.slice(1));
         });
 
+        it('finds no person when the name is only punctuation', () => {
+            expect(parsePersonRef('Thanks @!!! see you')).toBeNull();
+        });
+
         it('ignores email addresses', () => {
             expect(parsePersonRef('Email bob@example.com')).toBeNull();
         });
@@ -240,6 +244,10 @@ describe('inbox natural-language parsing', () => {
                 { name: 'Home', text: '~Home' },
                 { name: 'Work.', text: '~"Work."' },
             ]);
+        });
+
+        it('finds no area when the name is only punctuation', () => {
+            expect(parseAreaRefs('Wait ~... and see')).toEqual([]);
         });
     });
 
