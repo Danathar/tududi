@@ -2,7 +2,7 @@ import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { DecorationSet } from '@codemirror/view';
-import { buildLivePreview } from '../livePreview';
+import { buildLivePreview, bareLinkHref } from '../livePreview';
 import { buildBlockWidgets } from '../blockWidgets';
 import { livePreviewExtension } from '../index';
 
@@ -124,9 +124,68 @@ describe('live preview decorations', () => {
             { from: 0, to: state.doc.length },
         ]);
         const items = flatten(decorations);
-        expect(has(items, 'mark:cm-md-link', 5, 9)).toBe(true);
+        expect(has(items, 'mark:cm-md-link cm-md-link-rendered', 5, 9)).toBe(
+            true
+        );
         expect(has(items, 'hide', 4, 5)).toBe(true);
         expect(has(items, 'hide', 9, 25)).toBe(true);
+    });
+
+    it('keeps a link editable while the caret is in it', () => {
+        const items = inline('see [docs](https://x.dev) now\ntail', 7);
+        expect(has(items, 'mark:cm-md-link', 5, 9)).toBe(true);
+        expect(has(items, 'mark:cm-md-marker', 4, 5)).toBe(true);
+    });
+
+    it('links bare URLs, emails and autolinks', () => {
+        const doc =
+            'a https://x.dev b <https://y.dev> me@x.dev www.z.dev\ntail';
+        const state = stateFor(doc);
+        const marks: Record<string, string> = {};
+        const iter = buildLivePreview(state, [
+            { from: 0, to: state.doc.length },
+        ]).decorations.iter();
+        while (iter.value) {
+            const spec: any = iter.value.spec;
+            if (spec.class?.includes('cm-md-link-rendered')) {
+                marks[state.sliceDoc(iter.from, iter.to)] =
+                    spec.attributes['data-href'];
+            }
+            iter.next();
+        }
+        expect(marks).toEqual({
+            'https://x.dev': 'https://x.dev',
+            'https://y.dev': 'https://y.dev',
+            'me@x.dev': 'mailto:me@x.dev',
+            'www.z.dev': 'https://www.z.dev',
+        });
+        const items = inline(doc);
+        expect(has(items, 'hide', 18, 19)).toBe(true);
+        expect(has(items, 'hide', 32, 33)).toBe(true);
+    });
+
+    it('gives a bare link the right href', () => {
+        expect(bareLinkHref('https://x.dev')).toBe('https://x.dev');
+        expect(bareLinkHref('mailto:me@x.dev')).toBe('mailto:me@x.dev');
+        expect(bareLinkHref('me@x.dev')).toBe('mailto:me@x.dev');
+        expect(bareLinkHref('www.z.dev/a:b')).toBe('https://www.z.dev/a:b');
+        expect(bareLinkHref('a@b@c')).toBe('https://a@b@c');
+    });
+
+    it('marks a link target once, not again as a bare URL', () => {
+        const hrefMarks = (doc: string) =>
+            inline(`${doc}\ntail`).filter((i) => i.kind.includes('cm-md-link'));
+        expect(hrefMarks('[docs](https://x.dev)')).toHaveLength(1);
+        expect(hrefMarks('![alt](https://x.dev/a.png)')).toHaveLength(0);
+        expect(hrefMarks('[docs][ref]\n\n[ref]: https://x.dev')).toHaveLength(
+            0
+        );
+    });
+
+    it('keeps an autolink editable while the caret is on its brackets', () => {
+        const items = inline('<https://y.dev> x\ntail', 0);
+        expect(has(items, 'mark:cm-md-link', 1, 14)).toBe(true);
+        expect(has(items, 'mark:cm-md-link cm-md-link-rendered')).toBe(false);
     });
 
     it('marks wikilinks but ignores them inside inline code', () => {
@@ -348,6 +407,31 @@ describe('selecting text keeps the rendered note (#1667)', () => {
         window.dispatchEvent(new MouseEvent('mouseup'));
         expect(boldMarkersShown()).toBe(true);
 
+        view.destroy();
+        parent.remove();
+    });
+});
+
+describe('rendered link styling', () => {
+    it('shows a pointer cursor over a link that opens on a plain click', () => {
+        const parent = document.createElement('div');
+        document.body.append(parent);
+        const view = new EditorView({
+            parent,
+            state: EditorState.create({
+                doc: 'see [a](https://x.dev)\n\ntail',
+                extensions: [
+                    markdown({ base: markdownLanguage }),
+                    livePreviewExtension(),
+                ],
+            }),
+        });
+        const css = Array.from(document.querySelectorAll('style'))
+            .map((el) => el.textContent ?? '')
+            .join('\n');
+        expect(css).toMatch(
+            /\.cm-md-link-rendered[^{]*\{[^}]*cursor:\s*pointer/
+        );
         view.destroy();
         parent.remove();
     });
