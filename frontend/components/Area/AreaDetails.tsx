@@ -86,11 +86,10 @@ const AreaDetails: React.FC = () => {
 
     const loadAreaTasks = useCallback(
         async (silent = false) => {
-            if (!area?.uid) return;
             if (!silent) setLoadingTasks(true);
             try {
                 const result = await fetchTasks(
-                    `?area_uid=${area.uid}&type=all&status=all`
+                    `?area_uid=${areaUid}&type=all&status=all`
                 );
                 setAreaTasks(result.tasks || []);
             } catch {
@@ -99,7 +98,7 @@ const AreaDetails: React.FC = () => {
                 if (!silent) setLoadingTasks(false);
             }
         },
-        [area?.uid]
+        [areaUid]
     );
 
     useEffect(() => {

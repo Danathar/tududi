@@ -131,3 +131,4 @@ out.
 | [#672](https://github.com/Danathar/tududi/issues/672) | `CHANGELOG.md` | fix(billing): offer checkout while a comp that ends is active; hand port of upstream chrisvel/tududi#2119 | fork only |
 | [#671](https://github.com/Danathar/tududi/issues/671) | `CHANGELOG.md`, `package-lock.json`, `package.json` | chore(deps): fix open Dependabot alerts (hono, i18next 26, fast-xml-parser, glob and minimatch overrides); hand port of upstream chrisvel/tududi#2118 | fork only |
 | [#681](https://github.com/Danathar/tududi/issues/681) | `CHANGELOG.md`, `backend/modules/inbox/nlpParsers.js`, `backend/tests/unit/services/inboxNlpParsers.test.js` | fix(inbox): trim punctuation from an @name without a quadratic regex | fork only |
+| [#686](https://github.com/Danathar/tududi/issues/686) | `frontend/components/Area/AreaDetails.tsx`, `frontend/components/Area/__tests__/AreaDetails.test.tsx` | fix(areas): show projects created elsewhere when an area opens | fork only |
