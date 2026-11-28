@@ -20,6 +20,10 @@ Notable changes to tududi. Versions match the git tags and the
 
 ### Fixed
 
+- A subscribed calendar whose current and repeating events alone come to
+  more than 5 MB is now refused with a clear message. Feeds of up to 50 MB
+  are still read when most of their size is old events, but one feed can no
+  longer make the server hold about 1 GB of memory.
 - Typing a very long run of punctuation after an @name in the inbox no longer
   freezes parsing. Trimming the punctuation at the end of the name now stays
   fast.

@@ -8,12 +8,7 @@ const {
     getCurrentDateInTimezone,
 } = require('../../utils/timezone-utils');
 const { fetchFeed, normalizeFeedUrl, FeedFetchError } = require('./fetcher');
-const {
-    parseCalendar,
-    dropPastEvents,
-    dayNumber,
-    eventsForRange,
-} = require('./icsEvents');
+const { readCurrentEvents, dayNumber, eventsForRange } = require('./icsEvents');
 const moment = require('moment-timezone');
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
@@ -34,7 +29,7 @@ function readFeed(text) {
         now.getUTCMonth() + 1,
         now.getUTCDate()
     );
-    return parseCalendar(dropPastEvents(text, today - KEEP_PAST_DAYS));
+    return readCurrentEvents(text, today - KEEP_PAST_DAYS);
 }
 
 // Parsed feeds per process, keyed by feed uid, with the ranges already

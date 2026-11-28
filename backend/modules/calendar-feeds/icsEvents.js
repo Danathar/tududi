@@ -2,6 +2,7 @@
 
 const ICAL = require('ical.js');
 const moment = require('moment-timezone');
+const { FeedFetchError } = require('./fetcher');
 
 const MAX_ITERATIONS = 20000;
 // What one feed may cost for one range, whatever it holds. Both sit far above
@@ -96,6 +97,25 @@ function dropPastEvents(text, keepFromDay) {
     }
     if (block) kept.push(...block);
     return kept.join('\r\n');
+}
+
+// What dropPastEvents keeps is up to the feed's author: events still to come
+// and series are never dropped. That part is parsed and held per process, so
+// it keeps the 5 MB limit the whole feed had before downloads of 50 MB were
+// accepted (#685). Parsed, 5 MB is about 100 MB of memory; 50 MB is about 1 GB.
+const MAX_CURRENT_MEGABYTES = 5;
+const MAX_CURRENT_BYTES = MAX_CURRENT_MEGABYTES * 1024 * 1024;
+
+// The events a view can still show, parsed. Refuses a feed whose current and
+// repeating events alone are too large to hold.
+function readCurrentEvents(text, keepFromDay) {
+    const current = dropPastEvents(text, keepFromDay);
+    if (Buffer.byteLength(current, 'utf8') > MAX_CURRENT_BYTES) {
+        throw new FeedFetchError(
+            `The calendar has more than ${MAX_CURRENT_MEGABYTES} MB of current and repeating events`
+        );
+    }
+    return parseCalendar(current);
 }
 
 function parseCalendar(text) {
@@ -434,6 +454,8 @@ function eventsForDate(events, date, userTimezone) {
 module.exports = {
     parseCalendar,
     dropPastEvents,
+    readCurrentEvents,
+    MAX_CURRENT_BYTES,
     dayNumber,
     eventsForDate,
     eventsForRange,
