@@ -1,6 +1,8 @@
 const {
     parseCalendar,
     dropPastEvents,
+    readCurrentEvents,
+    MAX_CURRENT_BYTES,
     dayNumber,
     eventsForDate,
     eventsForRange,
@@ -651,6 +653,86 @@ describe('dropPastEvents', () => {
             'Europe/Athens'
         );
         expect(after).toEqual(before);
+    });
+});
+
+describe('readCurrentEvents', () => {
+    const keepFrom = dayNumber(2026, 1, 1);
+    const oneOff = (uid, day) =>
+        [
+            'BEGIN:VEVENT',
+            `UID:${uid}`,
+            `DTSTART:${day}T090000Z`,
+            `DTEND:${day}T100000Z`,
+            'END:VEVENT',
+        ].join('\r\n');
+    const head = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN';
+    const tail = 'END:VCALENDAR';
+    // A feed whose kept part is exactly `bytes` long: the padding goes into
+    // one future event's SUMMARY, so nothing of it is dropped.
+    const currentFeedOf = (bytes) => {
+        const event = (summary) =>
+            [
+                'BEGIN:VEVENT',
+                'UID:padded',
+                'DTSTART:20270101T090000Z',
+                'DTEND:20270101T100000Z',
+                `SUMMARY:${summary}`,
+                'END:VEVENT',
+            ].join('\r\n');
+        const frame = [head, event(''), tail].join('\r\n');
+        return [head, event('x'.repeat(bytes - frame.length)), tail].join(
+            '\r\n'
+        );
+    };
+
+    it('parses a feed whose current part is at the limit', () => {
+        const feed = currentFeedOf(MAX_CURRENT_BYTES);
+        expect(dropPastEvents(feed, keepFrom)).toHaveLength(MAX_CURRENT_BYTES);
+        expect(readCurrentEvents(feed, keepFrom).map((e) => e.uid)).toEqual([
+            'padded',
+        ]);
+    });
+
+    it('refuses a feed whose current part is one byte over the limit', () => {
+        const feed = currentFeedOf(MAX_CURRENT_BYTES + 1);
+        expect(() => readCurrentEvents(feed, keepFrom)).toThrow(
+            new FeedFetchError(
+                'The calendar has more than 5 MB of current and repeating events'
+            )
+        );
+    });
+
+    it('counts bytes, not characters', () => {
+        // Each é is two bytes in UTF-8, so this is over the limit in bytes
+        // while under it in characters.
+        const feed = currentFeedOf(MAX_CURRENT_BYTES).replace(
+            /x{1000}/,
+            'é'.repeat(1000)
+        );
+        expect(feed.length).toBe(MAX_CURRENT_BYTES);
+        expect(() => readCurrentEvents(feed, keepFrom)).toThrow(FeedFetchError);
+    });
+
+    it('accepts a large feed that is mostly old events', () => {
+        const old = [];
+        for (let size = 0; size <= MAX_CURRENT_BYTES;) {
+            const event = oneOff(`old-${old.length}`, '20200310');
+            old.push(event);
+            size += event.length + 2;
+        }
+        const feed = [head, ...old, oneOff('next', '20270101'), tail].join(
+            '\r\n'
+        );
+        expect(feed.length).toBeGreaterThan(MAX_CURRENT_BYTES);
+        expect(readCurrentEvents(feed, keepFrom).map((e) => e.uid)).toEqual([
+            'next',
+        ]);
+    });
+
+    it('is a 5 MB limit, the size feeds were held to before #685', () => {
+        expect(MAX_CURRENT_BYTES).toBe(5 * 1024 * 1024);
+        expect(MAX_CURRENT_BYTES).toBeLessThan(MAX_BYTES);
     });
 });
 
