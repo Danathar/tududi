@@ -1,8 +1,15 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+    act,
+    fireEvent,
+    render,
+    screen,
+    waitFor,
+} from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import AreaDetails from '../AreaDetails';
+import { fetchTasks } from '../../../utils/tasksService';
 import { ToastProvider } from '../../Shared/ToastContext';
 
 jest.mock('../../../i18n', () => ({
@@ -20,6 +27,14 @@ const area: Record<string, unknown> = {
     id: 1,
     uid: 'areauid1',
     name: 'Work',
+    description: '',
+    color: null,
+};
+
+const otherArea: Record<string, unknown> = {
+    id: 2,
+    uid: 'areauid2',
+    name: 'Home',
     description: '',
     color: null,
 };
@@ -86,34 +101,47 @@ jest.mock('../AreaModal', () => ({
     default: () => null,
 }));
 
-jest.mock('../../../store/useStore', () => ({
-    useStore: (selector: any) =>
-        selector({
-            areasStore: {
-                areas: [area],
-                isLoading: false,
-                loadAreas: jest.fn(),
-                setAreas: mockSetAreas,
-            },
-            projectsStore: {
-                projects,
-                hasLoaded: true,
-                isLoading: false,
-                loadProjects: jest.fn(),
-            },
-            tasksStore: {
-                tasks: [],
-                setTasks: jest.fn(),
-            },
-            goalsStore: {
-                goals,
-                hasLoaded: true,
-                isLoading: false,
-                loadGoals: jest.fn(),
-                setGoals: jest.fn(),
-            },
-        }),
+const mockFetchProjects = jest.fn(() => Promise.resolve(projects));
+const mockSetProjects = jest.fn();
+const mockLoadGoals = jest.fn();
+
+jest.mock('../../../utils/projectsService', () => ({
+    fetchProjects: (...args: unknown[]) => mockFetchProjects(...(args as [])),
 }));
+
+jest.mock('../../../store/useStore', () => {
+    const buildState = () => ({
+        areasStore: {
+            areas: [area, otherArea],
+            isLoading: false,
+            loadAreas: jest.fn(),
+            setAreas: mockSetAreas,
+        },
+        projectsStore: {
+            projects,
+            hasLoaded: true,
+            isLoading: false,
+            loadProjects: jest.fn(),
+            setProjects: mockSetProjects,
+        },
+        tasksStore: {
+            tasks: [],
+            setTasks: jest.fn(),
+        },
+        goalsStore: {
+            goals,
+            hasLoaded: true,
+            isLoading: false,
+            loadGoals: mockLoadGoals,
+            setGoals: jest.fn(),
+        },
+    });
+    let state: ReturnType<typeof buildState> | undefined;
+    const getState = () => (state ??= buildState());
+    const useStore = (selector: any) => selector(getState());
+    useStore.getState = getState;
+    return { useStore };
+});
 
 const renderPage = () =>
     render(
@@ -202,5 +230,295 @@ describe('AreaDetails leaving a shared area', () => {
         await waitFor(() =>
             expect(mockNavigate).toHaveBeenCalledWith('/areas')
         );
+    });
+});
+
+describe('AreaDetails refreshing', () => {
+    beforeEach(() => {
+        mockFetchProjects.mockClear();
+        mockSetProjects.mockClear();
+        mockLoadGoals.mockClear();
+    });
+
+    it('fetches projects and goals again when the area opens', async () => {
+        renderPage();
+        await screen.findByText('Project one');
+
+        await waitFor(() => expect(mockSetProjects).toHaveBeenCalled());
+        expect(mockFetchProjects).toHaveBeenCalledWith('all', '');
+        expect(mockLoadGoals).toHaveBeenCalledWith(true);
+    });
+
+    it('fetches again when the window comes back into focus', async () => {
+        renderPage();
+        await screen.findByText('Project one');
+        await waitFor(() => expect(mockSetProjects).toHaveBeenCalled());
+        mockFetchProjects.mockClear();
+        mockLoadGoals.mockClear();
+
+        fireEvent.focus(window);
+
+        await waitFor(() => expect(mockFetchProjects).toHaveBeenCalled());
+        expect(mockLoadGoals).toHaveBeenCalledWith(true);
+    });
+});
+
+describe('AreaDetails refreshing in the background', () => {
+    const mockFetchTasks = fetchTasks as unknown as jest.Mock;
+    const defaultFetchTasks = () => Promise.resolve({ tasks });
+
+    const deferred = <T,>() => {
+        let resolve!: (value: T) => void;
+        let reject!: (reason?: unknown) => void;
+        const promise = new Promise<T>((res, rej) => {
+            resolve = res;
+            reject = rej;
+        });
+        return { promise, resolve, reject };
+    };
+
+    const setVisibility = (state: 'visible' | 'hidden') =>
+        Object.defineProperty(document, 'visibilityState', {
+            configurable: true,
+            get: () => state,
+        });
+
+    const clearCalls = () => {
+        mockFetchProjects.mockClear();
+        mockSetProjects.mockClear();
+        mockLoadGoals.mockClear();
+        mockFetchTasks.mockClear();
+    };
+
+    beforeEach(() => {
+        clearCalls();
+        mockFetchTasks.mockImplementation(defaultFetchTasks);
+    });
+
+    afterEach(() => {
+        // Drops the own property so jsdom's getter shows through again.
+        delete (document as unknown as Record<string, unknown>).visibilityState;
+    });
+
+    const openAndSettle = async () => {
+        const view = renderPage();
+        await screen.findByText('3 tasks');
+        await waitFor(() => expect(mockSetProjects).toHaveBeenCalled());
+        clearCalls();
+        return view;
+    };
+
+    it('fetches the area tasks again when the window comes back into focus', async () => {
+        await openAndSettle();
+        mockFetchTasks.mockImplementation(() =>
+            Promise.resolve({
+                tasks: [...tasks, { uid: 'task-4', name: 'New', status: 'x' }],
+            })
+        );
+
+        fireEvent.focus(window);
+
+        expect(await screen.findByText('4 tasks')).toBeInTheDocument();
+        expect(mockFetchTasks).toHaveBeenCalledWith(
+            '?area_uid=areauid1&type=all&status=all'
+        );
+    });
+
+    it('fetches again when the page becomes visible', async () => {
+        await openAndSettle();
+
+        fireEvent(document, new Event('visibilitychange'));
+
+        await waitFor(() => expect(mockFetchProjects).toHaveBeenCalled());
+        expect(mockLoadGoals).toHaveBeenCalledWith(true);
+        expect(mockFetchTasks).toHaveBeenCalled();
+    });
+
+    it('does not fetch while the page is hidden', async () => {
+        await openAndSettle();
+        setVisibility('hidden');
+
+        fireEvent.focus(window);
+        fireEvent(document, new Event('visibilitychange'));
+
+        expect(mockFetchProjects).not.toHaveBeenCalled();
+        expect(mockLoadGoals).not.toHaveBeenCalled();
+        expect(mockFetchTasks).not.toHaveBeenCalled();
+    });
+
+    it('stops listening once the page is closed', async () => {
+        const { unmount } = await openAndSettle();
+        unmount();
+
+        fireEvent.focus(window);
+        fireEvent(document, new Event('visibilitychange'));
+
+        expect(mockFetchProjects).not.toHaveBeenCalled();
+        expect(mockLoadGoals).not.toHaveBeenCalled();
+        expect(mockFetchTasks).not.toHaveBeenCalled();
+    });
+
+    it('does not listen for focus when the area is not found', async () => {
+        render(
+            <ToastProvider>
+                <MemoryRouter initialEntries={['/area/missing-area']}>
+                    <Routes>
+                        <Route
+                            path="/area/:uidSlug"
+                            element={<AreaDetails />}
+                        />
+                    </Routes>
+                </MemoryRouter>
+            </ToastProvider>
+        );
+        await waitFor(() => expect(mockFetchProjects).toHaveBeenCalled());
+        clearCalls();
+
+        fireEvent.focus(window);
+        fireEvent(document, new Event('visibilitychange'));
+
+        expect(mockFetchProjects).not.toHaveBeenCalled();
+        expect(mockLoadGoals).not.toHaveBeenCalled();
+    });
+
+    it('fetches nothing on open when the address names no area', async () => {
+        render(
+            <ToastProvider>
+                <MemoryRouter initialEntries={['/area']}>
+                    <Routes>
+                        <Route
+                            path="/area/:uidSlug?"
+                            element={<AreaDetails />}
+                        />
+                    </Routes>
+                </MemoryRouter>
+            </ToastProvider>
+        );
+        await screen.findByText('Area not found');
+
+        expect(mockFetchProjects).not.toHaveBeenCalled();
+        expect(mockLoadGoals).not.toHaveBeenCalled();
+    });
+
+    it('fetches again when the viewer moves to another area', async () => {
+        render(
+            <ToastProvider>
+                <MemoryRouter initialEntries={['/area/areauid1-work']}>
+                    <Link to="/area/areauid2-home">go home</Link>
+                    <Routes>
+                        <Route
+                            path="/area/:uidSlug"
+                            element={<AreaDetails />}
+                        />
+                    </Routes>
+                </MemoryRouter>
+            </ToastProvider>
+        );
+        await waitFor(() => expect(mockSetProjects).toHaveBeenCalled());
+        clearCalls();
+
+        fireEvent.click(screen.getByText('go home'));
+
+        await waitFor(() => expect(mockFetchProjects).toHaveBeenCalled());
+        expect(mockLoadGoals).toHaveBeenCalledWith(true);
+        await waitFor(() =>
+            expect(mockFetchTasks).toHaveBeenCalledWith(
+                '?area_uid=areauid2&type=all&status=all'
+            )
+        );
+    });
+
+    it('treats a reply without tasks as an empty list', async () => {
+        mockFetchTasks.mockImplementation(() => Promise.resolve({}));
+        renderPage();
+
+        await waitFor(() => expect(mockFetchTasks).toHaveBeenCalled());
+        await act(async () => {
+            await Promise.resolve();
+        });
+
+        expect(screen.getByText('0 tasks')).toBeInTheDocument();
+    });
+
+    describe('on the Tasks tab', () => {
+        const openTasksTab = () =>
+            fireEvent.click(
+                screen.getByRole('button', { name: /^Tasks \(\d+\)$/ })
+            );
+
+        it('shows loading for the first fetch, then clears it', async () => {
+            const first = deferred<{ tasks: unknown[] }>();
+            mockFetchTasks.mockImplementation(() => first.promise);
+            renderPage();
+            await screen.findByText('Project one');
+            openTasksTab();
+
+            expect(screen.getByText('Loading tasks…')).toBeInTheDocument();
+
+            first.resolve({ tasks });
+
+            await waitFor(() =>
+                expect(
+                    screen.queryByText('Loading tasks…')
+                ).not.toBeInTheDocument()
+            );
+        });
+
+        it('does not show loading for a refresh', async () => {
+            await openAndSettle();
+            openTasksTab();
+            const refresh = deferred<{ tasks: unknown[] }>();
+            mockFetchTasks.mockImplementation(() => refresh.promise);
+
+            fireEvent.focus(window);
+            await waitFor(() => expect(mockFetchTasks).toHaveBeenCalled());
+
+            expect(
+                screen.queryByText('Loading tasks…')
+            ).not.toBeInTheDocument();
+            refresh.resolve({ tasks });
+        });
+
+        it('keeps the first fetch loading when a refresh finishes before it', async () => {
+            const first = deferred<{ tasks: unknown[] }>();
+            mockFetchTasks.mockImplementation(() => first.promise);
+            renderPage();
+            await screen.findByText('Project one');
+            openTasksTab();
+            mockFetchTasks.mockImplementation(defaultFetchTasks);
+
+            fireEvent.focus(window);
+            await screen.findByText('3 tasks');
+
+            expect(screen.getByText('Loading tasks…')).toBeInTheDocument();
+            first.resolve({ tasks });
+        });
+
+        it('keeps the tasks shown when a refresh fails', async () => {
+            await openAndSettle();
+            mockFetchTasks.mockImplementation(() =>
+                Promise.reject(new Error('offline'))
+            );
+
+            fireEvent.focus(window);
+            await waitFor(() => expect(mockFetchTasks).toHaveBeenCalled());
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            expect(screen.getByText('3 tasks')).toBeInTheDocument();
+        });
+
+        it('empties the tasks when the first fetch fails', async () => {
+            const first = deferred<{ tasks: unknown[] }>();
+            mockFetchTasks.mockImplementation(() => first.promise);
+            renderPage();
+            await screen.findByText('Project one');
+            mockFetchTasks.mockImplementation(defaultFetchTasks);
+            fireEvent.focus(window);
+            await screen.findByText('3 tasks');
+
+            first.reject(new Error('offline'));
+
+            expect(await screen.findByText('0 tasks')).toBeInTheDocument();
+        });
     });
 });
