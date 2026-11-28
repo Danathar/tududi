@@ -165,12 +165,13 @@ export function buildLivePreview(
                 }
 
                 // A bare URL, email or <autolink>. Links inside [text](url)
-                // and images are handled with their parent below.
+                // are handled with their parent below; an image's children
+                // are never visited (its branch returns false).
                 if (name === 'URL') {
                     const parent = ref.node.parent;
                     if (
                         !parent ||
-                        ['Link', 'Image', 'LinkReference'].includes(parent.name)
+                        ['Link', 'LinkReference'].includes(parent.name)
                     ) {
                         return;
                     }

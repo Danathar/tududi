@@ -165,6 +165,29 @@ describe('link clicks while editing', () => {
         cleanup();
     });
 
+    it('opens a wikilink chip on a plain click when the caret is elsewhere', () => {
+        const onOpenWikilink = jest.fn();
+        const parent = document.createElement('div');
+        document.body.append(parent);
+        const doc = 'see [[Note]] here\n\ntail';
+        const view = new EditorView({
+            parent,
+            state: EditorState.create({
+                doc,
+                selection: { anchor: doc.length },
+                extensions: [
+                    markdown({ base: markdownLanguage }),
+                    livePreviewExtension({ onOpenWikilink }),
+                ],
+            }),
+        });
+        mousedown(parent.querySelector('[data-wikilink]') as Element);
+        expect(onOpenWikilink).toHaveBeenCalledTimes(1);
+        expect(onOpenWikilink.mock.calls[0][0]).toBe('Note');
+        view.destroy();
+        parent.remove();
+    });
+
     it('places the caret instead when the link syntax is showing', () => {
         const open = jest.spyOn(window, 'open').mockImplementation(() => null);
         const { parent, cleanup } = mount(doc, [], 6);
